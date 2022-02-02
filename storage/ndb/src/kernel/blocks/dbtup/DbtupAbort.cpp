@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2003, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2021, 2021, Logical Clocks and/or its affiliates.
+   Copyright (c) 2021, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -307,7 +307,7 @@ void Dbtup::do_tup_abortreq(Signal* signal, Uint32 flags)
     }
   }
 
-  removeActiveOpList(regOperPtr.p, tuple_ptr);
+  removeActiveOpList(regOperPtr.p, tuple_ptr, page.p);
 
   if (first_and_last &&
       (flags & ZABORT_DEALLOC) &&
@@ -492,9 +492,10 @@ void Dbtup::tupkeyErrorLab(KeyReqStruct* req_struct)
   }
 
   Uint32 *ptr = 0;
+  PagePtr tmp;
+  tmp.p = nullptr;
   if (!is_tuple_loc_null)
   {
-    PagePtr tmp;
     ptr= get_ptr(&tmp,
                  &regOperPtr->m_tuple_location,
                  prepare_tabptr.p);
@@ -506,7 +507,7 @@ void Dbtup::tupkeyErrorLab(KeyReqStruct* req_struct)
     jamDebug();
     acquire_frag_mutex(req_struct->fragPtrP, regOperPtr->fragPageId);
   }
-  removeActiveOpList(regOperPtr, (Tuple_header*)ptr);
+  removeActiveOpList(regOperPtr, (Tuple_header*)ptr, tmp.p);
   if (use_lock)
   {
     jamDebug();
@@ -533,7 +534,8 @@ void Dbtup::send_TUPKEYREF(const KeyReqStruct* req_struct)
  * Unlink one operation from the m_operation_ptr_i list in the tuple.
  */
 void Dbtup::removeActiveOpList(Operationrec*  const regOperPtr,
-                               Tuple_header *tuple_ptr)
+                               Tuple_header *tuple_ptr,
+                               Page *pageP)
 {
   OperationrecPtr nextOperPtr;
   OperationrecPtr prevOperPtr;
@@ -554,12 +556,14 @@ void Dbtup::removeActiveOpList(Operationrec*  const regOperPtr,
      * the record.
      */
     ndbassert(!m_is_query_block);
+    ndbassert(pageP != nullptr);
+    Tup_fixsize_page *fix_page = (Tup_fixsize_page*)pageP;
+    fix_page->dec_ref_count(1);
     nextOperPtr.i = regOperPtr->nextActiveOp;
     prevOperPtr.i = regOperPtr->prevActiveOp;
     regOperPtr->op_struct.bit_field.in_active_list= false;
     if (nextOperPtr.i != RNIL)
     {
-      jam();
       ndbrequire(m_curr_tup->c_operation_pool.getValidPtr(nextOperPtr));
       nextOperPtr.p->prevActiveOp = prevOperPtr.i;
     }

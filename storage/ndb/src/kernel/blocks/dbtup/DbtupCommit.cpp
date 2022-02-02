@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2003, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2021, 2021, Logical Clocks and/or its affiliates.
+   Copyright (c) 2021, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -518,6 +518,7 @@ Dbtup::dealloc_tuple(Signal* signal,
   fix_page->set_change_maps(regOperPtr->m_tuple_location.m_page_idx);
   ndbassert(fix_page->verify_change_maps(jamBuffer()));
   fix_page->set_max_gci(gci_hi);
+  fix_page->dec_ref_count(1);
   setInvalidChecksum(ptr, regTabPtr);
   if (regOperPtr->op_struct.bit_field.m_tuple_existed_at_start)
   {
@@ -1066,6 +1067,7 @@ Dbtup::commit_operation(Signal* signal,
   Tup_fixsize_page *fix_page = (Tup_fixsize_page*)pagePtr.p;
   fix_page->set_change_maps(regOperPtr->m_tuple_location.m_page_idx);
   fix_page->set_max_gci(gci_hi);
+  fix_page->dec_ref_count(1);
   ndbassert(fix_page->verify_change_maps(jamBuffer()));
 
   if (regTabPtr->m_bits & Tablerec::TR_RowGCI &&
@@ -1520,16 +1522,18 @@ Dbtup::set_commit_started(Uint32 leaderOperPtrI)
   } while (loopOperPtr.i != RNIL);
 }
 
-void
+Uint32
 Dbtup::set_commit_performed(OperationrecPtr firstOperPtr,
                             Fragrecord *fragPtrP)
 {
+  Uint32 loop_count = 0;
   OperationrecPtr loopOperPtr = firstOperPtr;
   goto first;
   do
   {
     ndbrequire(m_curr_tup->c_operation_pool.getValidPtr(loopOperPtr));
     first:
+    loop_count++;
     switch (loopOperPtr.p->m_commit_state)
     {
       case Operationrec::CommitNotStarted:
@@ -1559,6 +1563,7 @@ Dbtup::set_commit_performed(OperationrecPtr firstOperPtr,
     }
     loopOperPtr.i = loopOperPtr.p->nextActiveOp;
   } while (loopOperPtr.i != RNIL);
+  return loop_count;
 }
 
 #ifdef ERROR_INSERT
@@ -2139,7 +2144,10 @@ Dbtup::execute_real_commit(Signal *signal,
   if (firstOperPtr.i != RNIL)
   {
     jam();
-    set_commit_performed(firstOperPtr, regFragPtrP);
+    Uint32 num_operations = set_commit_performed(firstOperPtr, regFragPtrP);
+    assert(num_operations > 1);
+    Tup_fixsize_page *fix_page = (Tup_fixsize_page*)tupPagePtr.p;
+    fix_page->dec_ref_count(num_operations - 1);
     report_commit_performed(signal, firstOperPtr, MAX_COMMITS, regFragPtrP);
   }
 }

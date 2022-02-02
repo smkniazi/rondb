@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2005, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2021, 2021, Logical Clocks and/or its affiliates.
+   Copyright (c) 2021, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -87,13 +87,15 @@ Uint32* Dbtup::alloc_var_rec(Uint32 * err,
 			     Tablerec* tabPtr,
 			     Uint32 alloc_size,
 			     Local_key* key,
-			     Uint32 * out_frag_page_id)
+			     Uint32 * out_frag_page_id,
+                             PagePtr & pagePtr)
 {
   /**
    * TODO alloc fix+var part
    */
   Uint32 *ptr = alloc_fix_rec(jamBuffer(), err, fragPtr, tabPtr, key,
-                              out_frag_page_id);
+                              out_frag_page_id,
+                              pagePtr);
   if (unlikely(ptr == 0))
   {
     return 0;
@@ -117,7 +119,6 @@ Uint32* Dbtup::alloc_var_rec(Uint32 * err,
     return ptr;
   }
   
-  PagePtr pagePtr;
   c_page_pool.getPtr(pagePtr, key->m_page_no);
   free_fix_rec(fragPtr, tabPtr, key, (Fix_page*)pagePtr.p);
   release_frag_mutex(fragPtr, *out_frag_page_id);
@@ -628,9 +629,15 @@ Dbtup::alloc_var_rowid(Uint32 * err,
 		       Tablerec* tabPtr,
 		       Uint32 alloc_size,
 		       Local_key* key,
-		       Uint32 * out_frag_page_id)
+		       Uint32 * out_frag_page_id,
+                       PagePtr & pagePtr)
 {
-  Uint32 *ptr = alloc_fix_rowid(err, fragPtr, tabPtr, key, out_frag_page_id);
+  Uint32 *ptr = alloc_fix_rowid(err,
+                                fragPtr,
+                                tabPtr,
+                                key,
+                                out_frag_page_id,
+                                pagePtr);
   if (unlikely(ptr == 0))
   {
     return 0;
@@ -655,7 +662,6 @@ Dbtup::alloc_var_rowid(Uint32 * err,
     return ptr;
   }
   
-  PagePtr pagePtr;
   c_page_pool.getPtr(pagePtr, key->m_page_no);
   free_fix_rec(fragPtr, tabPtr, key, (Fix_page*)pagePtr.p);
   release_frag_mutex(fragPtr, *out_frag_page_id);

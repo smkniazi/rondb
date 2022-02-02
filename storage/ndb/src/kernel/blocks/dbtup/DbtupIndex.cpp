@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2003, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2021, 2021, Logical Clocks and/or its affiliates.
+   Copyright (c) 2021, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -82,13 +82,15 @@ Dbtup::tuxAllocNode(EmulatedJamBuffer * jamBuf,
   Fragrecord* fragPtrP = (Fragrecord*)fragPtrP_input;
 
   Local_key key;
+  PagePtr pagePtr;
   Uint32* ptr, frag_page_id, err;
   if ((ptr = alloc_fix_rec(jamBuf,
                            &err,
                            fragPtrP,
                            tablePtrP,
                            &key,
-                           &frag_page_id)) == 0)
+                           &frag_page_id,
+                           pagePtr)) == 0)
   {
     thrjam(jamBuf);
     return err;

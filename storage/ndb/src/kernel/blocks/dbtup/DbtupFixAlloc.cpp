@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -56,6 +57,7 @@
 //               Tablerec* const regTabPtr,    # In
 //		 Local_key* key,               # Out
 //		 Uint32 * out_frag_page_id)    # Out
+//		 PagePtr & pagePtr)            # Out
 // This method allocates a fixed size and the pagePtr is a reference
 // to the page and pageOffset is the offset in the page of the tuple.
 //
@@ -86,13 +88,13 @@ Dbtup::alloc_fix_rec(EmulatedJamBuffer* jamBuf,
                      Fragrecord* const regFragPtr,
 		     Tablerec* const regTabPtr,
 		     Local_key* key,
-		     Uint32 * out_frag_page_id) 
+		     Uint32 * out_frag_page_id,
+                     PagePtr &pagePtr)
 {
 /* ---------------------------------------------------------------- */
 /*       EITHER NORMAL PAGE REQUESTED OR ALLOCATION FROM COPY PAGE  */
 /*       FAILED. TRY ALLOCATING FROM NORMAL PAGE.                   */
 /* ---------------------------------------------------------------- */
-  PagePtr pagePtr;
   pagePtr.i = regFragPtr->thFreeFirst.getFirst();
   if (pagePtr.i == RNIL) {
 /* ---------------------------------------------------------------- */
@@ -244,12 +246,12 @@ Dbtup::alloc_fix_rowid(Uint32 * err,
                        Fragrecord* regFragPtr,
 		       Tablerec* regTabPtr,
 		       Local_key* key,
-		       Uint32 * out_frag_page_id) 
+		       Uint32 * out_frag_page_id,
+                       PagePtr & pagePtr) 
 {
   Uint32 page_no = key->m_page_no;
   Uint32 idx= key->m_page_idx;
   
-  PagePtr pagePtr;
   if ((pagePtr.i = allocFragPage(err, regTabPtr, regFragPtr, page_no)) == RNIL)
   {
     return 0;

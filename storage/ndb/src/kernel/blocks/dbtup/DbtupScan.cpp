@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2005, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2021, 2021, Logical Clocks and/or its affiliates.
+   Copyright (c) 2021, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2114,6 +2114,26 @@ Dbtup::scanNext(Signal* signal, ScanOpPtr scanPtr)
           jam();
         }
 	c_page_pool.getPtr(pagePtr, pos.m_realpid_mm);
+        if (bits & ScanOp::SCAN_NR)
+        {
+          Tup_fixsize_page *fix_page = (Tup_fixsize_page*)pagePtr.p;
+          Uint32 page_gci = fix_page->get_max_gci();
+          if (page_gci > 0 &&
+              page_gci < scan.m_scanGCI &&
+              fix_page->get_ref_count() == 0)
+          {
+            /**
+             * This isn't a new page (requires some special treatment).
+             * The page hasn't been touched since the starting node failed.
+             * The page isn't currently being updated.
+             * Thus we can be certain that the other node knows about the
+             * page and even has the correct data on it. Thus no need to
+             * continue with this page.
+             */
+            jamDebug();
+            break; // incr loop count
+          }
+        }
         /**
          * We are in the process of performing a Full table scan, this can be
          * either due to a user requesting a full table scan, it can also be

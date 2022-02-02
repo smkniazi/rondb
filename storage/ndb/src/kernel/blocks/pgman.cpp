@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2005, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2020, 2021, Logical Clocks and/or its affiliates.
+   Copyright (c) 2020, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3925,7 +3925,8 @@ Pgman::fswritereq(Signal* signal, Ptr<Page_entry> ptr)
       tup_page_v2->m_ndb_version = NDB_DISK_V2;
       tup_page_v2->unused_cluster_page[0] = 0;
       tup_page_v2->unused_cluster_page[1] = 0;
-      tup_page_v2->unused_cluster_page[2] = 0;
+      tup_page_v2->m_ref_count = 0;
+      tup_page_v2->m_gci = 0;
       tup_page_v2->m_change_map[0] = 0;
       tup_page_v2->m_change_map[1] = 0;
       tup_page_v2->m_change_map[2] = 0;

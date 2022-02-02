@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2003, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2021, 2021, Logical Clocks and/or its affiliates.
+   Copyright (c) 2021, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -906,6 +906,8 @@ void Dbtup::prepare_scanTUPKEYREQ(Uint32 page_id, Uint32 page_idx)
     {
       NDB_PREFETCH_WRITE(tuple_ptr + i);
     }
+    Tup_fixsize_page *fix_page = (Tup_fixsize_page*)pagePtr.p;
+    fix_page->prefetch_ref_count();
   }
 }
 
@@ -937,6 +939,8 @@ void Dbtup::prepare_scan_tux_TUPKEYREQ(Uint32 page_id, Uint32 page_idx)
     {
       NDB_PREFETCH_WRITE(tuple_ptr + i);
     }
+    Tup_fixsize_page *fix_page = (Tup_fixsize_page*)pagePtr.p;
+    fix_page->prefetch_ref_count();
   }
 }
 
@@ -1333,6 +1337,7 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
    ndbassert(!m_is_in_query_thread);
    req_struct.changeMask.clear();
    Tuple_header *tuple_ptr = nullptr;
+   req_struct.m_page_ptr.p = nullptr;
 
    if (!Local_key::isInvalid(pageid, pageidx))
    {
@@ -1459,6 +1464,9 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
           */
          insertActiveOpList(operPtr, &req_struct, tuple_ptr);
          release_frag_mutex(regFragPtr, pageid);
+         Tup_fixsize_page *fix_page =
+           (Tup_fixsize_page*)req_struct.m_page_ptr.p;
+         fix_page->inc_ref_count();
        }
        else
        {
@@ -1593,6 +1601,9 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
        }
 #endif
        release_frag_mutex(regFragPtr, pageid);
+       Tup_fixsize_page *fix_page =
+         (Tup_fixsize_page*)req_struct.m_page_ptr.p;
+       fix_page->inc_ref_count();
        terrorCode = 0;
        checkImmediateTriggersAfterUpdate(&req_struct,
                                          regOperPtr,
@@ -1657,6 +1668,9 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
        acquire_frag_mutex(regFragPtr, pageid);
        insertActiveOpList(operPtr, &req_struct, tuple_ptr);
        release_frag_mutex(regFragPtr, pageid);
+       Tup_fixsize_page *fix_page =
+         (Tup_fixsize_page*)req_struct.m_page_ptr.p;
+       fix_page->inc_ref_count();
        checkImmediateTriggersAfterDelete(&req_struct,
                                          regOperPtr,
                                          regTabPtr,
@@ -1723,6 +1737,9 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
        }
 #endif
        c_lqh->release_frag_access();
+       Tup_fixsize_page *fix_page =
+         (Tup_fixsize_page*)req_struct.m_page_ptr.p;
+       fix_page->inc_ref_count();
        returnTUPKEYCONF(signal, &req_struct, regOperPtr, TRANS_STARTED);
        return true;
      }
@@ -2713,7 +2730,8 @@ int Dbtup::handleInsertReq(Signal* signal,
                            regFragPtr,
 			   regTabPtr,
 			   &regOperPtr.p->m_tuple_location,
-			   &frag_page_id);
+			   &frag_page_id,
+                           req_struct->m_page_ptr);
       } 
       else 
       {
@@ -2723,7 +2741,8 @@ int Dbtup::handleInsertReq(Signal* signal,
                            regFragPtr, regTabPtr,
 			   sizes[2+MM],
 			   &regOperPtr.p->m_tuple_location,
-			   &frag_page_id);
+			   &frag_page_id,
+                           req_struct->m_page_ptr);
       }
       if (unlikely(ptr == 0))
       {
@@ -2747,7 +2766,8 @@ int Dbtup::handleInsertReq(Signal* signal,
                              regFragPtr,
 			     regTabPtr,
 			     &regOperPtr.p->m_tuple_location,
-			     &frag_page_id);
+			     &frag_page_id,
+                             req_struct->m_page_ptr);
       } 
       else 
       {
@@ -2757,7 +2777,8 @@ int Dbtup::handleInsertReq(Signal* signal,
                              regFragPtr, regTabPtr,
 			     sizes[2+MM],
 			     &regOperPtr.p->m_tuple_location,
-			     &frag_page_id);
+			     &frag_page_id,
+                             req_struct->m_page_ptr);
       }
       if (unlikely(ptr == 0))
       {

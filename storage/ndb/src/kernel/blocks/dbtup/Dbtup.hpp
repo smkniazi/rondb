@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2003, 2021, Oracle and/or its affiliates.
-   Copyright (c) 2020, 2021, Logical Clocks and/or its affiliates.
+   Copyright (c) 2020, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2339,8 +2339,8 @@ private:
                             Uint32);
 #endif
   void set_commit_started(Uint32 leaderOperPtrI);
-  void set_commit_performed(OperationrecPtr firstOperPtr,
-                            Fragrecord *fragPtrP);
+  Uint32 set_commit_performed(OperationrecPtr firstOperPtr,
+                              Fragrecord *fragPtrP);
   void continue_report_commit_performed(Signal*, Uint32 firstOperPtrI);
   void send_continue_report_commit_performed(Signal*, Uint32 nextOp);
   void report_commit_performed(Signal*,
@@ -3531,7 +3531,9 @@ private:
   void setTupleStateOnPreviousOps(Uint32 prevOpIndex);
   void copyMem(Signal* signal, Uint32 sourceIndex, Uint32 destIndex);
 
-  void removeActiveOpList(Operationrec*  const regOperPtr, Tuple_header*);
+  void removeActiveOpList(Operationrec*  const regOperPtr,
+                          Tuple_header*,
+                          Page*);
 
   void updatePackedList(Uint16 ahostIndex);
 
@@ -3778,7 +3780,8 @@ private:
 //
 // Public methods
   Uint32* alloc_var_rec(Uint32 * err,
-                        Fragrecord*, Tablerec*, Uint32, Local_key*, Uint32*);
+                        Fragrecord*, Tablerec*, Uint32, Local_key*, Uint32*,
+                        PagePtr &pagePtr);
   void free_var_rec(Fragrecord*, Tablerec*, Local_key*, Ptr<Page>);
   void free_var_part(Fragrecord*, Tablerec*, Local_key*);
   Uint32* alloc_var_part(Uint32*err,Fragrecord*, Tablerec*, Uint32, Local_key*);
@@ -3794,13 +3797,16 @@ private:
   
   Uint32* alloc_fix_rec(EmulatedJamBuffer* jamBuf, Uint32* err,
                         Fragrecord*const, Tablerec*const, Local_key*,
-                        Uint32*);
+                        Uint32*,
+                        PagePtr & pagePtr);
   void free_fix_rec(Fragrecord*, Tablerec*, Local_key*, Fix_page*);
   
   Uint32* alloc_fix_rowid(Uint32 * err,
-                          Fragrecord*, Tablerec*, Local_key*, Uint32 *);
+                          Fragrecord*, Tablerec*, Local_key*, Uint32 *,
+                          PagePtr & pagePtr);
   Uint32* alloc_var_rowid(Uint32 * err,
-                          Fragrecord*, Tablerec*, Uint32, Local_key*, Uint32*);
+                          Fragrecord*, Tablerec*, Uint32, Local_key*, Uint32*,
+                          PagePtr & pagePtr);
 // Private methods
   void convertThPage(Fix_page* regPagePtr,
 		     Tablerec*,

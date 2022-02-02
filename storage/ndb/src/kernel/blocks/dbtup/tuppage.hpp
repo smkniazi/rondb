@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2005, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2022, 2022, Logical Clocks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -47,7 +48,8 @@ struct Tup_page
     Uint32 prev_page;
     Uint32 prevList;
   };
-  Uint32 unused_cluster_page[3];
+  Uint32 unused_cluster_page[2];
+  Uint32 m_ref_count;
   Uint32 m_gci;
   Uint32 frag_page_id;
   Uint32 physical_page_id;
@@ -111,7 +113,8 @@ struct Tup_fixsize_page
     Uint32 prev_page;
     Uint32 prevList;
   };
-  Uint32 unused_cluster_page[3];
+  Uint32 unused_cluster_page[2];
+  Uint32 m_ref_count;
   Uint32 m_gci;
   Uint32 frag_page_id;
   Uint32 physical_page_id;
@@ -217,6 +220,10 @@ struct Tup_fixsize_page
     Uint32 flags_clear_val = ~flags_bit;
     Uint32 flags_new_val = flags & flags_clear_val;
     m_flags = flags_new_val;
+  }
+  void prefetch_ref_count()
+  {
+    NDB_PREFETCH_WRITE(&m_ref_count);
   }
   void prefetch_change_map()
   {
@@ -493,6 +500,23 @@ struct Tup_fixsize_page
       m_gci = gci;
   }
 
+  void clear_ref_count()
+  {
+    m_ref_count = 0;
+  }
+  Uint32 get_ref_count()
+  {
+    return m_ref_count;
+  }
+  void inc_ref_count()
+  {
+    m_ref_count++;
+  }
+  void dec_ref_count(Uint32 count)
+  {
+    assert(m_ref_count > count);
+    m_ref_count-= count;
+  }
   /**
    * Alloc record from page
    *   return page_idx
@@ -516,7 +540,8 @@ struct Tup_varsize_page
     Uint32 prev_page;
     Uint32 prevList;
   };
-  Uint32 unused_cluster_page[3];
+  Uint32 unused_cluster_page[2];
+  Uint32 m_ref_count;
   Uint32 m_gci;
   Uint32 frag_page_id;
   Uint32 physical_page_id;
