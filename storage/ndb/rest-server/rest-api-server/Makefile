@@ -35,8 +35,6 @@ BUILD_COMMAND=go build  -ldflags="-w \
      -X hopsworks.ai/rdrs/version.BRANCH=${BRANCH}" \
      -o ${OUTPUT_DIR}/rdrs ./cmd/server/main.go
 
-LINK_COMMAND=CGO_LDFLAGS="-g -O2 -L${RDRS_LIB_DIR} -lrdrclient"
-
 rdrs:
 	CGO_LDFLAGS="-g -O2 -L${RDRS_LIB_DIR} -lrdrclient" ${BUILD_COMMAND}
 
