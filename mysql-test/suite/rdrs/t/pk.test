@@ -8,8 +8,7 @@
 
 --source suite/rdrs/include/have_rdrs.inc
 
---sleep 100000
---let RDRS_TEST_CMD=go test -v -run TestDataTypesTimestampColumn/validpk1_pre3 ./internal/handlers/pkread/
+--let RDRS_TEST_CMD=go test -v -run Test ./internal/handlers/pkread/
 
 --source suite/rdrs/include/run_rdrs_unit_test.inc
 

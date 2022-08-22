@@ -175,7 +175,7 @@ printf $CONF "                \"UseHopsWorksAPIKeys\": true,\n";
 printf $CONF "                \"HopsWorksAPIKeysCacheValiditySec\": 3\n";
 printf $CONF "        },\n";
 printf $CONF "        \"Log\": {\n";
-printf $CONF "                \"Level\": \"info\",\n";
+printf $CONF "                \"Level\": \"WARN\",\n";
 printf $CONF "                \"FilePath\": \"\",\n";
 printf $CONF "                \"MaxSizeMB\": 100,\n";
 printf $CONF "                \"MaxBackups\": 10,\n";
