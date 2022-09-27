@@ -26,6 +26,7 @@
 package testsuite.clusterj;
 
 import com.mysql.clusterj.Constants;
+import com.mysql.clusterj.DynamicObject;
 import com.mysql.clusterj.Session;
 import testsuite.clusterj.model.Employee;
 import testsuite.clusterj.model.Employee2;
@@ -80,6 +81,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
       e.setMagic(i);
       e.setName(Integer.toString(i));
       s.savePersistent(e);
+      closeDTO(s, e, Employee.class);
       returnSession(s);
     }
 
@@ -92,6 +94,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
           + " expected age " + i
           + " actual age " + e.getId());
       }
+      closeDTO(s, e, Employee.class);
       returnSession(s);
     }
 
@@ -100,6 +103,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
       Session s = getSession(null);
       Employee e = s.find(Employee.class, i);
       s.deletePersistent(e);
+      closeDTO(s, e, Employee.class);
       returnSession(s);
     }
     failOnError();
@@ -114,6 +118,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
       e.setMagic(i);
       e.setName(Integer.toString(i));
       s.savePersistent(e);
+      closeDTO(s, e, Employee2.class);
       returnSession(s);
     }
 
@@ -126,6 +131,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
           + " expected age " + i
           + " actual age " + e.getId());
       }
+      closeDTO(s, e, Employee2.class);
       returnSession(s);
     }
 
@@ -134,6 +140,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
       Session s = getSession("test2");
       Employee2 e = s.find(Employee2.class, i);
       s.deletePersistent(e);
+      closeDTO(s, e, Employee2.class);
       returnSession(s);
     }
     failOnError();
@@ -148,6 +155,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
       e.setMagic(i);
       e.setName(Integer.toString(i));
       s.savePersistent(e);
+      closeDTO(s, e, Employee3.class);
       returnSession(s);
     }
 
@@ -160,6 +168,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
           + " expected age " + i
           + " actual age " + e.getId());
       }
+      closeDTO(s, e, Employee3.class);
       returnSession(s);
     }
 
@@ -168,6 +177,7 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
       Session s = getSession("test3");
       Employee3 e = s.find(Employee3.class, i);
       s.deletePersistent(e);
+      closeDTO(s, e, Employee3.class);
       returnSession(s);
     }
     failOnError();
@@ -186,6 +196,14 @@ public class MultiDBUpdate2Test extends AbstractClusterJModelTest {
       s.closeCache();
     } else {
       s.close();
+    }
+  }
+
+  void closeDTO(Session s, Object dto, Class dtoClass) {
+    if (useCache) {
+      s.releaseCache(dto, dtoClass);
+    } else {
+      s.release(dto);
     }
   }
 }

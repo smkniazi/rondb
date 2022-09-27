@@ -104,6 +104,7 @@ public class MultiDBUpdateTest extends AbstractClusterJModelTest {
       EmpBasic e = s.newInstance(EmpBasic.class);
       setFields(e, i);
       s.savePersistent(e);
+      closeDTO(s, e, EmpBasic.class);
       returnSession(s);
     }
 
@@ -112,6 +113,7 @@ public class MultiDBUpdateTest extends AbstractClusterJModelTest {
       Session s = getSession(db);
       EmpBasic e = s.find(EmpBasic.class, i);
       verifyFields(e, i);
+      closeDTO(s, e, EmpBasic.class);
       returnSession(s);
     }
 
@@ -120,6 +122,7 @@ public class MultiDBUpdateTest extends AbstractClusterJModelTest {
       Session s = getSession(db);
       EmpBasic e = s.find(EmpBasic.class, i);
       s.deletePersistent(e);
+      closeDTO(s, e, EmpBasic.class);
       returnSession(s);
     }
 
@@ -175,6 +178,14 @@ public class MultiDBUpdateTest extends AbstractClusterJModelTest {
       s.closeCache();
     } else {
       s.close();
+    }
+  }
+
+  void closeDTO(Session s, DynamicObject dto, Class dtoClass) {
+    if (useCache) {
+      s.releaseCache(dto, dtoClass);
+    } else {
+      s.release(dto);
     }
   }
 }
