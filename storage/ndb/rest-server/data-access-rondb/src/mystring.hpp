@@ -27,8 +27,8 @@
     @return the number of characters required to escape string @a s
     @complexity Linear in the length of string @a s.
     */
-std::size_t extra_space(const std::string &s) noexcept;
+std::size_t extra_space(const char* s, int length) noexcept;
 
-std::string escape_string(const std::string &s) noexcept;
+std::string escape_string(const char* s, int length) noexcept;
 
 #endif  // STORAGE_NDB_REST_SERVER_DATA_ACCESS_RONDB_SRC_MYSTRING_HPP_
