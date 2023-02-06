@@ -520,6 +520,10 @@ public class ClusterConnectionImpl
                     "Removing dictionary entry for cached table " +
                     "db:" + databaseName + " " + tableName);
                 dictionary.invalidateTable(tableName);
+
+                for (DbImpl db : dbs.keySet()) {
+                    ((DictionaryImpl)db.getDictionary()).getNdbDictionary().removeCachedTable(tableName);
+                }
             }
         }
     }
