@@ -304,7 +304,7 @@ RS_Status PKRResponse::Append_char(const char *colName, const char *fromBuff, Ui
     wellFormedString = wellFormedString.substr(0, endpos + 1);
   }
 
-  std::string escapedstr = escape_string(wellFormedString);
+  std::string escapedstr = escape_string(wellFormedString.c_str(), wellFormedString.length());
   if ((escapedstr.length() + extraSpace) >= GetRemainingCapacity()) {  // +2 for quotation marks
     return RS_SERVER_ERROR(ERROR_010);
   }
