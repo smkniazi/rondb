@@ -48,7 +48,7 @@ std::size_t extra_space(const Int8 *str, std::size_t length) noexcept {
     }
 
     default: {
-      if (c >= 0x00 && c <= 0x1f) {
+      if (static_cast<int>(c) >= 0x00 && static_cast<int>(c) <= 0x1f) {
         // from c (1 byte) to \uxxxx (6 bytes)
         result += 5;
       }
@@ -134,7 +134,7 @@ const Int8 *escape_string(const Int8 *str, std::size_t *length) noexcept {
     }
 
     default: {
-      if (c >= 0x00 && c <= 0x1f) {
+      if (static_cast<int>(c) >= 0x00 && static_cast<int>(c) <= 0x1f) {
         int len = 7;  // print character c as \uxxxx. +1 or null character
         snprintf(&result[pos + 1], len, "u%04x", static_cast<int>(c));
         pos += 6;
