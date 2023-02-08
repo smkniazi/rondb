@@ -29,11 +29,11 @@
     @return the number of characters required to escape string @a s
     @complexity Linear in the length of string @a s.
     */
-std::size_t extra_space(const char *s, int length) noexcept {
+std::size_t extra_space(const Int8 *str, int length) noexcept {
   std::size_t result = 0;
 
   for (int i = 0; i < length; i++) {
-    char c = s[i];
+    char c = str[i];
     switch (c) {
     case '"':
     case '\\':
@@ -71,10 +71,10 @@ std::size_t extra_space(const char *s, int length) noexcept {
     @return  the escaped string
     @complexity Linear in the length of string @a s.
     */
-std::string escape_string(const char *s, int length) noexcept {
-  const auto space = extra_space(s, length);
+const Int8 *escape_string(const Int8 *str, int length) noexcept {
+  const auto space = extra_space(str, length);
   if (space == 0) {
-    return s;
+    return str; 
   }
 
   // create a result string of necessary size
@@ -82,7 +82,7 @@ std::string escape_string(const char *s, int length) noexcept {
   std::size_t pos = 0;
 
   for (int i = 0; i < length; i++) {
-    char c = s[i];
+    char c = str[i];
     switch (c) {
     // quotation mark (0x22)
     case '"': {
@@ -149,5 +149,5 @@ std::string escape_string(const char *s, int length) noexcept {
     }
   }
 
-  return result;
+  return reinterpret_cast<const Int8 *>(result.c_str());
 }
