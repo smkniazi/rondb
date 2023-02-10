@@ -36,11 +36,14 @@ build-all.sh {-s path} [-b path] {-o path} {-r}
         No of build threads. This is passed to $(make -j$build_threads)
 -d      Deploy to remote repo.hops.works
 -r      Make release tarballs. Takes longer
+-f      Make final realse for clusterj artifacts with out -SNAPSHOT in the artifact name.
+        By default clusterj artifacts are uploaded as a SNAPSHOT version
 EOF
 }
 
 # Defaults
 RELEASE_BUILD=false
+RELEASE_FINAL_CLUSTERJ=false
 DEPLOY=false
 
 # A POSIX variable
@@ -61,6 +64,9 @@ while getopts ":n:s:b:o:j:rd" opt; do
     ;;
   r)
     RELEASE_BUILD=true
+    ;;
+  f)
+    RELEASE_FINAL_CLUSTERJ=true
     ;;
   d)
     DEPLOY=true
@@ -174,5 +180,11 @@ $SRC_DIR_ABS/build_scripts/release_scripts/create_rondb_tarball.sh $TARBALL_NAME
 if [ "$DEPLOY" = true ]; then
   echo "_____________ DEPLOYING TARBALL _____________"
   cd $TEMP_BUILD_DIR_ABS
-  $SRC_DIR_ABS/build_scripts/release_scripts/deploy.sh $RONDB_VERSION $TARBALL_NAME $OUTPUT_DIR_ABS $SRC_DIR_ABS/id_rsa
+
+  CLUSTERJ_ARTIFACT_POSTFIX="-SNAPSHOT"
+  if [ "$RELEASE_FINAL_CLUSTERJ" = true ]; then
+    CLUSTERJ_ARTIFACT_POSTFIX=""
+  fi
+
+  $SRC_DIR_ABS/build_scripts/release_scripts/deploy.sh $RONDB_VERSION $TARBALL_NAME $OUTPUT_DIR_ABS $SRC_DIR_ABS/id_rsa "$CLUSTERJ_ARTIFACT_POSTFIX"
 fi
