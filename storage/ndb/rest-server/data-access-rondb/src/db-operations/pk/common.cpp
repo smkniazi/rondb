@@ -27,32 +27,11 @@
 #include <string>
 #include <algorithm>
 #include <utility>
+#include "decimal.h"
 #include "src/error-strings.h"
 #include "src/status.hpp"
 #include "src/mystring.hpp"
 #include "src/rdrs-const.h"
-
-static const int MaxMySQLDecimalPrecision = 65;
-static const int MaxDecimalStrLen         = MaxMySQLDecimalPrecision + 3;
-
-static int howManyBytesNeeded[] = {
-    0,  1,  1,  2,  2,  3,  3,  4,  4,  4,  5,  5,  6,  6,  7,  7,  8,  8,  8,  9,  9,  10,
-    10, 11, 11, 12, 12, 12, 13, 13, 14, 14, 15, 15, 16, 16, 16, 17, 17, 18, 18, 19, 19, 20,
-    20, 20, 21, 21, 22, 22, 23, 23, 24, 24, 24, 25, 25, 26, 26, 27, 27, 28, 28, 28, 29, 29};
-
-/** Get the number of bytes needed in memory to represent the decimal number.
- *
- * @param precision the precision of the number
- * @param scale the scale
- * @return the number of bytes needed for the binary representation of the number
- */
-
-inline int getDecimalColumnSpace(int precision, int scale) {
-  int howManyBytesNeededForIntegral = howManyBytesNeeded[precision - scale];
-  int howManyBytesNeededForFraction = howManyBytesNeeded[scale];
-  int result                        = howManyBytesNeededForIntegral + howManyBytesNeededForFraction;
-  return result;
-}
 
 typedef unsigned char uchar;
 typedef Uint32 uint32;
@@ -312,23 +291,23 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
   case NdbDictionary::Column::Decimal: {
     int precision      = col->getPrecision();
     int scale          = col->getScale();
-    int bytesNeeded    = getDecimalColumnSpace(precision, scale);
     const char *decStr = request->PKValueCStr(colIdx);
-    char decBin [MAX_KEY_SIZE_IN_WORDS*4];
 
-    if (decimal_str2bin(decStr, strlen(decStr), precision, scale, decBin, bytesNeeded) != 0) {
+    char decBin [DECIMAL_MAX_SIZE_IN_BYTES];
+    if (decimal_str2bin(decStr, strlen(decStr), precision, scale, decBin, DECIMAL_MAX_SIZE_IN_BYTES) != 0) {
       return RS_CLIENT_ERROR(ERROR_015 + std::string(" Expecting Decimal with Precision: ") +
                              std::to_string(precision) + std::string(" and Scale: ") +
                              std::to_string(scale));
     }
 
-    if (operation->equal(request->PKName(colIdx), decBin, bytesNeeded) != 0) {
+    if (operation->equal(request->PKName(colIdx), decBin, DECIMAL_MAX_SIZE_IN_BYTES) != 0) {
       return RS_SERVER_ERROR(ERROR_023);
     }
     return RS_OK;
   }
   case NdbDictionary::Column::Char: {
-    ///< Len. A fixed array of 1-byte chars
+    ///A fix sized array of characters
+    ///size of a character depends on encoding scheme
 
     const int data_len = request->PKValueLen(colIdx);
     if (data_len > col->getLength()) {
@@ -338,7 +317,8 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
     }
 
     // operation->equal expects a zero-padded char string
-    char pk[MAX_KEY_SIZE_IN_WORDS*4];
+    char pk[CHAR_MAX_SIZE_IN_BYTES];
+    assert( col->getLength() <=CHAR_MAX_SIZE_IN_BYTES );
     std::fill (pk, pk + col->getLength(), 0);
     
     const char *data_str = request->PKValueCStr(colIdx);
@@ -364,79 +344,37 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
     if (request->PKValueNDBStr(colIdx, col, &charStr) != 0) {
       return RS_CLIENT_ERROR(ERROR_019);
     }
+
     if (operation->equal(request->PKName(colIdx), charStr, data_len) != 0) {
       return RS_SERVER_ERROR(ERROR_023);
     }
     return RS_OK;
   }
   case NdbDictionary::Column::Binary: {
-    ///< Len
-    const char *encodedStr = request->PKValueCStr(colIdx);
-    int data_len = request->PKValueLen(colIdx);
+    ///Binary data is sent as base64 string
+    assert(col->getLength() <= BINARY_MAX_SIZE_IN_BYTES);
+    const char *encoded_str = request->PKValueCStr(colIdx);
+    const size_t encoded_str_len = request->PKValueLen(colIdx); 
+    size_t col_len = col->getLength();
 
-    /*
-      Binary data will be sent as base64 strings.
-      These use 4 ASCII characters to represent any 3 bytes.
-
-      This means that any data which is not a multiple of 3 bytes will
-      append the padding character "=" once or twice in the encoded string.
-
-      E.g. the string "a"
-        -> to byte array: [ 97 ]
-        -> to base64 string: "YQ=="
-      This uses "==" as padding, since we only have 1 byte to represent.
-
-      Since the function decoded_size() does not read the string, it is not aware
-      of whether it contains padding characters or not. PKValueLen() is also not
-      aware of this. Thereby, any "==" will be intepreted as part of the data
-      and therefore decoded_size() will always return a multiple of 3 bytes.
-
-      E.g. given base64 string "YQ==" (4 ASCII characters)
-        -> data_len == 4 bytes
-        -> decoded_size == 3 bytes (since base64 always uses 4 bytes to represent 3 bytes of data)
-    */
-    size_t decoded_size = boost::beast::detail::base64::decoded_size(data_len);
-
-    if (decoded_size > size_t(col->getLength())) {
-      
-      /*
-        As described above, it may be the case that the decoded_size falsely interpretes
-        1 or 2 padding bytes as part of the data. Since the decoded_size must be a
-        multiple of 3, it may now only be the next multiple after col->getLength().
-
-        E.g.: col->getLength() == 100; decoded_size is now only allowed to be 102
-      */
-      int base64Mod = col->getLength() % 3; // 100 % 3 == 1
-      int base64Total = col->getLength() - base64Mod + 3; // 100 - 1 + 3 == 102
-
-      if (decoded_size != size_t(base64Total)) {
+    size_t decoded_size = boost::beast::detail::base64::decoded_size(encoded_str_len);
+    if(decoded_size > BINARY_MAX_SIZE_IN_BYTES_DECODED ) {
         return RS_CLIENT_ERROR(
-            std::string(ERROR_008) +
-            " Decoded data length (" + std::to_string(decoded_size) +
-            ") is greater than column length (" + std::to_string(col->getLength()) +
-            "). Column: " + std::string(col->getName())
-        );
-      }
-      /*
-        It may now still be the case that the real decoded_size is 1 byte larger than
-        the column length. But we cannot find out unless we decode the string.
-      */
+            std::string(ERROR_008) +" "+ "Decoded data length is greater than column length. "+
+            "Column: " + std::string(col->getName()) + " Length: "+ std::to_string(col->getLength()));
     }
-
-    // operation->equal expects a zero-padded char string
-    char pk[MAX_KEY_SIZE_IN_WORDS*4];
+    
+    char pk[BINARY_MAX_SIZE_IN_BYTES_DECODED];
     std::fill (pk, pk + col->getLength(), 0);
-
-    std::pair<std::size_t, std::size_t> ret = boost::beast::detail::base64::decode(pk, encodedStr, data_len);
-
-    // ret.first does not interpret padding bytes as part of data
-    if (ret.first > size_t(col->getLength())) {
+    std::pair<std::size_t, std::size_t> ret = boost::beast::detail::base64::decode(pk, encoded_str,
+        encoded_str_len);
+    // make sure everything was decoded. 1 or 2 bytes of padding is not included in ret.second
+    assert(ret.second >= encoded_str_len-2 && ret.second <= encoded_str_len ); 
+    if (ret.first > col_len ) {  
         return RS_CLIENT_ERROR(
-            std::string(ERROR_008) +
-            " ret.first (" + std::to_string(ret.first) +
-            ") is not equal to decoded_size (" + std::to_string(decoded_size)
-        );
-    }
+            std::string(ERROR_008) +" "+ "Decoded data length is greater than column length. "+
+            "Column: " + std::string(col->getName()) + " Length: "+ std::to_string(col->getLength()));
+      }
 
     if (operation->equal(request->PKName(colIdx), pk, col->getLength()) != 0) {
       return RS_SERVER_ERROR(ERROR_023);
@@ -447,75 +385,37 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
     ///< Length bytes: 1, Max: 255
     [[fallthrough]];
   case NdbDictionary::Column::Longvarbinary: {
-    ///< Length bytes: 2, little-endian
+    // Length bytes: 2, little-endian
+   //Note: col->getLength() does not include the length bytes.
 
-    /*
-      In NDB, a row containing a varbinary column will use 11 bytes to store 
-      10 bytes in this column. This is because the first byte will represent
-      the length of the array. A longvarbinary column will use the first 2 bytes
-      to represent the length.
+    const size_t col_len = col->getLength(); 
+    const char *encoded_str = request->PKValueCStr(colIdx);
+    const size_t encoded_str_len = request->PKValueLen(colIdx); 
 
-      col->getLength() should not include the length bytes.
-    */
+    size_t decoded_size = boost::beast::detail::base64::decoded_size(encoded_str_len);
 
-    /*
-      PKValueLen refers to data without prepended length bytes.
-      The length bytes are only native to RonDB.
-    */
-    const int data_len = request->PKValueLen(colIdx); // data length of binary value
-
-    /*
-      Similarly to binary columns, the data in the request will be a base64 string.
-      Once again, the data_len is unaware of base64's "=" used as padding. Therefore the
-      decoded_size may be off by 1 or 2 bytes.
-    */ 
-    size_t decoded_size = boost::beast::detail::base64::decoded_size(data_len);
-
-    if (decoded_size > size_t(col->getLength())) {
-
-      /*
-        As described above, it may be the case that the decoded_size falsely interpretes
-        1-2 padding bytes as part of the data. If so, the decoded_size must be a
-        multiple of 3 and it may only be the next multiple after col->getLength().
-
-        E.g.: col->getLength() == 100; decoded_size may now only be 102
-      */
-      int base64Mod = col->getLength() % 3; // 100 % 3 == 1
-      int base64Total = col->getLength() - base64Mod + 3; // 100 - 1 + 3 == 102
-
-      if (decoded_size != size_t(base64Total)) {
+    if (decoded_size > KEY_MAX_SIZE_IN_BYTES_DECODED) {
         return RS_CLIENT_ERROR(
-            std::string(ERROR_008) +
-            " Decoded data length (" + std::to_string(decoded_size) +
-            ") is greater than column length (" + std::to_string(col->getLength()) +
-            "). Column: " + std::string(col->getName())
-        );
-      }
-      // It can now still be the case that the true decoded length is
-      // 101 or 102 bytes. We can only find out by decoding the string
+            std::string(ERROR_008) +" "+ "Decoded data length is greater than column length. "+
+            "Column: " + std::string(col->getName()) + " Length: "+ std::to_string(col->getLength()));
     }
 
+    char pk[KEY_MAX_SIZE_IN_BYTES_DECODED];
     int additional_len  = 1;
     if (col->getType() == NdbDictionary::Column::Longvarbinary) {
       additional_len = 2;
     }
 
-    const char *encodedStr = request->PKValueCStr(colIdx);
-
-    char pk[MAX_KEY_SIZE_IN_WORDS*4 + 2];
-
     // leave first 1-2 bytes free for saving length bytes
     std::pair<std::size_t, std::size_t> ret = boost::beast::detail::base64::decode(
-        pk + additional_len, encodedStr, data_len);
-
-    // ret.first does not interpret padding bytes as part of data
-    if (ret.first > size_t(col->getLength())) {
+        pk + additional_len, encoded_str, encoded_str_len);
+    // make sure everything was decoded. 1 or 2 bytes of padding which is not included in ret.second
+    assert(ret.second >= encoded_str_len-2 && ret.second <= encoded_str_len ); 
+    if (ret.first > col_len ) {  
         return RS_CLIENT_ERROR(
-            std::string(ERROR_008) +
-            " Size of decoded bytes (" + std::to_string(ret.first) +
-            ") is greater than the varbinary column length (" + std::to_string(col->getLength())
-        );
-    }
+            std::string(ERROR_008) +" "+ "Decoded data length is greater than column length. "+
+            "Column: " + std::string(col->getName()) + " Length: "+ std::to_string(col->getLength()));
+      }
 
     // insert the length at the beginning of the array
     if (col->getType() == NdbDictionary::Column::Varbinary) {
@@ -555,11 +455,10 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
                              " Expecting only date data. Column: " + std::string(col->getName()));
     }
 
-    unsigned char packed[4];
+    unsigned char packed[DATE_MAX_SIZE_IN_BYTES];
     my_date_to_binary(&l_time, packed);
 
-    int exitCode = operation->equal(request->PKName(colIdx), reinterpret_cast<char *>(packed), col->getSizeInBytes());
-    if ( exitCode != 0 ) {
+    if ( operation->equal(request->PKName(colIdx), reinterpret_cast<char *>(packed), col->getSizeInBytes()) != 0 ) {
       return RS_SERVER_ERROR(ERROR_023);
     }
     return RS_OK;
@@ -620,6 +519,7 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
   // */
   case NdbDictionary::Column::Time2: {
     ///< 3 bytes + 0-3 fraction
+    assert(col->getSizeInBytes() <= TIME2_MAX_SIZE_IN_BYTES );
     const char *time_str = request->PKValueCStr(colIdx);
     size_t time_str_len  = request->PKValueLen(colIdx);
 
@@ -631,22 +531,26 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
                              std::string(col->getName()))
     }
 
-    size_t col_byte_size = col->getSizeInBytes();
+    size_t col_size = col->getSizeInBytes();
     int precision     = col->getPrecision();
-    unsigned char packed[6];
+    unsigned char packed[TIME2_MAX_SIZE_IN_BYTES];
 
-    TruncatePrecision(&l_time, status.fractional_digits, precision);
+    int warnings;
+my_datetime_adjust_frac(&l_time,precision,&warnings,true  );
+assert(warnings==0);
+
     longlong numeric_date_time = TIME_to_longlong_time_packed(l_time);
     my_time_packed_to_binary(numeric_date_time, packed, precision);
 
-    int exitCode = operation->equal(request->PKName(colIdx), reinterpret_cast<char *>(packed), col_byte_size);
-    if ( exitCode != 0) {
+    if ( operation->equal(request->PKName(colIdx), reinterpret_cast<char *>(packed), col_size) != 0) {
       return RS_SERVER_ERROR(ERROR_023);
     }
     return RS_OK;
   }
   case NdbDictionary::Column::Datetime2: {
     ///< 5 bytes plus 0-3 fraction
+    assert(col->getSizeInBytes() <= DATETIME_MAX_SIZE_IN_BYTES );
+
     const char *date_str = request->PKValueCStr(colIdx);
     size_t date_str_len  = request->PKValueLen(colIdx);
 
@@ -658,18 +562,19 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
                              std::string(col->getName()))
     }
 
-    size_t col_byte_size = col->getSizeInBytes();
+    size_t col_size = col->getSizeInBytes();
     int precision     = col->getPrecision();
 
-    TruncatePrecision(&l_time, status.fractional_digits, precision);
-    unsigned char packed[8];
+    int warnings;
+my_datetime_adjust_frac(&l_time,precision,&warnings,true  );
+assert(warnings==0);
 
     longlong numeric_date_time = TIME_to_longlong_datetime_packed(l_time);
 
+    unsigned char packed[DATETIME_MAX_SIZE_IN_BYTES];
     my_datetime_packed_to_binary(numeric_date_time, packed, precision);
 
-    int exitCode = operation->equal(request->PKName(colIdx), reinterpret_cast<char *>(packed), col_byte_size);
-    if ( exitCode != 0 ) {
+    if ( operation->equal(request->PKName(colIdx), reinterpret_cast<char *>(packed), col_size) != 0 ) {
       return RS_SERVER_ERROR(ERROR_023);
     }
     return RS_OK;
@@ -677,9 +582,10 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
   case NdbDictionary::Column::Timestamp2: {
     // epoch range 0 , 2147483647
     /// < 4 bytes + 0-3 fraction
+    assert (col->getSizeInBytes() <= TIMESTAMP2_MAX_SIZE_IN_BYTES);
     const char *ts_str = request->PKValueCStr(colIdx);
     size_t ts_str_len  = request->PKValueLen(colIdx);
-    unsigned char packed[7];
+    unsigned char packed[TIMESTAMP2_MAX_SIZE_IN_BYTES];
     uint precision = col->getPrecision();
 
     MYSQL_TIME l_time;
@@ -725,16 +631,20 @@ RS_Status SetOperationPKCol(const NdbDictionary::Column *col, NdbOperation *oper
     // TODO(salman) how to deal with time zone setting in mysql server
     //
 
-    TruncatePrecision(&l_time, status.fractional_digits, precision);
+    int warnings;
+my_datetime_adjust_frac(&l_time,precision,&warnings,true  );
+assert(warnings==0);
+
     // On Mac timeval.tv_usec is Int32 and on linux it is Int64.
     // Inorder to be compatible we cast l_time.second_part to Int32
     // This will not create problems as only six digit nanoseconds 
     // are stored in Timestamp2
     timeval my_tv{epoch, (Int32)l_time.second_part};
+
     my_timestamp_to_binary(&my_tv, packed, precision);
 
-    size_t col_byte_size = col->getSizeInBytes();
-    int exitCode = operation->equal(request->PKName(colIdx), reinterpret_cast<char *>(packed), col_byte_size);
+    size_t col_size = col->getSizeInBytes();
+    int exitCode = operation->equal(request->PKName(colIdx), reinterpret_cast<char *>(packed), col_size);
     if ( exitCode != 0 ) {
       return RS_SERVER_ERROR(ERROR_023);
     }
@@ -817,12 +727,12 @@ RS_Status WriteColToRespBuff(const NdbRecAttr *attr, PKRResponse *response) {
     ///< MySQL >= 5.0 signed decimal,  Precision, Scale
     [[fallthrough]];
   case NdbDictionary::Column::Decimalunsigned: {
-    char decStr[MaxDecimalStrLen];
+    char decStr[DECIMAL_MAX_STR_LEN_IN_BYTES];
     int precision = attr->getColumn()->getPrecision();
     int scale     = attr->getColumn()->getScale();
     void *bin     = attr->aRef();
     int bin_len   = attr->get_size_in_bytes();
-    decimal_bin2str(bin, bin_len, precision, scale, decStr, MaxDecimalStrLen);
+    decimal_bin2str(bin, bin_len, precision, scale, decStr, DECIMAL_MAX_STR_LEN_IN_BYTES);
     return response->Append_string(attr->getColumn()->getName(), std::string(decStr),
                                    RDRS_FLOAT_DATATYPE);
   }
@@ -855,7 +765,8 @@ RS_Status WriteColToRespBuff(const NdbRecAttr *attr, PKRResponse *response) {
     if (GetByteArray(attr, &data_start, &attr_bytes) != 0) {
       return RS_CLIENT_ERROR(ERROR_019);
     } else {
-      char buffer[MAX_TUPLE_SIZE_IN_WORDS*4 + 2];
+      assert(attr_bytes<=MAX_TUPLE_SIZE_IN_BYTES_ENCODED);
+      char buffer[MAX_TUPLE_SIZE_IN_BYTES_ENCODED];
       size_t ret = boost::beast::detail::base64::encode(reinterpret_cast<void *>(buffer),
                                                         data_start, attr_bytes);
       return response->Append_string(attr->getColumn()->getName(), std::string(buffer, ret),
@@ -892,17 +803,18 @@ RS_Status WriteColToRespBuff(const NdbRecAttr *attr, PKRResponse *response) {
     if (attr->getColumn()->getLength() % 8 != 0) {
       words += 1;
     }
+    assert(words<=BIT_MAX_SIZE_IN_BYTES);
 
     // change endieness
     int i = 0;
-    char reversed [MAX_TUPLE_SIZE_IN_WORDS*4];
+    char reversed [BIT_MAX_SIZE_IN_BYTES];
     for (int j = words - 1; j >= 0; j--) {
       reversed[i++] = attr->aRef()[j];
     }
 
-    char buffer [MAX_TUPLE_SIZE_IN_WORDS*4];
-    size_t ret =
-        boost::beast::detail::base64::encode(reinterpret_cast<void *>(buffer), reversed, words);
+    char buffer [BIT_MAX_SIZE_IN_BYTES_ENCODED];
+    size_t ret = boost::beast::detail::base64::encode(reinterpret_cast<void *>(buffer),
+        reversed, words);
     return response->Append_string(attr->getColumn()->getName(), std::string(buffer, ret),
                                    RDRS_BIT_DATATYPE);
   }
@@ -1031,19 +943,3 @@ int GetByteArray(const NdbRecAttr *attr, const char **first_byte, Uint32 *bytes)
   }
 }
 
-void TruncatePrecision(MYSQL_TIME *l_time, int currentPrecision, int maxPrecision) {
-    int precisionDifference = currentPrecision - maxPrecision;
-    if (precisionDifference > 0) {
-      for (int i = 1; i <= precisionDifference; i++) {
-        int rest = l_time->second_part % 10;
-        l_time->second_part = l_time->second_part / 10;
-
-        // round up the last digit
-        if (i == precisionDifference && rest > 4) {
-          l_time->second_part++;
-        }
-      }
-      // Append zeros
-      l_time->second_part = l_time->second_part * pow(10, precisionDifference);
-    }
-}
