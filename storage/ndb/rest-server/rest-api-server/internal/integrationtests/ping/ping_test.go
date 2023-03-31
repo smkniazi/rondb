@@ -49,7 +49,7 @@ func TestPing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if conf.Security.UseHopsworksAPIKeys {
+	if conf.Security.APIKeyParameters.UseHopsworksAPIKeys {
 		req.Header.Set(config.API_KEY_NAME, testutils.HOPSWORKS_TEST_API_KEY)
 	}
 

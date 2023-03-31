@@ -32,12 +32,10 @@ import (
 )
 
 func TestStat(t *testing.T) {
-	db := testdbs.DB004
-	table := "int_table"
 
 	ch := make(chan int)
 
-	numOps := uint32(5)
+	numOps := uint32(50)
 	expectedAllocations := numOps * 2
 
 	conf := config.GetAll()
@@ -48,7 +46,7 @@ func TestStat(t *testing.T) {
 	}
 
 	for i := uint32(0); i < numOps; i++ {
-		go performPkOp(t, db, table, ch)
+		go performPkOp(t, ch)
 	}
 	for i := uint32(0); i < numOps; i++ {
 		<-ch
@@ -60,6 +58,8 @@ func TestStat(t *testing.T) {
 
 	statsGRPC := getStatsGRPC(t)
 	compare(t, statsGRPC, int64(expectedAllocations), int64(numOps))
+
+	fmt.Printf("Test completed\n")
 }
 
 func compare(t *testing.T, stats *api.StatResponse, expectedAllocations int64, numOps int64) {
@@ -69,25 +69,45 @@ func compare(t *testing.T, stats *api.StatResponse, expectedAllocations int64, n
 		t.Fatalf("Native buffer stats do not match Got: %v", stats)
 	}
 
-	if stats.RonDBStats.NdbObjectsCreationCount != numOps ||
-		stats.RonDBStats.NdbObjectsTotalCount != numOps ||
-		stats.RonDBStats.NdbObjectsFreeCount != numOps {
+	// Number of NDB objects created must be equal to number of NDB
+	// objects freed
+	if stats.RonDBStats.NdbObjectsTotalCount != stats.RonDBStats.NdbObjectsFreeCount {
 		t.Fatalf("RonDB stats do not match. %#v", stats.RonDBStats)
 	}
 }
 
-func performPkOp(t *testing.T, db string, table string, ch chan int) {
-	param := api.PKReadBody{
-		Filters:     integrationtests.NewFiltersKVs("id0", 0, "id1", 0),
-		ReadColumns: integrationtests.NewReadColumn("col0"),
+func performPkOp(t *testing.T, ch chan int) {
+
+	db := testdbs.DB004
+	table := "int_table"
+	ops := api.BatchOperationTestInfo{ // bigger batch of numbers table
+		HttpCode: []int{http.StatusOK, http.StatusNotFound},
+		Operations: []api.BatchSubOperationTestInfo{
+			{
+				SubOperation: api.BatchSubOp{
+					Method:      &[]string{config.PK_HTTP_VERB}[0],
+					RelativeURL: &[]string{string(db + "/" + table + "/" + config.PK_DB_OPERATION)}[0],
+					Body: &api.PKReadBody{
+						Filters:     integrationtests.NewFiltersKVs("id0", 0, "id1", 0),
+						ReadColumns: integrationtests.NewReadColumns("col", 2),
+						OperationID: integrationtests.NewOperationID(64),
+					},
+				},
+				Table:    table,
+				DB:       db,
+				HttpCode: http.StatusOK,
+				RespKVs:  []interface{}{"col0", "col1"},
+			},
+		},
+		ErrMsgContains: "",
 	}
-	body, _ := json.MarshalIndent(param, "", "\t")
 
-	url := testutils.NewPKReadURL(db, table)
-	integrationtests.SendHttpRequest(t, config.PK_HTTP_VERB, url, string(body),
-		"", http.StatusOK)
+	defer func() {
+		ch <- 0
+	}()
 
-	ch <- 0
+	integrationtests.BatchGRPCTest(t, ops, false, true)
+
 }
 
 func getStatsHttp(t *testing.T) *api.StatResponse {

@@ -42,6 +42,9 @@ import (
 	"hopsworks.ai/rdrs/pkg/api"
 )
 
+var client *http.Client
+var clientMutex sync.Mutex
+
 func SendHttpRequest(
 	t testing.TB,
 	httpVerb string,
@@ -52,10 +55,10 @@ func SendHttpRequest(
 ) (int, string) {
 	t.Helper()
 
-	client := testutils.SetupHttpClient(t)
 	var req *http.Request
 	var resp *http.Response
 	var err error
+
 	switch httpVerb {
 	case http.MethodPost:
 		req, err = http.NewRequest(http.MethodPost, url, strings.NewReader(body))
@@ -73,10 +76,15 @@ func SendHttpRequest(
 	}
 
 	conf := config.GetAll()
-	if conf.Security.UseHopsworksAPIKeys {
+	if conf.Security.APIKeyParameters.UseHopsworksAPIKeys {
 		req.Header.Set(config.API_KEY_NAME, testutils.HOPSWORKS_TEST_API_KEY)
 	}
 
+	clientMutex.Lock()
+	defer clientMutex.Unlock()
+	if client == nil {
+		client = testutils.SetupHttpClient(t)
+	}
 	resp, err = client.Do(req)
 	if err != nil {
 		t.Fatalf("failed to perform HTTP request towards url: '%s'\nrequest body: '%s'\nerror: %v", url, body, err)
@@ -493,7 +501,7 @@ func InitGRPCConnction() (*grpc.ClientConn, error) {
 	var err error
 	if grpcConn == nil {
 		conf := config.GetAll()
-		grpcConn, err = testutils.CreateGrpcConn(conf.Security.UseHopsworksAPIKeys, conf.Security.EnableTLS)
+		grpcConn, err = testutils.CreateGrpcConn(conf.Security.APIKeyParameters.UseHopsworksAPIKeys, conf.Security.TLS.EnableTLS)
 		if err != nil {
 			return nil, err
 		}

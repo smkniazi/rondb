@@ -72,9 +72,10 @@ RS_Status init(const char *connection_string, unsigned int connection_pool_size,
 
   retCode = ndb_connection->wait_until_ready(30, 0);
   if (retCode != 0) {
-    return RS_SERVER_ERROR(ERROR_003 + std::string(" RetCode: ") + std::to_string(retCode)+
-        std::string(" Lastest Error: ")+std::to_string(ndb_connection->get_latest_error())+
-        std::string(" Lastest Error Msg: ")+ std::string(ndb_connection->get_latest_error_msg()));
+    return RS_SERVER_ERROR(
+        ERROR_003 + std::string(" RetCode: ") + std::to_string(retCode) +
+        std::string(" Lastest Error: ") + std::to_string(ndb_connection->get_latest_error()) +
+        std::string(" Lastest Error Msg: ") + std::string(ndb_connection->get_latest_error_msg()));
   }
 
   // Initialize NDB Object Pool
@@ -99,6 +100,7 @@ RS_Status shutdown_connection() {
     // ndb_end(0); // causes seg faults when called repeated from unit tests*/
     NdbObjectPool::GetInstance()->Close();
     delete ndb_connection;
+    ndb_connection = nullptr;
   } catch (...) {
     WARN("Exception in Shutdown");
   }
@@ -176,7 +178,7 @@ RS_Status pk_batch_read(unsigned int no_req, RS_Buffer *req_buffs, RS_Buffer *re
 }
 
 /**
- * Deallocate pointer array
+ * Returns statistis about RonDB connection
  */
 RS_Status get_rondb_stats(RonDB_Stats *stats) {
   RonDB_Stats ret              = NdbObjectPool::GetInstance()->GetStats();
