@@ -168,7 +168,7 @@ my $jsonStr = <<"END_TXT";
                         "EnableTLS": true,
                         "RequireAndVerifyClientCert": true,
                 }, 
-                "APIKeyParameters": {
+                "APIKey": {
                         "UseHopsworksAPIKeys": true
                 }
         },
