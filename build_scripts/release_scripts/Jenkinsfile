@@ -33,7 +33,7 @@ pipeline {
               sh '''
                 echo "Cloning RonDB Branch ${BRANCH}"  
                 cd ${WORKSPACE}
-                git clone --depth=1 --branch ${BRANCH} https://github.com/logicalclocks/rondb
+                git clone --depth=1 --branch ${BRANCH} https://github.com/smkniazi/rondb
               '''
             }
         }
