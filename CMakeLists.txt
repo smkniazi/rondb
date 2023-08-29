@@ -842,6 +842,8 @@ INCLUDE(fido2)
 INCLUDE(win_jemalloc)
 INCLUDE(msvc_cppcheck)
 INCLUDE(base64)
+INCLUDE(trantor)
+INCLUDE(drogon)
 
 IF(UNIX)
   OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
@@ -1751,6 +1753,12 @@ IF(WITH_SYSTEM_LIBS)
   UNSET(WITH_SYSTEM_LIBS)
   UNSET(WITH_SYSTEM_LIBS CACHE)
 ENDIF()
+
+# Add bundle for Trantor Non Blocking IO lib
+CHECK_TRANTOR_NON_BLOCKING_IO()
+
+# Add bundle for Drogon REST Framework 
+CHECK_DROGON_WEB_FRAMEWORK()
 
 # Add bundled or system zlib.
 MYSQL_CHECK_ZLIB()

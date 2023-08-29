@@ -110,6 +110,7 @@ endif()
 target_include_directories(
     ${PROJECT_NAME}
     PUBLIC $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/lib/inc>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/orm_lib/inc>
     $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/nosql_lib/redis/inc>
     $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}>
@@ -126,8 +127,8 @@ if(USE_SUBMODULE)
 add_subdirectory(trantor)
 target_link_libraries(${PROJECT_NAME} PUBLIC trantor)
 else()
-find_package(Trantor CONFIG REQUIRED)
-target_link_libraries(${PROJECT_NAME} PUBLIC Trantor::Trantor)
+# find_package(Trantor CONFIG REQUIRED)
+target_link_libraries(${PROJECT_NAME} PUBLIC trantor)
 endif()
 
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Haiku")

@@ -99,7 +99,8 @@ if (BUILD_CTL)
             ${CMAKE_CURRENT_SOURCE_DIR}/integration_test/server/test.md
             ${CMAKE_CURRENT_SOURCE_DIR}/integration_test/server/index.html.gz
             ${CMAKE_CURRENT_SOURCE_DIR}/integration_test/server/中文.txt
-            ${PROJECT_SOURCE_DIR}/trantor/trantor/tests/server.pem
+            ${TRANTOR_SOURCE_DIR}/trantor/tests/server.crt
+            ${TRANTOR_SOURCE_DIR}/trantor/tests/server.key
             $<TARGET_FILE_DIR:integration_test_server>)
   add_custom_command(
     TARGET integration_test_server POST_BUILD
