@@ -844,6 +844,7 @@ INCLUDE(msvc_cppcheck)
 INCLUDE(base64)
 INCLUDE(trantor)
 INCLUDE(drogon)
+INCLUDE(simdjson)
 
 IF(UNIX)
   OPTION(WITH_VALGRIND "Valgrind instrumentation" OFF)
@@ -1753,6 +1754,9 @@ IF(WITH_SYSTEM_LIBS)
   UNSET(WITH_SYSTEM_LIBS)
   UNSET(WITH_SYSTEM_LIBS CACHE)
 ENDIF()
+
+# Add bundle for simdjson
+CHECK_SIMDJON()
 
 # Add bundle for Trantor Non Blocking IO lib
 CHECK_TRANTOR_NON_BLOCKING_IO()
