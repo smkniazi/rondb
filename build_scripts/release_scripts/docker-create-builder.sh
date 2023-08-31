@@ -163,7 +163,7 @@ echo "Creating Docker image ${DOCKER_IMAGE_NAME}"
 docker buildx build . \
   -f $SRC_DIR_ABS/$DOCKERFILE \
   --tag $DOCKER_IMAGE_NAME \
-  --target rondb-build-dependencies \
+  --target build-allXXX \
   --build-arg BUILD_THREADS=$CORES
 
 echo "Building RonDB using $DOCKER_IMAGE_NAME"

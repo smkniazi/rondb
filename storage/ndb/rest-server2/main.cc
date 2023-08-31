@@ -10,7 +10,7 @@
 #include <drogon/utils/string_view.h>
 #include <thread>
 #include "data-structs.h"
-#include "simdjson.h"
+#include <singleheader/simdjson.h>
 
 using namespace drogon;
 using namespace drogon::orm;
