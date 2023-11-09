@@ -9,6 +9,7 @@ mysqld=
 ndbapi=,,,
 DataMemory            = 200M
 MaxNoOfOrderedIndexes = 150
+MaxNoOfTables         = 256
 ClassicFragmentation  = 1
 
 [cluster_config.mysqld.1.1]
