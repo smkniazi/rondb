@@ -61,3 +61,4 @@ INSERT INTO
     text_table
 VALUES
     ("5", lpad("", 20000, 0xe28080), 1);
+ 
