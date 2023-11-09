@@ -90,6 +90,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBUpdate1Test.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBUpdate2Test.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBUpdate3Test.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBSchemaChangeTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/NegativeMetadataTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/NotPersistentTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/NullValuesTest.java

@@ -124,4 +124,4 @@ echo   "com.mysql.clusterj.database=test"                               >>   clu
 echo   "com.mysql.clusterj.max.transactions=1024"                       >>   clusterj.properties
 echo   "com.mysql.clusterj.connection.reconnect.timeout=3"              >>   clusterj.properties
 echo   "com.mysql.clusterj.max.cached.instances=128"                    >>   clusterj.properties
-java -cp $ALL_JARS -Djava.library.path=$LIBNDBCLIENT_PATH -Dclusterj.properties=$CLUSTERJ_BUILD_DIR/clusterj.properties testsuite.clusterj.AllTests  $TEST_JAR
+java -XX:ReservedCodeCacheSize=1G -cp $ALL_JARS -Djava.library.path=$LIBNDBCLIENT_PATH -Dclusterj.properties=$CLUSTERJ_BUILD_DIR/clusterj.properties testsuite.clusterj.AllTests  $TEST_JAR
