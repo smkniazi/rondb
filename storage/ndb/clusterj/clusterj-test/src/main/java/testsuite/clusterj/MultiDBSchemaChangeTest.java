@@ -105,14 +105,27 @@ public class MultiDBSchemaChangeTest extends AbstractClusterJModelTest {
   private void setUpDB(String DB) {
     runSQLCMD(this, "DROP DATABASE IF EXISTS "+DB);
     runSQLCMD(this, "CREATE DATABASE  "+DB);
-    String createTableCmd = "CREATE TABLE " + DB+"."+TABLE + " ( id int NOT NULL, col_old_1 " +
-      "INT DEFAULT NULL, col_old_2 INT DEFAULT NULL,col_old_3 INT DEFAULT NULL, col_old_4 INT DEFAULT NULL, " +
-      " PRIMARY KEY (id)) ENGINE=ndbcluster";
+    String createTableCmd = "CREATE TABLE " + DB+"."+TABLE + " ( id int NOT NULL, " +
+      "col_old_0 INT DEFAULT NULL, col_old_1 INT DEFAULT NULL, col_old_2 INT DEFAULT NULL, col_old_3 INT DEFAULT NULL,"+
+      " col_old_4 INT DEFAULT NULL, col_old_5 INT DEFAULT NULL, " + " PRIMARY KEY (id)) ENGINE=ndbcluster";
     runSQLCMD(this, createTableCmd);
   }
 
   private void updateDB(String DB, int colID) {
-    String alterTableCmd = "ALTER TABLE " + DB+"."+TABLE + " ADD COLUMN col_new_"+colID+" INT DEFAULT NULL,  algorithm=COPY";
+    String alterTableCmd = "ALTER TABLE " + DB+"."+TABLE + " ADD COLUMN col_new_"+colID+" INT DEFAULT NULL,  algorithm=INPLACE";
+    runSQLCMD(this, alterTableCmd);
+  }
+
+  private void updateDB2(String DB, int colID) {
+    runSQLCMD(this, "DROP TABLE "+DB+"."+TABLE);
+    String createTableCmd = "CREATE TABLE " + DB+"."+TABLE + " ( id int NOT NULL, col_new_1 " +
+      "INT DEFAULT NULL, col_new_2 INT DEFAULT NULL,col_new_3 INT DEFAULT NULL, col_new_4 INT DEFAULT NULL, " +
+      " PRIMARY KEY (id)) ENGINE=ndbcluster";
+    runSQLCMD(this, createTableCmd);
+  }
+
+  private void updateDB3(String DB, int colID) {
+    String alterTableCmd = "ALTER TABLE " + DB+"."+TABLE + " drop COLUMN col_old_"+colID+"";
     runSQLCMD(this, alterTableCmd);
   }
 
@@ -161,16 +174,25 @@ public class MultiDBSchemaChangeTest extends AbstractClusterJModelTest {
         t.start();
       }
 
-      Thread.sleep(2000);
+      Thread.sleep(1000);
+
+      for (int i = 0; i < NUM_THREADS; i++) {
+        threads.get(i).pause();
+      }
+
+      Thread.sleep(500);
 
       for (int j = 0; j < 5; j++) {
-        for (int i = 0 ; i < num_dbs; i++){
-          updateDB(DB_PREFIX+i, j);
-          Thread.sleep(200);
+        for (int i = 0; i < num_dbs; i++) {
+          updateDB3(DB_PREFIX+i, j);
         }
       }
 
-      Thread.sleep(2000);
+      for (int i = 0; i < NUM_THREADS; i++) {
+        threads.get(i).unPause();
+      }
+
+      Thread.sleep(1000);
 
 
       int failed = 0;
@@ -206,6 +228,8 @@ public class MultiDBSchemaChangeTest extends AbstractClusterJModelTest {
 
 
     private boolean run = true;
+    private Object pause = new Object();
+    private boolean isPaused = false;
     private int startIndex = 0;
     private String db;
 
@@ -215,7 +239,7 @@ public class MultiDBSchemaChangeTest extends AbstractClusterJModelTest {
 
     DataInsertWorker(String db, int startIndex, int maxRowsToWrite) {
       this.db = db;
-      System.out.println(db);
+      System.out.println("Tread started with DB: "+db);
       this.startIndex = startIndex;
       this.maxRowsToWrite = maxRowsToWrite;
     }
@@ -225,6 +249,20 @@ public class MultiDBSchemaChangeTest extends AbstractClusterJModelTest {
 
       int currentIndex = startIndex;
       while (run) {
+
+        if(isPaused){
+
+          try {
+            synchronized(pause) {
+              System.out.println("Thread paused");
+              pause.wait();
+              System.out.println("Thread resumed");
+            }
+          }catch(Exception e) {
+            System.out.println(e);
+          }
+        }
+
         Session session = getSession(db);
         DynamicObject e = null;
         boolean rowInserted = false;
@@ -258,6 +296,17 @@ public class MultiDBSchemaChangeTest extends AbstractClusterJModelTest {
             returnSession(session);
           }
         }
+      }
+    }
+
+    public void pause(){
+      isPaused = true;
+    }
+
+    public void unPause() {
+      synchronized(pause){
+        isPaused = false;
+        pause.notify();
       }
     }
 
