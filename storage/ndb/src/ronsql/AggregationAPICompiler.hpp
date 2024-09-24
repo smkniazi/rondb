@@ -33,7 +33,6 @@
 #include "DynamicArray.hpp"
 #include "RonSQLCommon.hpp"
 // todo order and remove superfluous includes
-using std::string;
 
 // todo Increase to 16 if possible
 #define REGS 8
