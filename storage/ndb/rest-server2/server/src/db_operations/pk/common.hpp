@@ -29,14 +29,6 @@
 #include <memory>
 #include <list>
 
-typedef struct ColRec {
-  ColRec(NdbRecAttr *recVal, NdbBlob *blobVal) :
-    ndbRec(recVal), blob(blobVal) {
-  }
-  NdbRecAttr *ndbRec = nullptr;
-  NdbBlob *blob = nullptr;
-} ColRec;
-
 /**
  * Set up read operation
  * @param col information of column that we're querying
@@ -53,29 +45,6 @@ RS_Status set_operation_pk_col(const NdbDictionary::Column *col,
                                Uint8 *row,
                                const NdbRecord *ndb_record,
                                Uint32 colIdx);
-/**
- * Set up read operation
- * @param col information of column that we're querying
- * @param request the incoming request from the REST API server
- * @param colIdx Column id
- * @param primaryKeyCol [out] Primary key column
- * @param primaryKeySize [out] Primary key size
- * @return the REST API status of performing the operation
- *
- * @return status
- */
-
-RS_Status SetOperationPKCol(const NdbDictionary::Column *col,
-                            PKRRequest *request,
-                            Uint32 colIdx,
-                            Int8 **primaryKeyCol,
-                            Uint32 *primaryKeySize);
-
-/**
- * it stores the data read from the DB into the response buffer
- */
-RS_Status WriteColToRespBuff(std::shared_ptr<ColRec> colRec,
-                             PKRResponse *response);
 
 /**
  * return data for array columns

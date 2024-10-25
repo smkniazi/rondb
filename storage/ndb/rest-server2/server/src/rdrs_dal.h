@@ -24,6 +24,8 @@ extern "C" {
 #ifndef STORAGE_NDB_REST_SERVER2_SERVER_SRC_RDRS_DAL_H_
 #define STORAGE_NDB_REST_SERVER2_SERVER_SRC_RDRS_DAL_H_
 
+#include <stdbool.h>
+
 typedef enum HTTP_CODE {
   SUCCESS      = 200,
   CLIENT_ERROR = 400,
@@ -139,14 +141,8 @@ RS_Status shutdown_connection();
 RS_Status reconnect();
 
 /**
- * Primary key read operation
- */
-RS_Status pk_read(RS_Buffer *reqBuff,
-                  RS_Buffer *respBuff,
-                  unsigned int threadIndex);
-
-/**
  * Batched primary key read operation
+ * Also used for single key read operation
  */
 RS_Status pk_batch_read(void *amalloc,
                         unsigned int no_req,

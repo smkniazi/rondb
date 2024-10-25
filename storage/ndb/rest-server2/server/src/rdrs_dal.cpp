@@ -135,25 +135,6 @@ RS_Status reconnect() {
   return rdrsRonDBConnectionPool->Reconnect();
 }
 
-RS_Status pk_read(RS_Buffer *reqBuff,
-                  RS_Buffer *respBuff,
-                  unsigned int threadIndex) {
-  Ndb *ndb_object  = nullptr;
-  RS_Status status = rdrsRonDBConnectionPool->GetNdbObject(&ndb_object,
-                                                           threadIndex);
-  if (unlikely(status.http_code != SUCCESS)) {
-    return status;
-  }
-  DATA_OP_RETRY_HANDLER(
-      PKROperation pkread(reqBuff, respBuff, ndb_object);
-      status = pkread.PerformOperation();
-  )
-  rdrsRonDBConnectionPool->ReturnNdbObject(ndb_object,
-                                           &status,
-                                           threadIndex);
-  return status;
-}
-
 RS_Status pk_batch_read(void *amalloc_void,
                         unsigned int no_req,
                         bool is_batch,
