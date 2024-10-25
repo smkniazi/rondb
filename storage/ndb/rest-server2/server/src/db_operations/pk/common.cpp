@@ -126,7 +126,7 @@ RS_Status set_operation_pk_col(const NdbDictionary::Column *col,
     memcpy(primaryKeyCol, &u, sizeof(Uint8));
     if (unlikely(*parsed != '\0' ||
                  errno != 0 ||
-                 !(parsedNumber >= 0 && parsedNumber <= 255))) {
+                 !(parsedNumber <= 255))) {
       error = RS_CLIENT_ERROR(
         ERROR_015 + std::string(" Expecting TINYINT UNSIGNED. Column: ") +
         std::string(request->PKName(colIdx)));
@@ -161,7 +161,7 @@ RS_Status set_operation_pk_col(const NdbDictionary::Column *col,
     memcpy(primaryKeyCol, &u, sizeof(Uint16));
     if (unlikely(*parsed != '\0' ||
                  errno != 0 ||
-                 !(parsedNumber >= 0 && parsedNumber <= 65535))) {
+                 !(parsedNumber <= 65535))) {
       error = RS_CLIENT_ERROR(
         ERROR_015 + std::string(" Expecting SMALLINT UNSIGNED. Column: ") +
         std::string(request->PKName(colIdx)));
@@ -192,12 +192,12 @@ RS_Status set_operation_pk_col(const NdbDictionary::Column *col,
 
     char *parsed = nullptr;
     errno = 0;
-    Int64 parsedNumber = strtoull(request->PKValueCStr(colIdx), &parsed, 10);
+    Uint64 parsedNumber = strtoull(request->PKValueCStr(colIdx), &parsed, 10);
     Uint32 u = (Uint32)parsedNumber;
     int3store(primaryKeyCol, (uint)u);
     if (unlikely(*parsed != '\0' ||
                  errno != 0 ||
-                 !(parsedNumber >= 0 && parsedNumber <= 16777215))) {
+                 !(parsedNumber <= 16777215))) {
       error = RS_CLIENT_ERROR(
         ERROR_015 + std::string(" Expecting MEDIUMINT UNSIGNED. Column: ") +
         std::string(request->PKName(colIdx)));
@@ -227,12 +227,12 @@ RS_Status set_operation_pk_col(const NdbDictionary::Column *col,
     ///< 32 bit. 4 byte unsigned integer, can be used in array
     char *parsed = nullptr;
     errno = 0;
-    Int64 parsedNumber = strtoull(request->PKValueCStr(colIdx), &parsed, 10);
+    Uint64 parsedNumber = strtoull(request->PKValueCStr(colIdx), &parsed, 10);
     Uint32 u = (Uint32)parsedNumber;
     memcpy(primaryKeyCol, &u, sizeof(Uint32));
     if (unlikely(*parsed != '\0' ||
                  errno != 0 ||
-                 !(parsedNumber >= 0 && parsedNumber <= 4294967295))) {
+                 !(parsedNumber <= 4294967295))) {
       error = RS_CLIENT_ERROR(
         ERROR_015 + std::string(" Expecting INT UNSIGNED. Column: ") +
         std::string(request->PKName(colIdx)));
