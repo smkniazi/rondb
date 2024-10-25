@@ -31,6 +31,7 @@
 #include <memory>
 #include <simdjson.h>
 #include <EventLogger.hpp>
+#include <ArenaMalloc.hpp>
 
 extern EventLogger *g_eventLogger;
 
@@ -61,7 +62,8 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
 
   // Store it to the first string buffer
   const char *json_str = req->getBody().data();
-  DEB_PK_CTRL("\n\n JSON REQUEST: \n %s \n", json_str);
+  DEB_PK_CTRL("\n\n JSON REQUEST: db: %s, tab: %s\n %s \n",
+              db.data(), table.data(), json_str);
   size_t length = req->getBody().length();
   if (unlikely(length > globalConfigs.internal.reqBufferSize)) {
     auto resp = drogon::HttpResponse::newHttpResponse();
@@ -113,6 +115,7 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
     }
   }
 
+  ArenaMalloc amalloc(64 * 1024);
   // Execute
   {
     RS_Buffer reqBuff  = rsBufferArrayManager.get_req_buffer();
@@ -132,7 +135,12 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
     reqBuff.size = *length_ptr_casted;
 
     // pk_read
-    status = pk_read(&reqBuff, &respBuff, currentThreadIndex);
+    status = pk_batch_read((void*)&amalloc,
+                           1,
+                           false,
+                           &reqBuff,
+                           &respBuff,
+                           currentThreadIndex);
 
     resp->setStatusCode(static_cast<drogon::HttpStatusCode>(status.http_code));
     if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=

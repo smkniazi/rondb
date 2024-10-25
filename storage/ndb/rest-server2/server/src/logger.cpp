@@ -22,6 +22,9 @@
 #include <string>
 #include <cstring>
 #include <iostream>
+#include <EventLogger.hpp>
+
+extern EventLogger *g_eventLogger;
 
 Callbacks my_cb_fns;
 
@@ -38,7 +41,15 @@ void log(const int level, const char *msg) {
     log_msg.message[RS_LOG_MSG_LEN - 1] = 0;
     my_cb_fns.logger(log_msg);
   } else {
-    std::cout << msg << std::endl;
+    if (level <= ErrorLevel) {
+      g_eventLogger->error("%s", msg);
+    } else if (level <= WarnLevel) {
+      g_eventLogger->warning("%s", msg);
+    } else if (level <= InfoLevel) {
+      g_eventLogger->info("%s", msg);
+    } else {
+      g_eventLogger->debug("%s", msg);
+    }
   }
 }
 
