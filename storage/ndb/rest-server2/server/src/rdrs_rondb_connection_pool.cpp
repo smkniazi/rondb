@@ -28,7 +28,7 @@
 extern EventLogger *g_eventLogger;
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
-#define DEBUG_POOL 1
+//#define DEBUG_POOL 1
 #endif
 
 #ifdef DEBUG_POOL
