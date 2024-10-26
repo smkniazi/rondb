@@ -180,8 +180,9 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
     Uint32 failed = 0;
     Uint32 j = 0;
     for (; j < numPrimaryKeys; j++) {
+      std::string_view pk_name(req->PKName(j), req->PKNameLen(j));
       const NdbDictionary::Column *pk_col =
-        tableDict->getColumn(req->PKName(j));
+        tableDict->getColumn(pk_name);
       if (unlikely(pk_col == nullptr || !pk_col->getPrimaryKey())) {
         failed = 1;
         break;
@@ -218,8 +219,10 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
     if (numReadColumns != 0) {
       j = 0;
       for (; j < numReadColumns; j++) {
+        std::string_view col_name(req->ReadColumnName(j),
+                                  req->ReadColumnNameLen(j));
         const NdbDictionary::Column *read_col =
-          tableDict->getColumn(req->ReadColumnName(j));
+          tableDict->getColumn(col_name);
         if (unlikely(read_col == nullptr)) {
           failed = 1;
           break;
