@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2003, 2024, Oracle and/or its affiliates.
-   Copyright (c) 2023, 2023, Hopsworks and/or its affiliates.
+   Copyright (c) 2023, 2024, Hopsworks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -378,6 +378,11 @@ int NdbDictionary::Table::addColumn(const Column &c) {
   }
   col->m_column_no = m_impl.m_columns.size() - 1;
   return 0;
+}
+
+const NdbDictionary::Column *NdbDictionary::Table::getColumn(
+    std::string_view &name) const {
+  return m_impl.getColumn(name);
 }
 
 const NdbDictionary::Column *NdbDictionary::Table::getColumn(

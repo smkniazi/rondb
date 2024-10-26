@@ -1590,9 +1590,8 @@ int NdbTableImpl::updateMysqlName() {
   return !m_mysqlName.assign("");
 }
 
-static Uint32 Hash(const char *str) {
+static Uint32 Hash(const char *str, size_t len) {
   Uint32 h = 0;
-  size_t len = strlen(str);
   while (len >= 4) {
     h = (h << 5) + h + str[0];
     h = (h << 5) + h + str[1];
@@ -1601,7 +1600,6 @@ static Uint32 Hash(const char *str) {
     len -= 4;
     str += 4;
   }
-
   switch (len) {
     case 3:
       h = (h << 5) + h + *str++;
@@ -1653,12 +1651,13 @@ static const Uint32 UniBucket = 0x00200000;
 static const Uint32 ColNameHashMask = 0x001FFFFF;
 static const Uint32 ColShift = 22;
 
-NdbColumnImpl *NdbTableImpl::getColumnByHash(const char *name) const {
+NdbColumnImpl *NdbTableImpl::getColumnByHash(const char *name,
+                                             Uint32 len) const {
   Uint32 sz = m_columns.size();
   NdbColumnImpl *const *cols = m_columns.getBase();
   const Uint32 *hashtable = m_columnHash.getBase();
 
-  const Uint32 hashValue = Hash(name) & ColNameHashMask;
+  const Uint32 hashValue = Hash(name, len) & ColNameHashMask;
   Uint32 bucket = hashValue & m_columnHashMask;
   bucket = (bucket < sz ? bucket : bucket - sz);
   hashtable += bucket;
@@ -1673,7 +1672,7 @@ NdbColumnImpl *NdbTableImpl::getColumnByHash(const char *name) const {
     tmp = *hashtable;
     if (hashValue == (tmp & ColNameHashMask)) {
       NdbColumnImpl *col = cols[tmp >> ColShift];
-      if (strcmp(name, col->m_name.c_str()) == 0) {
+      if (memcmp(name, col->m_name.c_str(), len) == 0) {
         return col;
       }
     }
@@ -1719,7 +1718,8 @@ int NdbTableImpl::buildColumnHash() {
   }
 
   for (i = 0; i < (int)size; i++) {
-    Uint32 hv = Hash(m_columns[i]->getName()) & ColNameHashMask;
+    Uint32 hv = Hash(m_columns[i]->getName(),
+                     strlen(m_columns[i]->getName())) & ColNameHashMask;
     Uint32 bucket = hv & m_columnHashMask;
     bucket = (bucket < size ? bucket : bucket - size);
     assert(bucket < size);
@@ -1843,7 +1843,8 @@ bool NdbTableImpl::checkColumnHash() const {
   for (Uint32 i = 0; i < m_columns.size(); i++) {
     const NdbColumnImpl *col = m_columns[i];
 
-    const NdbColumnImpl *hashLookup = getColumnByHash(col->getName());
+    const NdbColumnImpl *hashLookup = 
+      getColumnByHash(col->getName(), strlen(col->getName()));
     if (hashLookup != col) {
       /**
        * We didn't get the column we expected

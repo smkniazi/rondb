@@ -30,7 +30,7 @@
 #if __cplusplus >= 201103L || (defined(_MSVC_LANG) && _MSVC_LANG >= 201103L)
 #include <memory>
 #endif
-
+#include <string_view>
 #include <ndb_types.h>
 
 class Ndb;
@@ -800,6 +800,12 @@ class NdbDictionary {
      * Get table id
      */
     int getTableId() const;
+
+    /**
+     * Get column definition via name.
+     * @return null if none existing name
+     */
+    const Column *getColumn(std::string_view &name) const;
 
     /**
      * Get column definition via name.
