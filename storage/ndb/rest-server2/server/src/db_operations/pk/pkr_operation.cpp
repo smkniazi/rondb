@@ -274,9 +274,23 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
         return err;
       }
     } else {
+      /**
+       * When we arrive here we have not received any column names from
+       * the JSON request. Since we want the use the request buffer to
+       * construct the response, we need to fill in the missing column
+       * names here.
+       */
       bool use_blob_values = false;
+      if (req->addReadColumns(numColumns)) {
+        status = RS_SERVER_ERROR(ERROR_067);
+        return status;
+      }
       for (Uint32 k = 0; k < numColumns; k++) {
         const NdbDictionary::Column *read_col = tableDict->getColumn(k);
+        if (req->addReadColumnName(k, read_col->getName())) {
+          status = RS_SERVER_ERROR(ERROR_067);
+          return status;
+        }
         key_op->m_readColumns[k] = read_col;
         if (unlikely(!use_blob_values &&
                      (read_col->getType() == NdbDictionary::Column::Blob ||

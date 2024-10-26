@@ -22,6 +22,8 @@
 #include "src/rdrs_const.h"
 #include "src/status.hpp"
 #include "my_compiler.h"
+#include "src/encoding_helper.hpp"
+#include <string_view>
 
 PKRRequest::PKRRequest(const RS_Buffer *request) {
   this->req = request;
@@ -175,6 +177,31 @@ const char *PKRRequest::OperationId() {
   } else {
     return nullptr;
   }
+}
+
+bool PKRRequest::addReadColumns(Uint32 numColumns) {
+  Uint32 head = reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_LENGTH_IDX];
+  reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_READ_COLS_IDX] = head;
+  reinterpret_cast<Uint32 *>(req->buffer + head)[0] = numColumns;
+  head += ((numColumns + 1) * ADDRESS_SIZE);
+  reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_LENGTH_IDX] = head;
+  return false;
+}
+
+bool PKRRequest::addReadColumnName(Uint32 index, const char *name) {
+  std::string_view name_view(name, strlen(name));
+  Uint32 col_head =
+    reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_READ_COLS_IDX];
+  Uint32 head = reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_LENGTH_IDX];
+  Uint32 *col_head_ptr = reinterpret_cast<Uint32 *>(req->buffer + col_head);
+  col_head_ptr[index + 1] = head;
+  EN_Status status = {};
+  head = copy_str_to_buffer(name_view, (Uint32*)req->buffer, head, status);
+  if (unlikely(head == 0)) {
+    return true;
+  }
+  reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_LENGTH_IDX] = head;
+  return false;
 }
 
 void PKRRequest::MarkInvalidOp(RS_Status error) {
