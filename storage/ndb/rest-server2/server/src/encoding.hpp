@@ -29,8 +29,7 @@
 #include <drogon/drogon.h>
 #include <iostream>
 
-RS_Status create_native_request(PKReadParams &, void *, void *);
-
+RS_Status create_native_request(PKReadParams &, Uint32*);
 RS_Status process_pkread_response(void *, PKReadResponseJSON &);
 
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_ENCODING_HPP_

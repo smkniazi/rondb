@@ -701,7 +701,7 @@ void FeatureStoreCtrl::featureStore(
       respBuffs[i] = respBuff;
 
       RS_Status status =
-        create_native_request(readParams[i], reqBuff.buffer, respBuff.buffer);
+        create_native_request(readParams[i], (Uint32*)reqBuff.buffer);
       if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
                      drogon::HttpStatusCode::k200OK)) {
         resp->setBody(std::string(status.message));

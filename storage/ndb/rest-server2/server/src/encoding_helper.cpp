@@ -26,68 +26,71 @@
 #include <cstring>
 #include <tuple>
 
-EN_Status copy_str_to_buffer(const std::string_view &src,
-                             void *dst,
-                             Uint32 offset) {
+Uint32 copy_str_to_buffer(const std::string_view &src,
+                          Uint32 *dst,
+                          Uint32 offset,
+                          EN_Status &status) {
   if (dst == nullptr) {
-    EN_Status status{};
     status.http_code =
       static_cast<HTTP_CODE>(drogon::HttpStatusCode::k400BadRequest);
-    status.retValue  = 0;
+    status.retValue = 0;
     strncpy(status.message,
             "Destination buffer pointer is null",
             EN_STATUS_MSG_LEN - 1);
     status.message[EN_STATUS_MSG_LEN - 1] = '\0';
-    return status;
+    return 0;
   }
+  /**
+   * We store identifiers aligned on 4 bytes with a 4 byte length
+   * in the first word and the string is null-terminated.
+   */
   Uint32 src_length = static_cast<Uint32>(src.size());
-  memcpy(static_cast<char *>(dst) + offset, src.data(), src_length);
-  static_cast<char *>(dst)[offset + src_length] = '\0';
-  return EN_Status(offset + src_length + 1);
+  char *dst_char = reinterpret_cast<char*>(dst);
+  char *curr_dst = dst_char + offset;
+  Uint32 *curr_word = reinterpret_cast<Uint32*>(curr_dst);
+  /* Set the length in the first word */
+  *curr_word = src_length;
+  curr_dst += 4;
+  Uint32 new_offset = align_word(offset + 4 + src_length + 1);
+  memcpy(curr_dst, src.data(), src_length);
+  curr_dst[src_length] = '\0';
+  return new_offset;
 }
 
-EN_Status copy_ndb_str_to_buffer(std::vector<char> &src,
-                                 void *dst,
-                                 Uint32 offset) {
+Uint32 copy_ndb_str_to_buffer(std::vector<char> &src,
+                              Uint32 *dst,
+                              Uint32 offset,
+                              EN_Status &status) {
   if (dst == nullptr) {
-    return EN_Status(static_cast<HTTP_CODE>(
+    status = EN_Status(static_cast<HTTP_CODE>(
       drogon::HttpStatusCode::k400BadRequest),
       0,
       "Destination buffer pointer is null");
+    return 0;
   }
-
   // Remove quotation marks from string, if it's a quoted string
   if (src.size() >= 2 && src.front() == '"' && src.back() == '"') {
 
-    RS_Status status = Unquote(src);
-    if (status.http_code != SUCCESS) {
+    RS_Status rs_status = Unquote(src);
+    if (rs_status.http_code != SUCCESS) {
       std::string msg =
         "Failed to unquote string. Error message: " +
         std::string(status.message);
-      return EN_Status(static_cast<HTTP_CODE>(
+      status = EN_Status(static_cast<HTTP_CODE>(
         drogon::HttpStatusCode::k400BadRequest), 0, msg.c_str());
     }
   }
-
   Uint32 src_length = static_cast<Uint32>(src.size());
-
-  // Write immutable length of the string
-  static const Uint32 MAX_BYTE_VALUE = 256;
-  static_cast<char *>(dst)[offset] =
-    static_cast<char>(src_length % MAX_BYTE_VALUE);
-  static_cast<char *>(dst)[offset + 1] =
-    static_cast<char>(src_length / MAX_BYTE_VALUE);
-  offset += 2;
-
-  static_cast<char *>(dst)[offset] = 0;
-  static_cast<char *>(dst)[offset + 1] = 0;
-  offset += 2;
-
-  memcpy(static_cast<char *>(dst) + offset, src.data(), src_length);
-
-  static_cast<char *>(dst)[offset + src_length] = 0x00;
-
-  return EN_Status(offset + src_length + 1);
+  char *dst_char = reinterpret_cast<char*>(dst);
+  char *curr_dst = dst_char + offset;
+  Uint32 *curr_word = reinterpret_cast<Uint32*>(curr_dst);
+  /* Set the length in the first word */
+  *curr_word = src_length;
+  curr_dst += 4;
+  Uint32 new_offset = align_word(offset + 4 + src_length + 1);
+  memcpy(curr_dst, src.data(), src_length);
+  curr_dst[src_length] = '\0';
+  return new_offset;
 }
 
 std::vector<char> string_to_byte_array(std::string str) {

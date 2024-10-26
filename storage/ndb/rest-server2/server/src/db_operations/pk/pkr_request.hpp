@@ -90,12 +90,20 @@ class PKRRequest {
   const char *PKName(Uint32 n);
 
   /**
+   * Get PK column name length
+   *
+   * @param n index
+   * @return PK column name length
+   */
+  Uint32 PKNameLen(Uint32 n);
+
+  /**
    * Get length of PK column value
    *
    * @param n index
    * @return PK length of the string
    */
-  Uint16 PKValueLen(Uint32 n);
+  Uint32 PKValueLen(Uint32 n);
 
   /**
    * Get PK column value.
@@ -104,18 +112,6 @@ class PKRRequest {
    * @return PK c-string for column value
    */
   const char *PKValueCStr(Uint32 n);
-
-  /**
-   * Get PK column value
-   *
-   * @param index [in] index
-   * @param col [in] ndb column
-   * @param data [out] data
-   * @return 0 if successfull
-   */
-  int PKValueNDBStr(Uint32 index,
-                    const NdbDictionary::Column *col,
-                    void **data);
 
   /**
    * Get number of read columns
@@ -130,6 +126,14 @@ class PKRRequest {
    * @return read column name
    */
   const char *ReadColumnName(const Uint32 n);
+
+  /**
+   * Get read column name length
+   *
+   * @param n index
+   * @return read column name length
+   */
+  Uint32 ReadColumnNameLen(const Uint32 n);
 
   /**
    * Get read column data return type

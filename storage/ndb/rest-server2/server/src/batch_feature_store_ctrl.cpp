@@ -223,8 +223,7 @@ void BatchFeatureStoreCtrl::batch_featureStore(
       respBuffs[i] = respBuff;
 
       status = create_native_request(readParams[i],
-                                     reqBuff.buffer,
-                                     respBuff.buffer);
+                                     (Uint32*)reqBuff.buffer);
       if (static_cast<drogon::HttpStatusCode>(status.http_code) !=
             drogon::HttpStatusCode::k200OK) {
         resp->setBody(std::string(status.message));

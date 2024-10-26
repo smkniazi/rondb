@@ -36,8 +36,14 @@ void printCharArray(const char *, size_t);
 
 RS_Status unquote(std::vector<char> &, bool);
 RS_Status Unquote(std::vector<char> &);
-EN_Status copy_str_to_buffer(const std::string_view &, void *, Uint32);
-EN_Status copy_ndb_str_to_buffer(std::vector<char> &, void *, Uint32);
+Uint32 copy_str_to_buffer(const std::string_view&,
+                          Uint32*,
+                          Uint32,
+                          EN_Status&);
+Uint32 copy_ndb_str_to_buffer(std::vector<char> &,
+                              Uint32 *,
+                              Uint32,
+                              EN_Status&);
 std::vector<char> string_to_byte_array(std::string);
 std::vector<char> string_view_to_byte_array(const std::string_view &);
 Uint32 align_word(Uint32);

@@ -121,7 +121,7 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
     RS_Buffer reqBuff  = rsBufferArrayManager.get_req_buffer();
     RS_Buffer respBuff = rsBufferArrayManager.get_resp_buffer();
 
-    status = create_native_request(reqStruct, reqBuff.buffer, respBuff.buffer);
+    status = create_native_request(reqStruct, (Uint32*)reqBuff.buffer);
     if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
           drogon::HttpStatusCode::k200OK)) {
       resp->setBody(std::string(status.message));

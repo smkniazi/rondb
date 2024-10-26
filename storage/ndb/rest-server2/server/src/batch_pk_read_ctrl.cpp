@@ -202,8 +202,7 @@ void BatchPKReadCtrl::batchPKRead(
       respBuffs[i] = respBuff;
 
       status = create_native_request(reqStructs[i],
-                                     reqBuff.buffer,
-                                     respBuff.buffer);
+                                     (Uint32*)reqBuff.buffer);
       if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
           drogon::HttpStatusCode::k200OK)) {
         resp->setBody(std::string(status.message));
@@ -241,7 +240,8 @@ void BatchPKReadCtrl::batchPKRead(
       }
 
       std::string json = PKReadResponseJSON::batch_to_string(responses);
-      resp->setBody(json);
+      DEB_BPK_CTRL("Response string: %s", json.c_str());
+      resp->setBody(std::move(json));
     }
     callback(resp);
     for (unsigned long i = 0; i < noOps; i++) {
