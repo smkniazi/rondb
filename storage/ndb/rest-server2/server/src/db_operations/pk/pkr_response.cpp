@@ -135,8 +135,8 @@ RS_Status PKRResponse::SetColumnDataInt(const char *colName,
                                         Uint32 type) {
   // first index is for column name
   // second index is for column value
-  // thrid index is for isNULL
-  // forth index is for data type, e.g., string, int, date etc
+  // third index is for isNULL
+  // fourth index is for data type, e.g., string, int, date etc
   Uint32 *b = reinterpret_cast<Uint32 *>(this->resp->buffer);
   Uint32 start = b[PK_RESP_COLS_IDX];
   start += ADDRESS_SIZE;  // skip the count

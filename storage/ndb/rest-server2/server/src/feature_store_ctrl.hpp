@@ -104,7 +104,9 @@ void FillPassedFeatures(
   const std::unordered_map<std::string, int> &indexLookup);
 
 RS_Status process_responses(
-  std::vector<RS_Buffer> &respBuffs, BatchResponseJSON &response);
+  std::vector<RS_Buffer> &respBuffs,
+  std::vector<RS_Buffer> &reqBuffs,
+  BatchResponseJSON &response);
 
 void FillPrimaryKey(
   const metadata::FeatureViewMetadata &featureView,

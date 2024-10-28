@@ -24,6 +24,20 @@
 #include "my_compiler.h"
 #include "src/encoding_helper.hpp"
 #include <string_view>
+#include <EventLogger.hpp>
+
+extern EventLogger *g_eventLogger;
+
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+#define DEBUG_REQ 1
+#endif
+
+#ifdef DEBUG_REQ
+#define DEB_REQ(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
+#else
+#define DEB_REQ(...) do { } while (0)
+#endif
+
 
 PKRRequest::PKRRequest(const RS_Buffer *request) {
   this->req = request;
@@ -134,6 +148,7 @@ const char *PKRRequest::ReadColumnName(const Uint32 n) {
   // +1 for count
   Uint32 r_offset =
     (reinterpret_cast<Uint32 *>(req->buffer))[(offset / ADDRESS_SIZE) + 1 + n];
+  DEB_REQ("RCName:Col id: %u, offset: %u, r_offset: %u", n, offset, r_offset);
   return req->buffer + r_offset + (ADDRESS_SIZE * 2);
 }
 
@@ -151,6 +166,8 @@ Uint32 PKRRequest::ReadColumnNameLen(const Uint32 n) {
     (reinterpret_cast<Uint32 *>(req->buffer))[(offset / ADDRESS_SIZE) + 1 + n];
   const char *ptr = req->buffer + r_offset + ADDRESS_SIZE;
   const Uint32 *len_ptr = reinterpret_cast<const Uint32*>(ptr);
+  DEB_REQ("RCLen:Colid: %u, offset: %u, r_offset: %u, len: %u",
+    n, offset, r_offset, *len_ptr);
   return *len_ptr;
 }
 
@@ -183,12 +200,15 @@ bool PKRRequest::addReadColumns(Uint32 numColumns) {
   Uint32 head = reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_LENGTH_IDX];
   reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_READ_COLS_IDX] = head;
   reinterpret_cast<Uint32 *>(req->buffer + head)[0] = numColumns;
+  DEB_REQ("ARCol:Num: %u, head: %u", numColumns, head);
   head += ((numColumns + 1) * ADDRESS_SIZE);
   reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_LENGTH_IDX] = head;
   return false;
 }
 
-bool PKRRequest::addReadColumnName(Uint32 index, const char *name) {
+bool PKRRequest::addReadColumnName(Uint32 index,
+                                   const char *name,
+                                   Uint32 data_type) {
   std::string_view name_view(name, strlen(name));
   Uint32 col_head =
     reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_READ_COLS_IDX];
@@ -196,10 +216,16 @@ bool PKRRequest::addReadColumnName(Uint32 index, const char *name) {
   Uint32 *col_head_ptr = reinterpret_cast<Uint32 *>(req->buffer + col_head);
   col_head_ptr[index + 1] = head;
   EN_Status status = {};
+  Uint32 *head_ptr = reinterpret_cast<Uint32 *>(req->buffer + head);
+  head_ptr[0] = data_type;
+  head += ADDRESS_SIZE;
+  DEB_REQ("ARCName: id: %u, name: %s, name_len: %u, head: %u, col_head: %u",
+    index, name_view.data(), (Uint32)name_view.size(), head, col_head);
   head = copy_str_to_buffer(name_view, (Uint32*)req->buffer, head, status);
   if (unlikely(head == 0)) {
     return true;
   }
+  DEB_REQ("ARCName: new head: %u", head);
   reinterpret_cast<Uint32 *>(req->buffer)[PK_REQ_LENGTH_IDX] = head;
   return false;
 }

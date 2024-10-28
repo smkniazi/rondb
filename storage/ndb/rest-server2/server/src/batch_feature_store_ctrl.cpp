@@ -253,7 +253,9 @@ void BatchFeatureStoreCtrl::batch_featureStore(
       callback(resp);
       return;
     }
-    status = process_responses(respBuffs, dbResponseIntf);
+    status = process_responses(respBuffs,
+                               reqBuffs,
+                               dbResponseIntf);
     if (unlikely(status.err_file_name[0] != '\0')) {
       auto fsError = TranslateRonDbError(status.http_code, status.message);
       resp->setBody(fsError->Error());

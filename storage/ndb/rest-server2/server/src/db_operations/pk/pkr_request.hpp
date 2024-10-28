@@ -173,6 +173,6 @@ class PKRRequest {
   /**
    * Add a read column name
    */
-  bool addReadColumnName(Uint32 index, const char *name);
+  bool addReadColumnName(Uint32 index, const char *name, Uint32 data_type);
 };
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_DB_OPERATIONS_PK_PKR_REQUEST_HPP_

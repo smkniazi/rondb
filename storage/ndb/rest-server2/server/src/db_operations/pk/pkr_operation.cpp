@@ -50,7 +50,7 @@
 #include <EventLogger.hpp>
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
-//#define DEBUG_NDB_BE 1
+#define DEBUG_NDB_BE 1
 #endif
 
 #ifdef DEBUG_NDB_BE
@@ -103,7 +103,8 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
     }
     const NdbDictionary::Dictionary *dict = ndb_object->getDictionary();
     const NdbDictionary::Table *tableDict = dict->getTable(req->Table());
-    DEB_NDB_BE("Request on DB: %s, Table: %s", req->DB(), req->Table());
+    DEB_NDB_BE("Request on DB: %s, Table: %s, op: %u",
+      req->DB(), req->Table(), i);
     if (unlikely(tableDict == nullptr)) {
       RS_Status err = RS_CLIENT_404_WITH_MSG_ERROR(
         ERROR_011 + std::string(" Database: ") +
@@ -179,6 +180,7 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
     memset(pk_bitmap_words, 0, num_bitmap_bytes);
     Uint32 failed = 0;
     Uint32 j = 0;
+    DEB_NDB_BE("Start setting up %u primary keys", numPrimaryKeys);
     for (; j < numPrimaryKeys; j++) {
       std::string_view pk_name(req->PKName(j), req->PKNameLen(j));
       const NdbDictionary::Column *pk_col =
@@ -218,13 +220,17 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
     bool use_blob_values = false;
     if (numReadColumns != 0) {
       j = 0;
+      DEB_NDB_BE("Start reading numReadColumns: %u", numReadColumns);
       for (; j < numReadColumns; j++) {
         std::string_view col_name(req->ReadColumnName(j),
                                   req->ReadColumnNameLen(j));
         const NdbDictionary::Column *read_col =
           tableDict->getColumn(col_name);
+        DEB_NDB_BE("Try to find column %s, with len: %u",
+          col_name.data(), (Uint32)col_name.size());
         if (unlikely(read_col == nullptr)) {
           failed = 1;
+          DEB_NDB_BE("Failed to find column %s", col_name.data());
           break;
         }
         Uint32 col_id = read_col->getColumnNo();
@@ -262,7 +268,7 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
         if (failed == 1) {
           err = RS_CLIENT_ERROR(
             ERROR_012 + std::string(" Column: ") +
-            std::string(req->ReadColumnName(i)));
+            std::string(req->ReadColumnName(j)));
         } else {
           err = RS_CLIENT_ERROR(
             ERROR_037 + std::string(req->ReadColumnName(j)));
@@ -280,18 +286,12 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
        * construct the response, we need to fill in the missing column
        * names here.
        */
+      DEB_NDB_BE("Start reading all columns: %u", numColumns);
       bool use_blob_values = false;
-      if (req->addReadColumns(numColumns)) {
-        status = RS_SERVER_ERROR(ERROR_067);
-        return status;
-      }
       for (Uint32 k = 0; k < numColumns; k++) {
         const NdbDictionary::Column *read_col = tableDict->getColumn(k);
-        if (req->addReadColumnName(k, read_col->getName())) {
-          status = RS_SERVER_ERROR(ERROR_067);
-          return status;
-        }
         key_op->m_readColumns[k] = read_col;
+        DEB_NDB_BE("Read column, id: %u, name: %s", k, read_col->getName());
         if (unlikely(!use_blob_values &&
                      (read_col->getType() == NdbDictionary::Column::Blob ||
                       read_col->getType() == NdbDictionary::Column::Text))) {
@@ -432,6 +432,24 @@ RS_Status BatchKeyOperations::create_response() {
       resp->SetStatus(req->GetError().http_code, req->GetError().message);
       resp->Close();
       continue;
+    }
+    if (req->ReadColumnsCount() == 0) {
+      DEB_NDB_BE("Build request when all columns requested");
+      Uint32 numColumns = key_op->m_num_table_columns;
+      if (req->addReadColumns(numColumns)) {
+        RS_Status status = RS_SERVER_ERROR(ERROR_067);
+        return status;
+      }
+      for (Uint32 k = 0; k < numColumns; k++) {
+        const NdbDictionary::Column *read_col =
+          key_op->m_tableDict->getColumn(k);
+        if (req->addReadColumnName(k,
+                                   read_col->getName(),
+                                   DEFAULT_DRT)) {
+          RS_Status status = RS_SERVER_ERROR(ERROR_067);
+          return status;
+        }
+      }
     }
     found = true;
     if (likely(op->getNdbError().classification == NdbError::NoError)) {

@@ -22,6 +22,7 @@
 #include "rdrs_dal.hpp"
 #include "buffer_manager.hpp"
 #include <my_compiler.h>
+#include "db_operations/pk/pkr_request.hpp"
 
 #include <cstring>
 #include <string>
@@ -184,7 +185,9 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
 }
 
 RS_Status process_pkread_response(void *respBuff,
+                                  RS_Buffer *reqBuff,
                                   PKReadResponseJSON &response) {
+  PKRRequest req = PKRRequest(reqBuff);
   Uint32 *buf = (Uint32 *)(respBuff);
   Uint32 responseType = buf[PK_RESP_OP_TYPE_IDX];
   if (responseType != RDRS_PK_RESP_ID) {
@@ -228,9 +231,8 @@ RS_Status process_pkread_response(void *respBuff,
       for (Uint32 j = 0; j < 4; j++) {
         colHeader[j] = colHeaderStart[j];
       }
-      Uint32 nameAdd = colHeader[0];
-      std::string name = std::string((char *)
-        (reinterpret_cast<UintPtr>(respBuff) + nameAdd));
+      //Uint32 nameAdd = colHeader[0];
+      std::string name = req.ReadColumnName(i);
       Uint32 valueAdd = colHeader[1];
       Uint32 isNull = colHeader[2];
       Uint32 dataType = colHeader[3];

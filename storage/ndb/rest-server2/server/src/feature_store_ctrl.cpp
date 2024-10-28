@@ -513,13 +513,16 @@ void FillPassedFeatures(
 }
 
 RS_Status process_responses(std::vector<RS_Buffer> &respBuffs,
+                            std::vector<RS_Buffer> &reqBuffs,
                             BatchResponseJSON &response) {
   for (unsigned int i = 0; i < respBuffs.size(); i++) {
     auto pkReadResponseWithCode = BatchResponseJSON::CreateNewSubResponse();
     auto pkReadResponse = pkReadResponseWithCode.getBody();
 
     auto subRespStatus =
-      process_pkread_response(respBuffs[i].buffer, pkReadResponse);
+      process_pkread_response(respBuffs[i].buffer,
+                              &reqBuffs[i],
+                              pkReadResponse);
     if (!(subRespStatus.err_file_name[0] == '\0')) {
       std::cerr << "Error: " << subRespStatus.err_file_name << std::endl;
       return subRespStatus;
@@ -739,7 +742,9 @@ void FeatureStoreCtrl::featureStore(
     }
     {
       DEB_FS_CTRL("Process Batch PK Read response for Feature Store request");
-      RS_Status status = process_responses(respBuffs, dbResponseIntf);
+      RS_Status status = process_responses(respBuffs,
+                                           reqBuffs,
+                                           dbResponseIntf);
       if (unlikely(status.err_file_name[0] != '\0')) {
         auto fsError = TranslateRonDbError(status.http_code, status.message);
         resp->setBody(fsError->Error());
