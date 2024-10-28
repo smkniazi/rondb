@@ -39,6 +39,7 @@ public:
   size_t len;
   LexString() = default;
   LexString(const char* str, size_t len);
+  LexString(const LexString& other) = default;
   LexString(const LexCString& other);
   LexString& operator= (const LexString& other) = default;
   ~LexString() = default;
