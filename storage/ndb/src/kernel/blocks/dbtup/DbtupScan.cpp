@@ -699,53 +699,6 @@ void Dbtup::scanReply(Signal *signal, ScanOpPtr scanPtr) {
           ndbabort();
       }
       ndbassert(c_freeScanLock != RNIL);
-    } else if (ttl_table) {
-      jam();
-      scan.m_last_seen = __LINE__;
-      // read tuple key - use TUX routine
-      const ScanPos& pos = scan.m_scanPos;
-      const Local_key& key_mm = pos.m_key_mm;
-      TablerecPtr tablePtr;
-      tablePtr.i = fragPtr.p->fragTableId;
-      ptrCheckGuard(tablePtr, cnoOfTablerec, tablerec);
-      int ret = tuxReadPk((Uint32*)fragPtr.p,
-                          (Uint32*)tablePtr.p,
-                          pos.m_realpid_mm,
-                          key_mm.m_page_idx,
-                          pkData,
-                          /*hash=*/true);
-      ndbrequire(ret > 0);
-      pkSize = ret;
-      dbg((DBTUP, "PK size=%d data=%08x", pkSize, pkData[0]));
-      /*
-       * Zart
-       * TTL
-       */
-      AccLockReq* const lockReq = (AccLockReq*)signal->getDataPtrSend();
-      lockReq->returnCode = RNIL;
-      lockReq->requestInfo = AccLockReq::LockShared;
-      lockReq->accOpPtr = RNIL;
-      lockReq->userPtr = scanPtr.i;
-      lockReq->userRef = reference();
-      lockReq->tableId = scan.m_tableId;
-      lockReq->fragId = frag.fragmentId;
-      lockReq->hashValue =
-        rondb_calc_hash_val((const char*)pkData,
-                  pkSize,
-                  ((tablePtr.p->m_bits & Tablerec::TR_HashFunction) != 0));
-      lockReq->page_id = key_mm.m_page_no;
-      lockReq->page_idx = key_mm.m_page_idx;
-      lockReq->transId1 = scan.m_transId1;
-      lockReq->transId2 = scan.m_transId2;
-      lockReq->isCopyFragScan = ((scan.m_bits & ScanOp::SCAN_COPY_FRAG) != 0);
-      ttl_ignore_for_ral = c_acc->WhetherSkipTTL(signal);
-#ifdef TTL_DEBUG
-      g_eventLogger->info("Zart, Dbtup::scanReply()[2] check whether needs "
-                          "to ignore TTL: %d", ttl_ignore_for_ral);
-#endif  // TTL_DEBUG
-      ndbassert(c_freeScanLock == RNIL);
-      scan.m_state = ScanOp::Locked;
-      jamEntryDebug();
     } else {
       ndbassert(c_freeScanLock == RNIL);
       scan.m_state = ScanOp::Locked;
@@ -789,7 +742,8 @@ void Dbtup::scanReply(Signal *signal, ScanOpPtr scanPtr) {
     /*
      * Zart
      * TTL
-     * Here we set ScanRecord->m_ignore_ttl_for_ral
+     * Here we set ScanRecord->m_ignore_ttl_for_ral for
+     * locking operations
      */
     c_lqh->exec_next_scan_conf(signal, ttl_ignore_for_ral);
     return;
