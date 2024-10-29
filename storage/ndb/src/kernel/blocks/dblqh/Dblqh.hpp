@@ -3862,6 +3862,9 @@ private:
                       Uint64 &inserts,
                       Uint64 &deletes,
                       Uint64& max_redo_percentage);
+  const Dbtux* get_c_tux() const {
+    return c_tux;
+  }
 
 private:
   bool validate_filter(Signal*);

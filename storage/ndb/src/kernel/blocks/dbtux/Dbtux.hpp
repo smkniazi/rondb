@@ -688,6 +688,11 @@ private:
    */
   void execTUX_MAINT_REQ(Signal *signal);
 
+  /*
+   * DbtuxScan.cpp
+   */
+  void PrepareAccLockReq4RAL(void* scan_rec_ptr,
+                             Signal* signal);
  private:
   /*
    * DbtuxNode.cpp

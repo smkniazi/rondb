@@ -48,6 +48,9 @@
 #include "AggInterpreter.hpp"
 #include "my_time.h"
 #include "my_systime.h"
+#include <signaldata/AccLock.hpp>
+#include "rondb_hash.hpp"
+#include "../dbtux/Dbtux.hpp"
 
 #define JAM_FILE_ID 422
 
@@ -2208,6 +2211,62 @@ int Dbtup::checkTTL(Tablerec* regTabPtr,
   return cmp_ret;
 }
 
+void Dbtup::PrepareAccLockReq4RAL(void* scan_rec_ptr, Signal* signal) {
+  Dblqh::ScanRecord* scan_rec =
+             reinterpret_cast<Dblqh::ScanRecord*>(scan_rec_ptr);
+  ndbassert(scan_rec != nullptr && scan_rec->scanBlock == this);
+  ScanOpPtr scan_op_PTR;
+  scan_op_PTR.i = scan_rec->scanAccPtr;
+  ndbrequire(c_scanOpPool.getValidPtr(scan_op_PTR));
+  ScanOp* scan_op = scan_op_PTR.p;
+  ndbrequire(!(scan_op->m_bits & ScanOp::SCAN_LOCK));
+#ifdef TTL_DEBUG
+  g_eventLogger->info("Zart, Dbtup::PrepareAccLockReq4RAL, "
+                      "ScanOp::m_tableId: %u, scanAccPtr: %u",
+      scan_op->m_tableId, scan_op_PTR.i);
+#endif  // TTL_DEBUG
+  FragrecordPtr fragPtr;
+  fragPtr.i = scan_op->m_fragPtrI;
+  ndbrequire(c_fragment_pool.getPtr(fragPtr));
+  Fragrecord& frag = *fragPtr.p;
+  ndbrequire(fragPtr.p->fragTableId == scan_op->m_tableId);
+
+  Uint32 *pkData = (Uint32 *)c_dataBuffer;
+  unsigned pkSize = 0;
+  jam();
+  scan_op->m_last_seen = __LINE__;
+  // read tuple key - use TUX routine
+  const ScanPos& pos = scan_op->m_scanPos;
+  const Local_key& key_mm = pos.m_key_mm;
+  TablerecPtr tablePtr;
+  tablePtr.i = fragPtr.p->fragTableId;
+  ptrCheckGuard(tablePtr, cnoOfTablerec, tablerec);
+  int ret = tuxReadPk((Uint32*)fragPtr.p,
+      (Uint32*)tablePtr.p,
+      pos.m_realpid_mm,
+      key_mm.m_page_idx,
+      pkData,
+      /*hash=*/true);
+  ndbrequire(ret > 0);
+  pkSize = ret;
+  AccLockReq* const lockReq = (AccLockReq*)signal->getDataPtrSend();
+  lockReq->returnCode = RNIL;
+  lockReq->requestInfo = AccLockReq::LockShared;
+  lockReq->accOpPtr = RNIL;
+  lockReq->userPtr = scan_op_PTR.i;
+  lockReq->userRef = reference();
+  lockReq->tableId = scan_op->m_tableId;
+  lockReq->fragId = frag.fragmentId;
+  lockReq->hashValue =
+    rondb_calc_hash_val((const char*)pkData,
+        pkSize,
+        ((tablePtr.p->m_bits & Tablerec::TR_HashFunction) != 0));
+  lockReq->page_id = key_mm.m_page_no;
+  lockReq->page_idx = key_mm.m_page_idx;
+  lockReq->transId1 = scan_op->m_transId1;
+  lockReq->transId2 = scan_op->m_transId2;
+  lockReq->isCopyFragScan = ((scan_op->m_bits & ScanOp::SCAN_COPY_FRAG) != 0);
+}
 /* ---------------------------------------------------------------- */
 /* ----------------------------- READ  ---------------------------- */
 /* ---------------------------------------------------------------- */
@@ -2254,12 +2313,45 @@ int Dbtup::handleReadReq(
     if (!has_error) {
       if (cmp_ret <= 0) {
         // Expired
+        bool ttl_ignore_for_ral = false;
+        if (req_struct->scan_rec != nullptr) {
+          Dblqh::ScanRecord* scan_rec_ptr =
+             reinterpret_cast<Dblqh::ScanRecord*>(req_struct->scan_rec);
+          if (!scan_rec_ptr->scanLockMode /* X */ &&
+              !scan_rec_ptr->scanLockHold /* S */) {
+            ndbrequire(scan_rec_ptr->readCommitted);
+            if (scan_rec_ptr->scanBlock == this) {
+              PrepareAccLockReq4RAL(req_struct->scan_rec, signal);
+            } else {
+              ndbrequire(reinterpret_cast<const void*>(c_lqh->get_c_tux()) ==
+                         reinterpret_cast<const void*>(
+                           scan_rec_ptr->scanBlock));
+              reinterpret_cast<Dbtux*>(scan_rec_ptr->scanBlock)->
+                              PrepareAccLockReq4RAL(
+                                        req_struct->scan_rec,
+                                        signal);
+            }
+            ttl_ignore_for_ral = c_acc->WhetherSkipTTL(signal);
 #ifdef TTL_DEBUG
-        g_eventLogger->info("Zart, (READ) TTL expired");
+            g_eventLogger->info("Zart, Dbtup::handleReadReq() check whether needs "
+                "to ignore TTL: %d", ttl_ignore_for_ral);
 #endif  // TTL_DEBUG
-        terrorCode = 626;
-        tupkeyErrorLab(req_struct);
-        return -1;
+          } else {
+#ifdef TTL_DEBUG
+            g_eventLogger->info("Zart, Dbtup::handleReadReq() skip TTL "
+                                "checking for locking-scan on TTL "
+                                "table");
+#endif  // TTL_DEBUG
+          }
+        }
+        if (!ttl_ignore_for_ral) {
+#ifdef TTL_DEBUG
+          g_eventLogger->info("Zart, (READ) TTL expired");
+#endif  // TTL_DEBUG
+          terrorCode = 626;
+          tupkeyErrorLab(req_struct);
+          return -1;
+        }
       }
     } else {
       jam();

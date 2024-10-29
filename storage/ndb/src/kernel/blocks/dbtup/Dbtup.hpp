@@ -2710,6 +2710,9 @@ private:
                KeyReqStruct *req_struct,
                bool* has_error,
                int* err_no);
+
+  void PrepareAccLockReq4RAL(void* scan_rec,
+                             Signal* signal);
 // *****************************************************************
 // Setting up the environment for reads, inserts, updates and deletes.
 // *****************************************************************
