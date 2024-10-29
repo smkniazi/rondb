@@ -52,14 +52,6 @@ RS_Status PKRResponse::Close() {
   return RS_OK;
 }
 
-RS_Status PKRResponse::SetDB(const char *db) {
-  return WriteStringHeaderField(PK_RESP_DB_IDX, db);
-}
-
-RS_Status PKRResponse::SetTable(const char *table) {
-  return WriteStringHeaderField(PK_RESP_TABLE_IDX, table);
-}
-
 RS_Status PKRResponse::SetOperationID(const char *opID) {
   return WriteStringHeaderField(PK_RESP_OP_ID_IDX, opID);
 }
@@ -101,8 +93,8 @@ RS_Status PKRResponse::SetNoOfColumns(Uint32 cols) {
   if (this->writeHeader % ADDRESS_SIZE != 0) {
     this->writeHeader += ADDRESS_SIZE - this->writeHeader % ADDRESS_SIZE;
   }
-  // first index is for column name
-  // second index is for column value
+  // first index is for column value
+  // second index is for column value length
   // thrid index is for isNULL
   // forth index is for data type, e.g., string or non-string data
 
@@ -120,18 +112,16 @@ RS_Status PKRResponse::SetNoOfColumns(Uint32 cols) {
   return RS_OK;
 }
 
-RS_Status PKRResponse::SetColumnDataNull(const char *colName) {
-  return SetColumnDataInt(colName, nullptr, RDRS_UNKNOWN_DATATYPE);
+RS_Status PKRResponse::SetColumnDataNull() {
+  return SetColumnDataInt(nullptr, RDRS_UNKNOWN_DATATYPE);
 }
 
-RS_Status PKRResponse::SetColumnData(const char *colName,
-                                     const char *value,
+RS_Status PKRResponse::SetColumnData(const char *value,
                                      Uint32 type) {
-  return this->SetColumnDataInt(colName, value, type);
+  return this->SetColumnDataInt(value, type);
 }
 
-RS_Status PKRResponse::SetColumnDataInt(const char *colName,
-                                        const char *value,
+RS_Status PKRResponse::SetColumnDataInt(const char *value,
                                         Uint32 type) {
   // first index is for column name
   // second index is for column value
@@ -141,12 +131,6 @@ RS_Status PKRResponse::SetColumnDataInt(const char *colName,
   Uint32 start = b[PK_RESP_COLS_IDX];
   start += ADDRESS_SIZE;  // skip the count
   int indexWritten = (start + (colsWritten * 4 * ADDRESS_SIZE)) / ADDRESS_SIZE;
-  Uint32 nameAddress = this->writeHeader;
-  RS_Status status   = Append_cstring(colName);
-  if (unlikely(status.http_code != SUCCESS)) {
-    return status;
-  }
-  b[indexWritten + 0] = nameAddress;
   if (value == nullptr) {
     b[indexWritten + 1] = 0;                      // value address not set
     b[indexWritten + 2] = 1;                      // isNULL
@@ -189,82 +173,80 @@ void PKRResponse::AdvanceWritePointer(Uint32 add) {
   writeHeader += add;
 }
 
-RS_Status PKRResponse::Append_string(const char *colName,
-                                     std::string value,
+RS_Status PKRResponse::Append_string(std::string value,
                                      Uint32 type) {
   // +1 null terminator
   if (unlikely((value.length() + 1) > GetRemainingCapacity())) {
     return RS_SERVER_ERROR(ERROR_016);
   }
-  return SetColumnData(colName, value.c_str(), type);
+  return SetColumnData(value.c_str(), type);
 }
 
-RS_Status PKRResponse::Append_i8(const char *colName, Int8 num) {
-  return Append_i64(colName, num);
+RS_Status PKRResponse::Append_i8(Int8 num) {
+  return Append_i64(num);
 }
 
-RS_Status PKRResponse::Append_iu8(const char *colName, Uint8 num) {
-  return Append_iu64(colName, num);
+RS_Status PKRResponse::Append_iu8(Uint8 num) {
+  return Append_iu64(num);
 }
 
-RS_Status PKRResponse::Append_i16(const char *colName, Int16 num) {
-  return Append_i64(colName, num);
+RS_Status PKRResponse::Append_i16(Int16 num) {
+  return Append_i64(num);
 }
 
-RS_Status PKRResponse::Append_iu16(const char *colName, Uint16 num) {
-  return Append_iu64(colName, num);
+RS_Status PKRResponse::Append_iu16(Uint16 num) {
+  return Append_iu64(num);
 }
 
-RS_Status PKRResponse::Append_i24(const char *colName, int num) {
-  return Append_i64(colName, num);
+RS_Status PKRResponse::Append_i24(int num) {
+  return Append_i64(num);
 }
 
-RS_Status PKRResponse::Append_iu24(const char *colName, Uint32 num) {
-  return Append_iu64(colName, num);
+RS_Status PKRResponse::Append_iu24(Uint32 num) {
+  return Append_iu64(num);
 }
 
-RS_Status PKRResponse::Append_iu32(const char *colName, Uint32 num) {
-  return Append_iu64(colName, num);
+RS_Status PKRResponse::Append_iu32(Uint32 num) {
+  return Append_iu64(num);
 }
 
-RS_Status PKRResponse::Append_i32(const char *colName, Int32 num) {
-  return Append_i64(colName, num);
+RS_Status PKRResponse::Append_i32(Int32 num) {
+  return Append_i64(num);
 }
 
-RS_Status PKRResponse::Append_f32(const char *colName, float num) {
-  return Append_d64(colName, num);
+RS_Status PKRResponse::Append_f32(float num) {
+  return Append_d64(num);
 }
 
-RS_Status PKRResponse::Append_d64(const char *colName, double num) {
+RS_Status PKRResponse::Append_d64(double num) {
   try {
     std::stringstream ss;
     ss << num;
-    return this->SetColumnData(colName, ss.str().c_str(), RDRS_FLOAT_DATATYPE);
+    return this->SetColumnData(ss.str().c_str(), RDRS_FLOAT_DATATYPE);
   } catch (...) {
     return RS_SERVER_ERROR(ERROR_015);
   }
 }
 
-RS_Status PKRResponse::Append_iu64(const char *colName, Uint64 num) {
+RS_Status PKRResponse::Append_iu64(Uint64 num) {
   try {
     std::string numStr = std::to_string(num);
-    return this->SetColumnData(colName, numStr.c_str(), RDRS_INTEGER_DATATYPE);
+    return this->SetColumnData(numStr.c_str(), RDRS_INTEGER_DATATYPE);
   } catch (...) {
     return RS_SERVER_ERROR(ERROR_015);
   }
 }
 
-RS_Status PKRResponse::Append_i64(const char *colName, Int64 num) {
+RS_Status PKRResponse::Append_i64(Int64 num) {
   try {
     std::string numStr = std::to_string(num);
-    return this->SetColumnData(colName, numStr.c_str(), RDRS_INTEGER_DATATYPE);
+    return this->SetColumnData(numStr.c_str(), RDRS_INTEGER_DATATYPE);
   } catch (...) {
     return RS_SERVER_ERROR(ERROR_015);
   }
 }
 
-RS_Status PKRResponse::Append_char(const char *colName,
-                                   const char *fromBuff,
+RS_Status PKRResponse::Append_char(const char *fromBuff,
                                    Uint32 fromBuffLen,
                                    CHARSET_INFO *fromCS) {
   Uint32 extraSpace = 3;  // +1 for null terminator 
@@ -336,5 +318,5 @@ RS_Status PKRResponse::Append_char(const char *colName,
       std::to_string(GetRemainingCapacity()) + std::string(" Required: ") +
       std::to_string(escapedstr.length() + extraSpace));
   }
-  return this->SetColumnData(colName, escapedstr.c_str(), RDRS_STRING_DATATYPE);
+  return this->SetColumnData(escapedstr.c_str(), RDRS_STRING_DATATYPE);
 }

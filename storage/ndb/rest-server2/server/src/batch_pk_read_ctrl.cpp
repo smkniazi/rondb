@@ -235,7 +235,8 @@ void BatchPKReadCtrl::batchPKRead(
       std::vector<PKReadResponseJSON> responses;
       for (unsigned int i = 0; i < noOps; i++) {
         PKReadResponseJSON response;
-        process_pkread_response(respBuffs[i].buffer,
+        process_pkread_response(&amalloc,
+                                respBuffs[i].buffer,
                                 &reqBuffs[i],
                                 response);
         responses.push_back(response);

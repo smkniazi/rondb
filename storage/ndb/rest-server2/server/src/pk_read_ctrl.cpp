@@ -25,6 +25,7 @@
 #include "api_key.hpp"
 #include "config_structs.hpp"
 #include "constants.hpp"
+#include <NdbSleep.h>
 
 #include <cstring>
 #include <drogon/HttpTypes.h>
@@ -159,9 +160,7 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
       char *respData = respBuff.buffer;
 
       PKReadResponseJSON respJson;
-      respJson.init();
-      process_pkread_response(respData, &reqBuff, respJson);
-
+      process_pkread_response(&amalloc, respData, &reqBuff, respJson);
       std::string json = respJson.to_string();
       DEB_PK_CTRL("JSON response: %s", json.c_str());
       resp->setBody(std::move(json));

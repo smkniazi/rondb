@@ -424,8 +424,6 @@ RS_Status BatchKeyOperations::create_response() {
     PKRRequest *req = &key_op->m_req;
     PKRResponse *resp = &key_op->m_resp;
     const NdbOperation *op = key_op->m_ndbOperation;
-    resp->SetDB(req->DB());
-    resp->SetTable(req->Table());
     resp->SetOperationID(req->OperationId());
     resp->SetNoOfColumns(key_op->m_num_read_columns);
     if (unlikely(req->IsInvalidOp())) {
@@ -525,7 +523,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
       Uint8 null_bit_value = (null_byte >> null_bit_in_byte) & 1;
       if (null_bit_value) {
         DEB_NDB_BE("Column %s is null", col_name);
-        return response->SetColumnDataNull(col_name);
+        return response->SetColumnDataNull();
       }
     }
   }
@@ -533,8 +531,8 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
   bool ret = NdbDictionary::getOffset(ndb_record, col_id, offset);
   require(ret);
   Uint8 *col_ptr = row + offset;
-  DEB_NDB_BE("Column %s with col_id: %u is not null, offset: %u",
-             col_name, col_id, offset);
+  DEB_NDB_BE("Column %s with col_id: %u is not null, offset: %u, type: %u",
+             col_name, col_id, offset, col->getType());
   switch (col->getType()) {
   case NdbDictionary::Column::Undefined: {
     ///< 4 bytes + 0-3 fraction
@@ -543,67 +541,67 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
   }
   case NdbDictionary::Column::Tinyint: {
     ///< 8 bit. 1 byte signed integer, can be used in array
-    return response->Append_i8(col_name, *(Int8*)col_ptr);
+    return response->Append_i8(*(Int8*)col_ptr);
   }
   case NdbDictionary::Column::Tinyunsigned: {
     ///< 8 bit. 1 byte unsigned integer, can be used in array
-    return response->Append_iu8(col_name, *(Uint8*)col_ptr);
+    return response->Append_iu8(*(Uint8*)col_ptr);
   }
   case NdbDictionary::Column::Smallint: {
     ///< 16 bit. 2 byte signed integer, can be used in array
     Int16 i16;
     memcpy(&i16, col_ptr, sizeof(Int16));
-    return response->Append_i16(col_name, i16);
+    return response->Append_i16(i16);
   }
   case NdbDictionary::Column::Smallunsigned: {
     Uint16 u16;
     memcpy(&u16, col_ptr, sizeof(Uint16));
     ///< 16 bit. 2 byte unsigned integer, can be used in array
-    return response->Append_iu16(col_name, u16);
+    return response->Append_iu16(u16);
   }
   case NdbDictionary::Column::Mediumint: {
     ///< 24 bit. 3 byte signed integer, can be used in array
-    return response->Append_i24(col_name, sint3korr(col_ptr));
+    return response->Append_i24(sint3korr(col_ptr));
   }
   case NdbDictionary::Column::Mediumunsigned: {
     ///< 24 bit. 3 byte unsigned integer, can be used in array
-    return response->Append_iu24(col_name, uint3korr(col_ptr));
+    return response->Append_iu24(uint3korr(col_ptr));
   }
   case NdbDictionary::Column::Int: {
     ///< 32 bit. 4 byte signed integer, can be used in array
     Int32 i32;
     memcpy(&i32, col_ptr, sizeof(Int32));
-    return response->Append_i32(col_name, i32);
+    return response->Append_i32(i32);
   }
   case NdbDictionary::Column::Unsigned: {
     ///< 32 bit. 4 byte unsigned integer, can be used in array
     Uint32 u32;
     memcpy(&u32, col_ptr, sizeof(Uint32));
-    return response->Append_iu32(col_name, u32);
+    return response->Append_iu32(u32);
   }
   case NdbDictionary::Column::Bigint: {
     ///< 64 bit. 8 byte signed integer, can be used in array
     Int64 i64;
     memcpy(&i64, col_ptr, sizeof(Int64));
-    return response->Append_i64(col_name, i64);
+    return response->Append_i64(i64);
   }
   case NdbDictionary::Column::Bigunsigned: {
     ///< 64 Bit. 8 byte signed integer, can be used in array
     Uint64 u64;
     memcpy(&u64, col_ptr, sizeof(Uint64));
-    return response->Append_iu64(col_name, u64);
+    return response->Append_iu64(u64);
   }
   case NdbDictionary::Column::Float: {
     ///< 32-bit float. 4 bytes float, can be used in array
     float f32;
     memcpy(&f32, col_ptr, sizeof(float));
-    return response->Append_f32(col_name, f32);
+    return response->Append_f32(f32);
   }
   case NdbDictionary::Column::Double: {
     ///< 64-bit float. 8 byte float, can be used in array
     double d64;
     memcpy(&d64, col_ptr, sizeof(double));
-    return response->Append_d64(col_name, d64);
+    return response->Append_d64(d64);
   }
   case NdbDictionary::Column::Olddecimal: {
     ///< MySQL < 5.0 signed decimal,  Precision, Scale
@@ -634,8 +632,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
                     DECIMAL_MAX_STR_LEN_IN_BYTES);
     DEB_NDB_BE("col_name: %s Decimal column, decStr: %s, binLen: %u",
                col_name, std::string(decStr).c_str(), binLen);
-    return response->Append_string(col_name,
-                                   std::string(decStr),
+    return response->Append_string(std::string(decStr),
                                    RDRS_FLOAT_DATATYPE);
   }
   case NdbDictionary::Column::Char:
@@ -678,8 +675,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     default:
       return RS_CLIENT_ERROR(ERROR_019);
     }
-    return response->Append_char(col_name,
-                                 dataStart,
+    return response->Append_char(dataStart,
                                  attrBytes,
                                  col->getCharset());
   }
@@ -730,8 +726,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     char buffer[MAX_TUPLE_SIZE_IN_BYTES_ENCODED];
     size_t outlen = 0;
     base64_encode(dataStart, attrBytes, (char *)&buffer[0], &outlen, 0);
-    return response->Append_string(col_name,
-                                   std::string(buffer, outlen),
+    return response->Append_string(std::string(buffer, outlen),
                                    RDRS_BINARY_DATATYPE);
   }
   case NdbDictionary::Column::Datetime: {
@@ -746,8 +741,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     my_unpack_date(&lTime, (char*)col_ptr);
     char to[MAX_DATE_STRING_REP_LENGTH];
     my_date_to_str(lTime, to);
-    return response->Append_string(col_name, std::string(to),
-                                   RDRS_DATETIME_DATATYPE);
+    return response->Append_string(std::string(to), RDRS_DATETIME_DATATYPE);
   }
   case NdbDictionary::Column::Blob: {
     ///< Binary large object (see NdbBlob)
@@ -771,7 +765,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
           std::string(" Column: ") + std::string(col_name) +
           " Type: " + std::to_string(col->getType()));
       }
-      return response->SetColumnDataNull(col_name);
+      return response->SetColumnDataNull();
     }
     if (blobHandle->getLength(length) == -1) {
       return RS_SERVER_ERROR(
@@ -823,9 +817,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
         if (bytes > 0) {
           total_read += bytes;
           if (chunk == 0) {
-            response->Append_string(col_name,
-                                    "",
-                                    RDRS_BINARY_DATATYPE);
+            response->Append_string("", RDRS_BINARY_DATATYPE);
             // This adds a column to the response buffer. Right now the last
             // byte of the response buffer is '\0'. Remove the last byte and
             // start appending the base64 data
@@ -877,7 +869,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
           std::string(" Column: ") + std::string(col_name) +
           " Type: " + std::to_string(col->getType()));
       }
-      return response->SetColumnDataNull(col_name);
+      return response->SetColumnDataNull();
     }
     if (blobHandle->getLength(length) == -1) {
       return RS_SERVER_ERROR(
@@ -937,7 +929,6 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
         " bytes. Read: " + std::to_string(total_read));
     }
     return response->Append_char(
-      col_name,
       static_cast<char *>(response->GetWritePointer()),
       length,
       col->getCharset());
@@ -967,8 +958,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
       col_ptr[words - 1],
       Uint32(outlen),
       std::string(buffer, outlen).c_str());
-    return response->Append_string(col_name,
-                                   std::string(buffer, outlen),
+    return response->Append_string(std::string(buffer, outlen),
                                    RDRS_BIT_DATATYPE);
   }
   case NdbDictionary::Column::Time: {
@@ -980,7 +970,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
   case NdbDictionary::Column::Year: {
     ///< Year 1901-2155 (1 byte)
     Int32 year = (uint)(1900 + col_ptr[0]);
-    return response->Append_i32(col_name, year);
+    return response->Append_i32(year);
   }
   case NdbDictionary::Column::Timestamp: {
     ///< Unix time
@@ -1005,9 +995,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     TIME_from_longlong_time_packed(&lTime, numericTime);
     char to[MAX_DATE_STRING_REP_LENGTH];
     my_TIME_to_str(lTime, to, precision);
-    return response->Append_string(col_name,
-                                   std::string(to),
-                                   RDRS_DATETIME_DATATYPE);
+    return response->Append_string(std::string(to), RDRS_DATETIME_DATATYPE);
   }
   case NdbDictionary::Column::Datetime2: {
     ///< 5 bytes plus 0-3 fraction
@@ -1018,9 +1006,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     TIME_from_longlong_datetime_packed(&lTime, numericDate);
     char to[MAX_DATE_STRING_REP_LENGTH];
     my_TIME_to_str(lTime, to, precision);
-    return response->Append_string(col_name,
-                                   std::string(to),
-                                   RDRS_DATETIME_DATATYPE);
+    return response->Append_string(std::string(to), RDRS_DATETIME_DATATYPE);
   }
   case NdbDictionary::Column::Timestamp2: {
     ///< 4 bytes + 0-3 fraction
@@ -1041,9 +1027,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     lTime.time_type   = MYSQL_TIMESTAMP_DATETIME;
     char to[MAX_DATE_STRING_REP_LENGTH];
     my_TIME_to_str(lTime, to, precision);
-    return response->Append_string(col_name,
-                                   std::string(to),
-                                   RDRS_DATETIME_DATATYPE);
+    return response->Append_string(std::string(to), RDRS_DATETIME_DATATYPE);
   }
   }
   return RS_SERVER_ERROR(

@@ -54,16 +54,6 @@ class PKRResponse {
   RS_Status Close();
 
   /**
-   * Set Database Name
-   */
-  RS_Status SetDB(const char *db);
-
-  /**
-   * Set Table Name
-   */
-  RS_Status SetTable(const char *table);
-
-  /**
    * Set Operation ID
    */
   RS_Status SetOperationID(const char *opID);
@@ -80,12 +70,12 @@ class PKRResponse {
   /**
    * Set data to null for this column
    */
-  RS_Status SetColumnDataNull(const char *colName);
+  RS_Status SetColumnDataNull();
 
   /**
    * Set column name and data
    */
-  RS_Status SetColumnData(const char *colName, const char *value, Uint32 type);
+  RS_Status SetColumnData(const char *value, Uint32 type);
 
   /**
    * Get remaining capacity of the response buffer
@@ -117,82 +107,80 @@ class PKRResponse {
   /**
    * Append to response buffer
    */
-  RS_Status Append_iu32(const char *colName, Uint32 num);
+  RS_Status Append_iu32(Uint32 num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_i32(const char *colName, Int32 num);
+  RS_Status Append_i32(Int32 num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_i64(const char *colName, Int64 num);
+  RS_Status Append_i64(Int64 num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_iu64(const char *colName, Uint64 num);
+  RS_Status Append_iu64(Uint64 num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_i8(const char *colName, Int8 num);
+  RS_Status Append_i8(Int8 num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_iu8(const char *colName, Uint8 num);
+  RS_Status Append_iu8(Uint8 num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_i16(const char *colName, Int16 num);
+  RS_Status Append_i16(Int16 num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_iu16(const char *colName, Uint16 num);
+  RS_Status Append_iu16(Uint16 num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_i24(const char *colName, int num);
+  RS_Status Append_i24(int num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_iu24(const char *colName, unsigned int num);
+  RS_Status Append_iu24(unsigned int num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_f32(const char *colName, float num);
+  RS_Status Append_f32(float num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_d64(const char *colName, double num);
+  RS_Status Append_d64(double num);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_char(const char *colName,
-                        const char *from_buffer,
+  RS_Status Append_char(const char *from_buffer,
                         Uint32 from_length,
                         CHARSET_INFO *from_cs);
 
   /**
    * Append to response buffer
    */
-  RS_Status Append_string(const char *colName, std::string value, Uint32 type);
+  RS_Status Append_string(std::string value, Uint32 type);
 
  private:
   /**
    * Set column name and data internal method
    */
-  RS_Status SetColumnDataInt(const char *colName,
-                             const char *value,
+  RS_Status SetColumnDataInt(const char *value,
                              Uint32 type);
 
   /**

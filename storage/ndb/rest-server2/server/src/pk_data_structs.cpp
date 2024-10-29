@@ -327,21 +327,24 @@ std::string PKReadResponseJSON::to_string() const {
   std::stringstream ss;
   ss << "{" << std::endl;
   ss << "  \"code\": " << static_cast<int>(code) << "," << std::endl;
-  ss << "  \"operationId\": \"" << operationID << "\"," << std::endl;
+  ss << "  \"operationId\": \"";
+  if (opIdPtr != nullptr) {
+    ss << opIdPtr;
+  }
+  ss << "\"," << std::endl;
   ss << "  \"data\": {";
-  bool first = true;
-  for (auto &[column, value] : data) {
-    if (!first) {
+  for (Uint32 i = 0; i < num_values; i++) {
+    if (i != 0) {
       ss << ",";
     }
-    first = false;
+    ResultView res_view = result_view[i];
     ss << std::endl;
-    ss << "    \"" << column << "\": ";
-    if (value.empty()) {
-      ss << "null";
-    } else {
-      ss << std::string(value.begin(), value.end());
-    }
+    ss << "    \"" << res_view.name_ptr << "\": ";
+    if (res_view.quoted_flag)
+      ss << "\"";
+    ss <<res_view.value_ptr;
+    if (res_view.quoted_flag)
+      ss << "\"";
   }
   ss << std::endl << "  }" << std::endl;
   ss << "}" << std::endl;
@@ -363,34 +366,35 @@ std::string PKReadResponseJSON::to_string(int indent, bool batch) const {
   } else {
     ss << indentStr << "{" << std::endl;
   }
-
-  ss << (batch ? innerMostIndentStr : innerIndentStr) << "\"operationId\": \""
-     << operationID << "\"," << std::endl;
+  ss << (batch ? innerMostIndentStr : innerIndentStr);
+  ss << "\"operationId\": \"";
+  if (opIdPtr != nullptr) {
+    ss << opIdPtr;
+  }
+  ss << "\"," << std::endl;
   ss << (batch ? innerMostIndentStr : innerIndentStr) << "\"data\": {";
 
-  bool first = true;
-  for (auto &[column, value] : data) {
-    if (!first) {
-      ss << ",";
-    }
-    first = false;
-    ss << std::endl;
-    ss << (batch ? innerMostIndentStr + "  " : innerMostIndentStr)
-       << "\"" << column << "\": ";
-    if (value.empty()) {
-      ss << "null";
-    } else {
-      ss << std::string(value.begin(), value.end());
+  if (code == drogon::HttpStatusCode::k200OK) {
+    for (Uint32 i = 0; i < num_values; i++) {
+      if (i != 0) {
+        ss << ",";
+      }
+      ResultView res_view = result_view[i];
+      ss << std::endl;
+      ss << (batch ? innerMostIndentStr + "  " : innerMostIndentStr)
+         << "\"" << res_view.name_ptr << "\": ";
+      if (res_view.quoted_flag)
+        ss << "\"";
+      ss << res_view.value_ptr;
+      if (res_view.quoted_flag)
+        ss << "\"";
     }
   }
-
   ss << std::endl << (batch ? innerMostIndentStr : innerIndentStr) << "}";
   ss << std::endl << (batch ? innerIndentStr : indentStr) << "}";
-
   if (batch) {
     ss << std::endl << indentStr << "}";
   }
-
   return ss.str();
 }
 

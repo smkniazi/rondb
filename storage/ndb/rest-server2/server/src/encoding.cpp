@@ -23,9 +23,23 @@
 #include "buffer_manager.hpp"
 #include <my_compiler.h>
 #include "db_operations/pk/pkr_request.hpp"
+#include <ArenaMalloc.hpp>
+#include <EventLogger.hpp>
 
 #include <cstring>
 #include <string>
+
+extern EventLogger *g_eventLogger;
+
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+#define DEBUG_ENC 1
+#endif
+
+#ifdef DEBUG_ENC
+#define DEB_ENC(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
+#else
+#define DEB_ENC(...) do { } while (0)
+#endif
 
 /**
  * Build memory structure for Primary Key request. This is stored in
@@ -184,12 +198,24 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
     drogon::HttpStatusCode::k200OK), "OK").status;
 }
 
-RS_Status process_pkread_response(void *respBuff,
+RS_Status process_pkread_response(ArenaMalloc *amalloc,
+                                  void *respBuff,
                                   RS_Buffer *reqBuff,
                                   PKReadResponseJSON &response) {
+  DEB_ENC("process_pk_read_response");
   PKRRequest req = PKRRequest(reqBuff);
   Uint32 *buf = (Uint32 *)(respBuff);
   Uint32 responseType = buf[PK_RESP_OP_TYPE_IDX];
+  Uint32 colCount = req.ReadColumnsCount();
+  ResultView *result_view = (ResultView*)
+    amalloc->alloc_bytes(colCount * sizeof(ResultView), 8);
+  response.init(colCount, result_view);
+  if (unlikely(result_view == nullptr)) {
+    std::string msg = "Failed to allocate memory";
+    return CRS_Status(static_cast<HTTP_CODE>(
+      drogon::HttpStatusCode::k500InternalServerError),
+      msg.c_str(), msg).status;
+  }
   if (responseType != RDRS_PK_RESP_ID) {
     std::string msg = "internal server error. Wrong response type";
     return CRS_Status(static_cast<HTTP_CODE>(
@@ -211,9 +237,9 @@ RS_Status process_pkread_response(void *respBuff,
   }
   Uint32 opIDX = buf[PK_RESP_OP_ID_IDX];
   if (opIDX != 0) {
-    UintPtr opIDXPtr = (UintPtr)respBuff + (UintPtr)opIDX;
-    std::string goOpID = std::string((char *)opIDXPtr);
-    response.setOperationID(goOpID);
+    const char* opIDXPtr = (const char*)respBuff + opIDX;
+    DEB_ENC("Set OperationID: %s", opIDXPtr);
+    response.setOperationID(opIDXPtr, (Uint32)strlen(opIDXPtr));
   }
 
   Int32 status = (Int32)(buf[PK_RESP_OP_STATUS_IDX]);
@@ -232,19 +258,26 @@ RS_Status process_pkread_response(void *respBuff,
         colHeader[j] = colHeaderStart[j];
       }
       //Uint32 nameAdd = colHeader[0];
-      std::string name = req.ReadColumnName(i);
+      const char* name = req.ReadColumnName(i);
+      Uint32 name_len = req.ReadColumnNameLen(i);
       Uint32 valueAdd = colHeader[1];
       Uint32 isNull = colHeader[2];
       Uint32 dataType = colHeader[3];
       if (isNull == 0) {
-        std::string value =
-          std::string((char *)
-            (reinterpret_cast<UintPtr>(respBuff) + valueAdd));
-        std::string quotedValue = quote_if_string(dataType, value);
-        response.setColumnData(
-          name, std::vector<char>(quotedValue.begin(), quotedValue.end()));
+        const char * value =
+          (reinterpret_cast<const char*>(respBuff) + valueAdd);
+        Uint32 value_len = strlen(value);
+        bool quoted = dataType != RDRS_INTEGER_DATATYPE &&
+                      dataType != RDRS_FLOAT_DATATYPE;
+        DEB_ENC("setColumnData(%u) name: %s, name_len: %u, value: %s,"
+                " value_len: %u, quoted: %u",
+          i, name, name_len, value, value_len, quoted);
+        response.setColumnData(i, name, name_len, value, value_len, quoted);
       } else {
-        response.setColumnData(name, std::vector<char>());
+        const char *null_value = "null";
+        Uint32 null_value_len = strlen(null_value);
+        response.setColumnData(
+          i, name, name_len, null_value, null_value_len, false);
       }
     }
   }
@@ -253,6 +286,12 @@ RS_Status process_pkread_response(void *respBuff,
   if (messageIDX != 0) {
     UintPtr messageIDXPtr = (UintPtr)respBuff + (UintPtr)messageIDX;
     message = std::string((char *)messageIDXPtr);
+    DEB_ENC("message: %s", message.c_str());
   }
+  DEB_ENC("OperationID: %s, view: %s, len_str: %u, len_view: %u",
+          response.getOperationIdString().c_str(),
+          response.getOperationID().data(),
+          (Uint32)response.getOperationIdString().size(),
+          (Uint32)response.getOperationID().size());
   return CRS_Status(static_cast<HTTP_CODE>(status), message.c_str()).status;
 }

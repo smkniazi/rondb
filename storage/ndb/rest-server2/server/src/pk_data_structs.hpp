@@ -82,13 +82,26 @@ struct Column {
   std::vector<char> value;  // Byte array for the value
 };
 
+struct ResultView {
+  const char *name_ptr;
+  Uint32 name_len;
+  const char *value_ptr;
+  Uint32 value_len;
+  bool quoted_flag;
+};
+
 class PKReadResponse {
  public:
   PKReadResponse()= default;
-  virtual void init() = 0;
-  virtual void setOperationID(std::string &opID)= 0;
-  virtual void setColumnData(std::string &column,
-                             const std::vector<char> &value) = 0;
+  virtual void init(Uint32, ResultView*) = 0;
+  virtual void setOperationID(const char*, Uint32) = 0;
+  virtual void setOperationID(std::string_view) = 0;
+  virtual void setColumnData(Uint32 index,
+                             const char *name,
+                             Uint32 name_len,
+                             const char *value,
+                             Uint32 value_len,
+                             bool quoted_flag) = 0;
   virtual std::string to_string() const = 0;
   virtual ~PKReadResponse() = default;
 };
@@ -98,10 +111,11 @@ class PKReadResponseJSON : public PKReadResponse {
   // json:"code"    form:"code"    binding:"required"
   drogon::HttpStatusCode code;
   // json:"operationId" form:"operation-id" binding:"omitempty"
-  std::string operationID;
+  const char *opIdPtr;
+  Uint32 opIdLen;
+  Uint32 num_values;
   // json:"data" form:"data" binding:"omitempty"
-  std::map<std::string, std::vector<char>>
-      data;
+  ResultView *result_view;
 
  public:
   PKReadResponseJSON() : PKReadResponse() {
@@ -109,48 +123,90 @@ class PKReadResponseJSON : public PKReadResponse {
 
   PKReadResponseJSON(const PKReadResponseJSON &other) : PKReadResponse() {
     code = other.code;
-    operationID = other.operationID;
-    data = other.data;
+    num_values = other.num_values;
+    opIdPtr = other.opIdPtr;
+    opIdLen = other.opIdLen;
+    result_view = other.result_view;
   }
-
   PKReadResponseJSON &operator=(const PKReadResponseJSON &other) {
     code = other.code;
-    operationID = other.operationID;
-    data = other.data;
+    num_values = other.num_values;
+    opIdPtr = other.opIdPtr;
+    opIdLen = other.opIdLen;
+    result_view = other.result_view;
     return *this;
   }
-
-  void init() override {
+  void init(Uint32 numColumns,
+            ResultView *in_result_view) override {
     code = drogon::HttpStatusCode::kUnknown;
-    operationID.clear();
-    data.clear();
+    opIdPtr = nullptr;
+    opIdLen = 0;
+    num_values = numColumns;
+    result_view = in_result_view;
   }
-
   void setStatusCode(drogon::HttpStatusCode c) {
     code = c;
   }
-
-  void setOperationID(std::string &opID) override {
-    operationID = opID;
+  void setOperationID(const char *opId, Uint32 len) override {
+    opIdPtr = opId;
+    opIdLen = len;
   }
-
-  void setColumnData(std::string &column,
-                     const std::vector<char> &value) override {
-    data[column] = value;
+  void setOperationID(std::string_view str_view) override {
+    opIdPtr = str_view.data();
+    opIdLen = str_view.size();
   }
-
+  void setColumnData(Uint32 index,
+                     const char *name,
+                     Uint32 name_len,
+                     const char *value,
+                     Uint32 value_len,
+                     bool quoted) override {
+    result_view[index].name_ptr = name;
+    result_view[index].name_len = name_len;
+    result_view[index].value_ptr = value;
+    result_view[index].value_len = value_len;
+    result_view[index].quoted_flag = quoted;
+  }
   drogon::HttpStatusCode getStatusCode() const {
     return code;
   }
-
-  std::string getOperationID() const {
-    return operationID;
+  std::string_view getOperationID() const {
+    std::string_view opId(opIdPtr, opIdLen);
+    return opId;
   }
-
-  std::map<std::string, std::vector<char>> getData() const {
-    return data;
+  std::string_view getName(Uint32 index) const {
+    std::string_view name(result_view[index].name_ptr,
+                          result_view[index].name_len);
+    return name;
   }
-
+  std::string getOperationIdString() const {
+    std::string opId(opIdPtr, opIdLen);
+    return opId;
+  }
+  Uint32 getNumValues() const {
+    return num_values;
+  }
+  std::string getNameString(Uint32 index) const {
+    std::string name(result_view[index].name_ptr,
+                     result_view[index].name_len);
+    return name;
+  }
+  std::string getValueString(Uint32 index) const {
+    std::string value(result_view[index].value_ptr,
+                      result_view[index].value_len);
+    return value;
+  }
+  std::vector<char> getValueArray(Uint32 index) {
+    const char *ptr = result_view[index].value_ptr;
+    Uint32 len = result_view[index].value_len;
+    std::vector<char> vec(ptr, ptr + len);
+    return vec;
+  }
+  std::string_view getValue(Uint32 index) const {
+    std::string_view value(result_view[index].value_ptr,
+                           result_view[index].value_len);
+    return value;
+  }
   std::string to_string() const override;
   std::string to_string(int, bool) const;
   static std::string batch_to_string(const std::vector<PKReadResponseJSON> &);
@@ -190,8 +246,12 @@ class PKReadResponseWithCodeJSON {
     body = b;
   }
 
-  void setOperationId(std::string &opID) {
-    body.setOperationID(opID);
+  void setOperationId(const char *opId, Uint32 opIdLen) {
+    body.setOperationID(opId, opIdLen);
+  }
+
+  void setOperationId(std::string_view str_view) {
+    body.setOperationID(str_view);
   }
 
   std::string getMessage() const {
