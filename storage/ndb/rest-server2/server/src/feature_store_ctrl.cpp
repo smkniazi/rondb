@@ -308,30 +308,35 @@ std::tuple<std::vector<std::vector<char>>,
       }
     } else if (response.getBody().getStatusCode() != drogon::k200OK) {
       status = feature_store_data_structs::FeatureStatus::Error;
-    }
-
-    Uint32 numValues = response.getBody().getNumValues();
-    for (Uint32 i = 0; i < numValues; i++) {
-      std::string featureName = response.getBody().getNameString(i);
-      std::vector<char> value = response.getBody().getValueArray(i);
-      std::string featureIndexKey = metadata::GetFeatureIndexKeyByFgIndexKey(
+    } else {
+      Uint32 numValues = response.getBody().getNumValues();
+      for (Uint32 i = 0; i < numValues; i++) {
+        std::string featureName = response.getBody().getNameString(i);
+        std::vector<char> value = response.getBody().getValueArray(i);
+        bool quote_flag = response.getBody().getQuoteFlag(i);
+        if (quote_flag) {
+          value.insert(value.begin(), '\"');
+          value.push_back('\"');
+        }
+        std::string featureIndexKey = metadata::GetFeatureIndexKeyByFgIndexKey(
           operationId, featureName);
-      if (auto it = featureView.featureIndexLookup.find(featureIndexKey);
+        if (auto it = featureView.featureIndexLookup.find(featureIndexKey);
           it != featureView.featureIndexLookup.end()) {
-        if (auto decoderIt = featureView.complexFeatures.find(featureIndexKey);
+          if (auto decoderIt = featureView.complexFeatures.find(featureIndexKey);
             decoderIt != featureView.complexFeatures.end()) {
-          auto deserResult =
-            DeserialiseComplexFeature(value, decoderIt->second);
-          if (std::get<0>(deserResult).empty()) {
-            status = feature_store_data_structs::FeatureStatus::Error;
-            err = DESERIALISE_FEATURE_FAIL->NewMessage(
-              "Feature name: " + featureName + "; " +
+            auto deserResult =
+              DeserialiseComplexFeature(value, decoderIt->second);
+            if (std::get<0>(deserResult).empty()) {
+              status = feature_store_data_structs::FeatureStatus::Error;
+              err = DESERIALISE_FEATURE_FAIL->NewMessage(
+                "Feature name: " + featureName + "; " +
               std::get<1>(deserResult)->Error());
+            } else {
+              (featureValues)[it->second] = std::get<0>(deserResult);
+            }
           } else {
-            (featureValues)[it->second] = std::get<0>(deserResult);
+            (featureValues)[it->second] = value;
           }
-        } else {
-          (featureValues)[it->second] = value;
         }
       }
     }

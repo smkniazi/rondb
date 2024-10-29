@@ -207,6 +207,10 @@ class PKReadResponseJSON : public PKReadResponse {
                            result_view[index].value_len);
     return value;
   }
+  bool getQuoteFlag(Uint32 index) {
+    return result_view[index].quoted_flag;
+  }
+
   std::string to_string() const override;
   std::string to_string(int, bool) const;
   static std::string batch_to_string(const std::vector<PKReadResponseJSON> &);
