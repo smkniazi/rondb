@@ -611,7 +611,7 @@ AggregationAPICompiler::compile(Expr* expr, Uint32* reg)
   {
     // Destination register is not writable after removing our locks, so we
     // need to select another destination register.
-    Uint32 new_dest;
+    Uint32 new_dest = 0;
     bool copy_already_exists = false;
     for (Uint32 i=0; i<REGS; i++)
     {

@@ -65,6 +65,7 @@ public:
   {
     assert(alloc != NULL);
   }
+  DynamicArray(const DynamicArray& other) = default;
   ~DynamicArray()
   {
     // No deallocation needed

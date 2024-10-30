@@ -25,7 +25,7 @@
 #include <RonSQLPreparer.hpp>
 #include <my_sys.h> // Only needed for MY_GIVE_INFO
 #include <getopt.h>
-#include <chrono>
+#include <NdbTick.h>
 
 using std::cerr;
 using std::cout;
@@ -119,11 +119,11 @@ main(int argc, char** argv)
     params.ndb = &myNdb;
     // Execute, perhaps timing it
     if (config.time_info)    {
-      auto start = std::chrono::high_resolution_clock::now();
+      NDB_TICKS start = NdbTick_getCurrentTicks();
       exit_code = run_ronsql(params);
-      auto end = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<double> elapsed = end - start;
-      cerr << "\nElapsed time: " << elapsed.count() << " s" << endl;
+      NDB_TICKS end = NdbTick_getCurrentTicks();
+      Uint32 elapsed_ms = NdbTick_Elapsed(start,end).milliSec();
+      cerr << "\nElapsed time: " << elapsed_ms << " ms" << endl;
     }
     else
     {

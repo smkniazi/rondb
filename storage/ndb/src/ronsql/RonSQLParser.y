@@ -226,6 +226,9 @@ selectstatement:
                   "Problem with TokenKind or rsqlp_token_kind_t definition");
     static_assert(std::is_same<TokenKind, decltype(yychar)>::value,
                   "Problem with TokenKind or yychar definition");
+  // Suppress a compiler warning about unused yynerrs. It is unused, but we
+  // can't easily remove it since it's declared in generated code.
+  (void)yynerrs;
   }
 
 explain_opt:

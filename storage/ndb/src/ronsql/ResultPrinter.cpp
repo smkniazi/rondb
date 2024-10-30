@@ -52,7 +52,6 @@ DEFINE_FORMATTER(quoted_identifier, LexCString, {
 static void print_json_string_from_utf8(std::ostream& output_stream, LexString ls, bool utf8_output);
 static void print_float_or_double(std::ostream& out, double value, bool is_double, bool json_output, bool tsv_output);
 static double convert_result_to_double(NdbAggregator::Result result);
-static float convert_result_to_float(NdbAggregator::Result result);
 
 ResultPrinter::ResultPrinter(ArenaMalloc* amalloc,
                              struct SelectStatement* query,
@@ -780,22 +779,6 @@ convert_result_to_double(NdbAggregator::Result result)
     return static_cast<double>(result.data_uint64());
   case NdbDictionary::Column::Type::Double:
     return static_cast<double>(result.data_double());
-  default:
-    abort();
-  }
-}
-
-inline static float
-convert_result_to_float(NdbAggregator::Result result)
-{
-  switch (result.type())
-  {
-  case NdbDictionary::Column::Type::Bigint:
-    return static_cast<float>(result.data_int64());
-  case NdbDictionary::Column::Type::Bigunsigned:
-    return static_cast<float>(result.data_uint64());
-  case NdbDictionary::Column::Type::Double:
-    return static_cast<float>(result.data_double());
   default:
     abort();
   }

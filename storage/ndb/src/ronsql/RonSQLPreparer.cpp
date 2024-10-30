@@ -1833,8 +1833,8 @@ RonSQLPreparer::~RonSQLPreparer()
 
 void
 RonSQLPreparer::Context::set_err_state(ErrState state,
-                                  char* err_pos,
-                                  size_t err_len)
+                                       char* err_pos,
+                                       size_t err_len)
 {
   if (m_err_state == ErrState::NONE)
   {
