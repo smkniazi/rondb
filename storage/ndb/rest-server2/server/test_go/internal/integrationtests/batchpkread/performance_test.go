@@ -76,7 +76,7 @@ func BenchmarkSimple(b *testing.B) {
 	start := time.Now()
         last := time.Now()
         var ops atomic.Uint64
-	runtime.GOMAXPROCS(14)
+	runtime.GOMAXPROCS(2)
 
 	/*
 		Assuming GOMAXPROCS is not set, a 10-core CPU
@@ -162,8 +162,8 @@ func BenchmarkSimple(b *testing.B) {
 	b.Logf("Batch size (per requests):  %d", batchSize)
 	b.Logf("Number of threads:          %d", threadId)
 	b.Logf("Throughput:                 %f pk lookups/second", PkLookupsPerSecond)
-	b.Logf("50th percentile latency:    %v ms", p50.Milliseconds())
-	b.Logf("99th percentile latency:    %v ms", p99.Milliseconds())
+	b.Logf("50th percentile latency:    %v us", p50.Microseconds())
+	b.Logf("99th percentile latency:    %v us", p99.Microseconds())
 	b.Log("-------------------------------------------------")
 }
 
@@ -264,8 +264,8 @@ func BenchmarkManyColumns(b *testing.B) {
 	b.Logf("Batch size (per requests):  %d", batchSize)
 	b.Logf("Number of threads:          %d", threadId)
 	b.Logf("Throughput:                 %f pk lookups/second", PkLookupsPerSecond)
-	b.Logf("50th percentile latency:    %v ms", p50.Milliseconds())
-	b.Logf("99th percentile latency:    %v ms", p99.Milliseconds())
+	b.Logf("50th percentile latency:    %v us", p50.Microseconds())
+	b.Logf("99th percentile latency:    %v us", p99.Microseconds())
 	b.Log("-------------------------------------------------")
 }
 
@@ -376,7 +376,7 @@ func BenchmarkBinary(b *testing.B) {
 	b.Logf("Batch size (per requests):  %d", batchSize)
 	b.Logf("Number of threads:          %d", threadId)
 	b.Logf("Throughput:                 %f pk lookups/second", PkLookupsPerSecond)
-	b.Logf("50th percentile latency:    %v ms", p50.Milliseconds())
-	b.Logf("99th percentile latency:    %v ms", p99.Milliseconds())
+	b.Logf("50th percentile latency:    %v us", p50.Microseconds())
+	b.Logf("99th percentile latency:    %v us", p99.Microseconds())
 	b.Log("-------------------------------------------------")
 }
