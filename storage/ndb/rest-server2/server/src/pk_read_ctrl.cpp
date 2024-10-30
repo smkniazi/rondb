@@ -37,7 +37,7 @@
 extern EventLogger *g_eventLogger;
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
-#define DEBUG_PK_CTRL 1
+//#define DEBUG_PK_CTRL 1
 #endif
 
 #ifdef DEBUG_PK_CTRL
@@ -162,7 +162,10 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
       PKReadResponseJSON respJson;
       process_pkread_response(&amalloc, respData, &reqBuff, respJson);
       std::string json = respJson.to_string();
-      DEB_PK_CTRL("JSON response: %s", json.c_str());
+      DEB_PK_CTRL("JSON response: %s, len: %u, calc_len: %u",
+                  json.c_str(),
+                  (Uint32)json.size(),
+                  (Uint32)respJson.getSizeJson());
       resp->setBody(std::move(json));
     }
     callback(resp);

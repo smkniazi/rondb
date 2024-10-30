@@ -32,7 +32,7 @@
 extern EventLogger *g_eventLogger;
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
-#define DEBUG_ENC 1
+//#define DEBUG_ENC 1
 #endif
 
 #ifdef DEBUG_ENC
@@ -286,6 +286,7 @@ RS_Status process_pkread_response(ArenaMalloc *amalloc,
   if (messageIDX != 0) {
     UintPtr messageIDXPtr = (UintPtr)respBuff + (UintPtr)messageIDX;
     message = std::string((char *)messageIDXPtr);
+    response.addSizeJsonMessage();
     DEB_ENC("message: %s", message.c_str());
   }
   DEB_ENC("OperationID: %s, view: %s, len_str: %u, len_view: %u",

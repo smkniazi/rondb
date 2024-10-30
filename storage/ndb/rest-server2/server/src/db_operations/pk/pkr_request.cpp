@@ -29,7 +29,7 @@
 extern EventLogger *g_eventLogger;
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
-#define DEBUG_REQ 1
+//#define DEBUG_REQ 1
 #endif
 
 #ifdef DEBUG_REQ

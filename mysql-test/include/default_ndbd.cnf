@@ -1,5 +1,5 @@
 [cluster_config]
-#UseShm= 1
+UseShm= 1
 MaxNoOfSavedMessages=          1000
 MaxNoOfConcurrentTransactions= 2048
 MaxNoOfConcurrentOperations=   10000
@@ -49,7 +49,7 @@ DiskIOThreadPool=1
 #
 # (Option is ignored for non-MT'ed NDB)
 #
-ThreadConfig=main={count=1},tc={count=3},ldm={count=4},io={count=1},rep={count=1},recv={count=2},send={count=2}
+ThreadConfig=main={count=1},tc={count=2},ldm={count=2},io={count=1},rep={count=1},recv={count=1},send={count=1}
 
 [api]
 UseOnlyIPv4=1

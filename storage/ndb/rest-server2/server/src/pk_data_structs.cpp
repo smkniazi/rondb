@@ -323,8 +323,12 @@ RS_Status PKReadParams::validate_columns(void) {
     drogon::HttpStatusCode::k200OK)).status;
 }
 
+#ifdef VM_TRACE
+#define VERBOSE_JSON
+#endif
 std::string PKReadResponseJSON::to_string() const {
   std::stringstream ss;
+#ifdef VERBOSE_JSON
   ss << "{" << std::endl;
   ss << "  \"code\": " << static_cast<int>(code) << "," << std::endl;
   ss << "  \"operationId\": \"";
@@ -348,12 +352,38 @@ std::string PKReadResponseJSON::to_string() const {
   }
   ss << std::endl << "  }" << std::endl;
   ss << "}" << std::endl;
+#else
+  ss << "{";
+  ss << " \"code\":" << static_cast<int>(code) << ",";
+  ss << " \"operationId\":\"";
+  if (opIdPtr != nullptr) {
+    ss << opIdPtr;
+  }
+  ss << "\",";
+  ss << " \"data\":{";
+  for (Uint32 i = 0; i < num_values; i++) {
+    if (i != 0) {
+      ss << ",";
+    }
+    ResultView res_view = result_view[i];
+    ss << std::endl;
+    ss << "\"" << res_view.name_ptr << "\":";
+    if (res_view.quoted_flag)
+      ss << "\"";
+    ss <<res_view.value_ptr;
+    if (res_view.quoted_flag)
+      ss << "\"";
+  }
+  ss << std::endl << " }" << std::endl;
+  ss << "}" << std::endl;
+#endif
   return ss.str();
 }
 
 // Indent the JSON string by `indent` spaces.
 std::string PKReadResponseJSON::to_string(int indent, bool batch) const {
   std::stringstream ss;
+#ifdef VERBOSE_JSON
   std::string indentStr(indent, ' ');
   std::string innerIndentStr     = indentStr + std::string(2, ' ');
   std::string innerMostIndentStr = innerIndentStr + std::string(2, ' ');
@@ -395,12 +425,50 @@ std::string PKReadResponseJSON::to_string(int indent, bool batch) const {
   if (batch) {
     ss << std::endl << indentStr << "}";
   }
+#else
+  std::string indentStr(indent, ' ');
+  if (batch) {
+    ss << "{";
+    ss << " \"code\":" << static_cast<int>(code)
+       << ",";
+    ss << " \"body\":{";
+  } else {
+    ss << "{" << std::endl;
+  }
+  ss << "\"operationId\":\"";
+  if (opIdPtr != nullptr) {
+    ss << opIdPtr;
+  }
+  ss << "\",";
+  ss << " \"data\":{";
+
+  if (code == drogon::HttpStatusCode::k200OK) {
+    for (Uint32 i = 0; i < num_values; i++) {
+      if (i != 0) {
+        ss << ",";
+      }
+      ResultView res_view = result_view[i];
+      ss << std::endl;
+      ss << "\"" << res_view.name_ptr << "\":";
+      if (res_view.quoted_flag)
+        ss << "\"";
+      ss << res_view.value_ptr;
+      if (res_view.quoted_flag)
+        ss << "\"";
+    }
+  }
+  ss << std::endl << "} }";
+  if (batch) {
+    ss << " }";
+  }
+#endif
   return ss.str();
 }
 
 std::string PKReadResponseJSON::batch_to_string(
   const std::vector<PKReadResponseJSON> &responses) {
   std::stringstream ss;
+#ifdef VERBOSE_JSON
   ss << "{" << std::endl;
   ss << "  \"result\": [";
   bool first = true;
@@ -414,6 +482,21 @@ std::string PKReadResponseJSON::batch_to_string(
   }
   ss << std::endl << "  ]" << std::endl;
   ss << "}" << std::endl;
+#else
+  ss << "{";
+  ss << " \"result\":[";
+  bool first = true;
+  for (auto &response : responses) {
+    if (!first) {
+      ss << ",";
+    }
+    first = false;
+    ss << std::endl;
+    ss << response.to_string(1, true);
+  }
+  ss << std::endl << " ]";
+  ss << " }" << std::endl;
+#endif
   return ss.str();
 }
 

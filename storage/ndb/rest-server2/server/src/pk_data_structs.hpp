@@ -116,6 +116,7 @@ class PKReadResponseJSON : public PKReadResponse {
   Uint32 num_values;
   // json:"data" form:"data" binding:"omitempty"
   ResultView *result_view;
+  size_t size_json;
 
  public:
   PKReadResponseJSON() : PKReadResponse() {
@@ -127,6 +128,7 @@ class PKReadResponseJSON : public PKReadResponse {
     opIdPtr = other.opIdPtr;
     opIdLen = other.opIdLen;
     result_view = other.result_view;
+    size_json = other.size_json;
   }
   PKReadResponseJSON &operator=(const PKReadResponseJSON &other) {
     code = other.code;
@@ -134,6 +136,7 @@ class PKReadResponseJSON : public PKReadResponse {
     opIdPtr = other.opIdPtr;
     opIdLen = other.opIdLen;
     result_view = other.result_view;
+    size_json = other.size_json;
     return *this;
   }
   void init(Uint32 numColumns,
@@ -143,6 +146,21 @@ class PKReadResponseJSON : public PKReadResponse {
     opIdLen = 0;
     num_values = numColumns;
     result_view = in_result_view;
+    /**
+     * First and last part + security
+     * The first and last part is 60 bytes for pkread
+     * 81 bytes for batch pkread. This is inclusive of
+     * extra line breaks and spaces for formatting. This
+     * is only used in debugging mode. Without so much
+     * extra spaces it suffices with 55 bytes for batched
+     * reads. In both cases we increase the number for
+     * safety to avoid risking buffer overruns.
+     */
+#ifdef VM_TRACE
+    size_json = 100;
+#else
+    size_json = 60;
+#endif
   }
   void setStatusCode(drogon::HttpStatusCode c) {
     code = c;
@@ -150,10 +168,12 @@ class PKReadResponseJSON : public PKReadResponse {
   void setOperationID(const char *opId, Uint32 len) override {
     opIdPtr = opId;
     opIdLen = len;
+    size_json += len;
   }
   void setOperationID(std::string_view str_view) override {
     opIdPtr = str_view.data();
     opIdLen = str_view.size();
+    size_json += str_view.size();
   }
   void setColumnData(Uint32 index,
                      const char *name,
@@ -166,6 +186,11 @@ class PKReadResponseJSON : public PKReadResponse {
     result_view[index].value_ptr = value;
     result_view[index].value_len = value_len;
     result_view[index].quoted_flag = quoted;
+#ifdef VM_TRACE
+    size_json += (20 + (2 * quoted) + name_len + value_len);
+#else
+    size_json += (8 + (2 * quoted) + name_len + value_len);
+#endif
   }
   drogon::HttpStatusCode getStatusCode() const {
     return code;
@@ -210,6 +235,15 @@ class PKReadResponseJSON : public PKReadResponse {
   bool getQuoteFlag(Uint32 index) {
     return result_view[index].quoted_flag;
   }
+
+  void addSizeJsonMessage() {
+#ifdef VM_TRACE
+    size_json += 20;
+#else
+    size_json += 8;
+#endif
+  }
+  size_t getSizeJson() const { return size_json; }
 
   std::string to_string() const override;
   std::string to_string(int, bool) const;

@@ -233,17 +233,26 @@ void BatchPKReadCtrl::batchPKRead(
       resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
       // convert resp to json
       std::vector<PKReadResponseJSON> responses;
+#ifdef VM_TRACE
+      size_t size_json = 35; // Batch overhead
+#else
+      size_t size_json = 35; // Batch overhead
+      //size_t size_json = 25; // Batch overhead
+#endif
       for (unsigned int i = 0; i < noOps; i++) {
         PKReadResponseJSON response;
         process_pkread_response(&amalloc,
                                 respBuffs[i].buffer,
                                 &reqBuffs[i],
                                 response);
+        size_json += response.getSizeJson();
         responses.push_back(response);
       }
-
       std::string json = PKReadResponseJSON::batch_to_string(responses);
-      DEB_BPK_CTRL("Response string: %s", json.c_str());
+      DEB_BPK_CTRL("Response string: len: %u, calc_len: %u: %s",
+                   (Uint32)json.size(),
+                   (Uint32)size_json,
+                   json.c_str());
       resp->setBody(std::move(json));
     }
     callback(resp);
