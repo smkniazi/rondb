@@ -25,7 +25,7 @@
 #include <drogon/HttpTypes.h>
 
 RS_Status RonDBConnection::init_rondb_connection(RonDB &rondbDataCluster,
-                                                 RonDB &rondbMetaDataCluster,
+                                                 RonDBMeta &rondbMetaDataCluster,
                                                  Uint32 numThreads) noexcept {
   // init RonDB client API
 

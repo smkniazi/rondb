@@ -100,9 +100,9 @@ VECTOR(Uint32)
 
 CLASS
 (RonDB,
- CM(std::vector<Mgmd>, Mgmds,                         Mgmds,                     {Mgmd()})
+ CM(std::vector<Mgmd>, Mgmds, Mgmds, {Mgmd()})
  CM(Uint32, connectionPoolSize, ConnectionPoolSize, 1)
- CM(std::vector<Uint32>, nodeIDs, NodeIDs, {0})
+ CM(std::vector<Uint32>, nodeIDs, NodeIDs, {})
  CM(Uint32, connectionRetries, ConnectionRetries, 5)
  CM(Uint32, connectionRetryDelayInSec, ConnectionRetryDelayInSec, 5)
  CM(Uint32, opRetryOnTransientErrorsCount, OpRetryOnTransientErrorsCount, 3)
@@ -113,6 +113,32 @@ CLASS
  "we do not support specifying more than one Management server yet")
  PROBLEM(connectionPoolSize > 8,
  "wrong connection pool size. Currently only at most 8 RonDB connections"
+ " are supported")
+ PROBLEM(nodeIDs.size() != connectionPoolSize && nodeIDs.size() != 0,
+ "wrong number of NodeIDs. The number of node ids must match the connection"
+ " pool size or be 0 (in which case the node ids are selected by RonDB")
+ CLASSDEFS
+ (
+  bool present_in_config_file = false;
+  std::string generate_Mgmd_connect_string();
+ )
+)
+
+CLASS
+(RonDBMeta,
+ CM(std::vector<Mgmd>, Mgmds, Mgmds, {Mgmd()})
+ CM(Uint32, connectionPoolSize, ConnectionPoolSize, 0)
+ CM(std::vector<Uint32>, nodeIDs, NodeIDs, {})
+ CM(Uint32, connectionRetries, ConnectionRetries, 5)
+ CM(Uint32, connectionRetryDelayInSec, ConnectionRetryDelayInSec, 5)
+ CM(Uint32, opRetryOnTransientErrorsCount, OpRetryOnTransientErrorsCount, 3)
+ CM(Uint32, opRetryInitialDelayInMS, OpRetryInitialDelayInMS, 500)
+ CM(Uint32, opRetryJitterInMS, OpRetryJitterInMS, 100)
+ PROBLEM(Mgmds.empty(), "at least one Management server has to be defined")
+ PROBLEM(Mgmds.size() > 1,
+ "we do not support specifying more than one Management server yet")
+ PROBLEM(connectionPoolSize > 1,
+ "wrong connection pool size. Currently only 0 or 1 RonDB metadata connections"
  " are supported")
  PROBLEM(nodeIDs.size() != connectionPoolSize && nodeIDs.size() != 0,
  "wrong number of NodeIDs. The number of node ids must match the connection"
@@ -218,7 +244,7 @@ CLASS
  CM(REST,        rest,                 REST,                 REST())
  CM(GRPC,        grpc,                 GRPC,                 GRPC())
  CM(RonDB,       ronDB,                RonDB,                RonDB())
- CM(RonDB,       ronDBMetadataCluster, RonDBMetadataCluster, RonDB())
+ CM(RonDBMeta,   ronDBMetadataCluster, RonDBMetadataCluster, RonDBMeta())
  CM(Security,    security,             Security,             Security())
  CM(LogConfig,   log,                  Log,                  LogConfig())
  CM(Testing,     testing,              Testing,              Testing())

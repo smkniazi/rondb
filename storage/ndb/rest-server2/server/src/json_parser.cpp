@@ -727,11 +727,6 @@ RS_Status JSONParser::config_parse(const std::string &configsBody,
       doc_initialized = true;
       parse(configsStruct, doc.get_object());
       assert_end_of_doc(doc);
-      // If .RonDBMetadataCluster is not present in config file, then set it to
-      // .RonDB.
-      if(!configsStruct.ronDBMetadataCluster.present_in_config_file) {
-        configsStruct.ronDBMetadataCluster = configsStruct.ronDB;
-      }
       // If .Testing.MySQLMetadataCluster is not present in config file, then
       // set it to .Testing.MySQL.
       if(!configsStruct.testing.mySQLMetadataCluster.present_in_config_file) {

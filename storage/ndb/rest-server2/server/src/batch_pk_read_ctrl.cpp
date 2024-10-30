@@ -233,7 +233,7 @@ void BatchPKReadCtrl::batchPKRead(
       resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
       // convert resp to json
       std::vector<PKReadResponseJSON> responses;
-      size_t calc_size_json = 30; // Batch overhead
+      size_t calc_size_json = 20; // Batch overhead
       for (unsigned int i = 0; i < noOps; i++) {
         PKReadResponseJSON response;
         process_pkread_response(&amalloc,

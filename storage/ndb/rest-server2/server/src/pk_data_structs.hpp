@@ -147,19 +147,8 @@ class PKReadResponseJSON : public PKReadResponse {
     result_view = in_result_view;
     /**
      * First and last part + security
-     * The first and last part is 60 bytes for pkread
-     * 81 bytes for batch pkread. This is inclusive of
-     * extra line breaks and spaces for formatting. This
-     * is only used in debugging mode. Without so much
-     * extra spaces it suffices with 55 bytes for batched
-     * reads. In both cases we increase the number for
-     * safety to avoid risking buffer overruns.
      */
-#ifdef VM_TRACE
-    size_json = 100;
-#else
-    size_json = 60;
-#endif
+    size_json = 55;
   }
   void setStatusCode(drogon::HttpStatusCode c) {
     code = c;
@@ -185,11 +174,8 @@ class PKReadResponseJSON : public PKReadResponse {
     result_view[index].value_ptr = value;
     result_view[index].value_len = value_len;
     result_view[index].quoted_flag = quoted;
-#ifdef VM_TRACE
-    size_json += (20 + (2 * quoted) + name_len + value_len);
-#else
-    size_json += (8 + (2 * quoted) + name_len + value_len);
-#endif
+    // 8 includes quoting for value
+    size_json += (8 + name_len + value_len);
   }
   drogon::HttpStatusCode getStatusCode() const {
     return code;

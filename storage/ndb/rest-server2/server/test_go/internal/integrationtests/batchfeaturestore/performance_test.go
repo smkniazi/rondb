@@ -113,7 +113,7 @@ const totalNumRequest = 100000
 // }
 
 // Include this benchmark for comparison
-func BenchmarkBatchPkRead(b *testing.B) {
+func BenchmarkSimple(b *testing.B) {
 	var batchSize = 100
 	table := "table_1"
 	col := "id0"
@@ -138,7 +138,7 @@ func BenchmarkBatchPkRead(b *testing.B) {
 			subOps = append(subOps, op.SubOperation)
 		}
 		batch := api.BatchOpRequest{Operations: &subOps}
-		body, err := json.MarshalIndent(batch, "", "\t")
+		body, err := json.Marshal(batch)
 		if err != nil {
 			b.Fatalf("Failed to marshall test request %v", err)
 		}

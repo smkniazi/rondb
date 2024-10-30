@@ -30,7 +30,7 @@ func pkRESTTestWithClient(
 	validate bool,
 ) {
 	url := testutils.NewPKReadURL(testInfo.Db, testInfo.Table)
-	body, err := json.MarshalIndent(testInfo.PkReq, "", "\t")
+	body, err := json.Marshal(testInfo.PkReq)
 	if err != nil {
 		t.Fatalf("Failed to marshall test request %v", err)
 	}
