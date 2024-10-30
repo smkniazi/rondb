@@ -102,7 +102,6 @@ class PKReadResponse {
                              const char *value,
                              Uint32 value_len,
                              bool quoted_flag) = 0;
-  virtual std::string to_string() const = 0;
   virtual ~PKReadResponse() = default;
 };
 
@@ -245,9 +244,10 @@ class PKReadResponseJSON : public PKReadResponse {
   }
   size_t getSizeJson() const { return size_json; }
 
-  std::string to_string() const override;
-  std::string to_string(int, bool) const;
-  static std::string batch_to_string(const std::vector<PKReadResponseJSON> &);
+  size_t to_string_single(char*) const;
+  char* to_string_batch(char*) const;
+  static size_t batch_to_string(const std::vector<PKReadResponseJSON> &,
+                                char*);
 };
 
 class PKReadResponseWithCodeJSON {
@@ -299,8 +299,6 @@ class PKReadResponseWithCodeJSON {
   PKReadResponseJSON getBody() const {
     return body;
   }
-
-  std::string to_string() const;
 };
 
 class BatchResponseJSON {
@@ -343,18 +341,6 @@ class BatchResponseJSON {
     if (index < result.size()) {
       result[index] = subResp;
     }
-  }
-
-  std::string to_string() const {
-    std::string res = "[";
-    for (size_t i = 0; i < result.size(); i++) {
-      res += result[i].to_string();
-      if (i < result.size() - 1) {
-        res += ",";
-      }
-    }
-    res += "]";
-    return res;
   }
 };
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_PK_DATA_STRUCTS_HPP_
