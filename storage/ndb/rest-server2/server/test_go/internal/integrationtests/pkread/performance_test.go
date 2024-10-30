@@ -70,7 +70,7 @@ func BenchmarkSimple(b *testing.B) {
 	b.ResetTimer()
 	start := time.Now()
         last := time.Now()
-	runtime.GOMAXPROCS(16)
+	runtime.GOMAXPROCS(24)
         var ops atomic.Uint64
 
 	/*

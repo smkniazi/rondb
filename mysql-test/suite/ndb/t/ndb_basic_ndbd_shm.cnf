@@ -2,5 +2,6 @@
 !include suite/ndb/shm.cnf
 [cluster_config]
 PartitionsPerNode=1
+NumCPUs=1
 [ENV]
-MTR_NDBMTD=0
+MTR_NDBMTD=1

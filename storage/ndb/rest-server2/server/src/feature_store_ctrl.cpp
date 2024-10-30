@@ -277,9 +277,9 @@ std::tuple<std::vector<std::vector<char>>,
   arrDetailedStatus.reserve(ronDbResult.size());
   std::shared_ptr<RestErrorCode> err;
   for (const auto &response : ronDbResult) {
+    std::string operationId = response.getBody().getOperationIdString();
     if (includeDetailedStatus) {
       auto fgInt = 0;
-      auto operationId = response.getBody().getOperationID();
       auto separatorPos = operationId.find('|');
       auto splitOperationIdFirst = operationId.substr(0, separatorPos);
       auto splitOperationIdSecond = operationId.substr(separatorPos + 1);
@@ -308,27 +308,35 @@ std::tuple<std::vector<std::vector<char>>,
       }
     } else if (response.getBody().getStatusCode() != drogon::k200OK) {
       status = feature_store_data_structs::FeatureStatus::Error;
-    }
-
-    for (const auto &[featureName, value] : response.getBody().getData()) {
-      std::string featureIndexKey = metadata::GetFeatureIndexKeyByFgIndexKey(
-          response.getBody().getOperationID(), featureName);
-      if (auto it = featureView.featureIndexLookup.find(featureIndexKey);
+    } else {
+      Uint32 numValues = response.getBody().getNumValues();
+      for (Uint32 i = 0; i < numValues; i++) {
+        std::string featureName = response.getBody().getNameString(i);
+        std::vector<char> value = response.getBody().getValueArray(i);
+        bool quote_flag = response.getBody().getQuoteFlag(i);
+        if (quote_flag) {
+          value.insert(value.begin(), '\"');
+          value.push_back('\"');
+        }
+        std::string featureIndexKey = metadata::GetFeatureIndexKeyByFgIndexKey(
+          operationId, featureName);
+        if (auto it = featureView.featureIndexLookup.find(featureIndexKey);
           it != featureView.featureIndexLookup.end()) {
-        if (auto decoderIt = featureView.complexFeatures.find(featureIndexKey);
+          if (auto decoderIt = featureView.complexFeatures.find(featureIndexKey);
             decoderIt != featureView.complexFeatures.end()) {
-          auto deserResult =
-            DeserialiseComplexFeature(value, decoderIt->second);
-          if (std::get<0>(deserResult).empty()) {
-            status = feature_store_data_structs::FeatureStatus::Error;
-            err = DESERIALISE_FEATURE_FAIL->NewMessage(
-              "Feature name: " + featureName + "; " +
+            auto deserResult =
+              DeserialiseComplexFeature(value, decoderIt->second);
+            if (std::get<0>(deserResult).empty()) {
+              status = feature_store_data_structs::FeatureStatus::Error;
+              err = DESERIALISE_FEATURE_FAIL->NewMessage(
+                "Feature name: " + featureName + "; " +
               std::get<1>(deserResult)->Error());
+            } else {
+              (featureValues)[it->second] = std::get<0>(deserResult);
+            }
           } else {
-            (featureValues)[it->second] = std::get<0>(deserResult);
+            (featureValues)[it->second] = value;
           }
-        } else {
-          (featureValues)[it->second] = value;
         }
       }
     }
@@ -512,14 +520,19 @@ void FillPassedFeatures(
   }
 }
 
-RS_Status process_responses(std::vector<RS_Buffer> &respBuffs,
+RS_Status process_responses(ArenaMalloc *amalloc,
+                            std::vector<RS_Buffer> &respBuffs,
+                            std::vector<RS_Buffer> &reqBuffs,
                             BatchResponseJSON &response) {
   for (unsigned int i = 0; i < respBuffs.size(); i++) {
     auto pkReadResponseWithCode = BatchResponseJSON::CreateNewSubResponse();
     auto pkReadResponse = pkReadResponseWithCode.getBody();
 
     auto subRespStatus =
-      process_pkread_response(respBuffs[i].buffer, pkReadResponse);
+      process_pkread_response(amalloc,
+                              respBuffs[i].buffer,
+                              &reqBuffs[i],
+                              pkReadResponse);
     if (!(subRespStatus.err_file_name[0] == '\0')) {
       std::cerr << "Error: " << subRespStatus.err_file_name << std::endl;
       return subRespStatus;
@@ -701,7 +714,7 @@ void FeatureStoreCtrl::featureStore(
       respBuffs[i] = respBuff;
 
       RS_Status status =
-        create_native_request(readParams[i], reqBuff.buffer, respBuff.buffer);
+        create_native_request(readParams[i], (Uint32*)reqBuff.buffer);
       if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
                      drogon::HttpStatusCode::k200OK)) {
         resp->setBody(std::string(status.message));
@@ -739,7 +752,10 @@ void FeatureStoreCtrl::featureStore(
     }
     {
       DEB_FS_CTRL("Process Batch PK Read response for Feature Store request");
-      RS_Status status = process_responses(respBuffs, dbResponseIntf);
+      RS_Status status = process_responses(&amalloc,
+                                           respBuffs,
+                                           reqBuffs,
+                                           dbResponseIntf);
       if (unlikely(status.err_file_name[0] != '\0')) {
         auto fsError = TranslateRonDbError(status.http_code, status.message);
         resp->setBody(fsError->Error());
@@ -796,7 +812,9 @@ void FeatureStoreCtrl::featureStore(
     }
     DEB_FS_CTRL("Send response for  Feature Store request");
     resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
-    resp->setBody(fsResp.to_string());
+    std::string respBody = fsResp.to_string();
+    DEB_FS_CTRL("JSON response: %s", respBody.c_str());
+    resp->setBody(std::move(respBody));
     resp->setStatusCode(drogon::HttpStatusCode::k200OK);
     callback(resp);
   }

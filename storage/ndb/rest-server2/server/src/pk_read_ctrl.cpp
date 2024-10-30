@@ -25,6 +25,7 @@
 #include "api_key.hpp"
 #include "config_structs.hpp"
 #include "constants.hpp"
+#include <NdbSleep.h>
 
 #include <cstring>
 #include <drogon/HttpTypes.h>
@@ -54,6 +55,7 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
   size_t currentThreadIndex = drogon::app().getCurrentThreadIndex();
   if (unlikely(currentThreadIndex >= globalConfigs.rest.numThreads)) {
     resp->setBody("Too many threads");
+    DEB_PK_CTRL("Error message: Too many threads");
     resp->setStatusCode(drogon::HttpStatusCode::k500InternalServerError);
     callback(resp);
     return;
@@ -68,6 +70,7 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
   if (unlikely(length > globalConfigs.internal.reqBufferSize)) {
     auto resp = drogon::HttpResponse::newHttpResponse();
     resp->setBody("Request too large");
+    DEB_PK_CTRL("Error message: Request too large");
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
     callback(resp);
     return;
@@ -87,6 +90,7 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
   if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
       drogon::HttpStatusCode::k200OK)) {
     resp->setBody(std::string(status.message));
+    DEB_PK_CTRL("Error message(1): %s", std::string(status.message).c_str());
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
     callback(resp);
     return;
@@ -97,6 +101,7 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
   if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
       drogon::HttpStatusCode::k200OK)) {
     resp->setBody(std::string(status.message));
+    DEB_PK_CTRL("Error message(2): %s", std::string(status.message).c_str());
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
     callback(resp);
     return;
@@ -109,6 +114,7 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
     if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
           drogon::HttpStatusCode::k200OK)) {
       resp->setBody(std::string(status.message));
+      DEB_PK_CTRL("Error message(3): %s", std::string(status.message).c_str());
       resp->setStatusCode((drogon::HttpStatusCode)status.http_code);
       callback(resp);
       return;
@@ -121,10 +127,11 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
     RS_Buffer reqBuff  = rsBufferArrayManager.get_req_buffer();
     RS_Buffer respBuff = rsBufferArrayManager.get_resp_buffer();
 
-    status = create_native_request(reqStruct, reqBuff.buffer, respBuff.buffer);
+    status = create_native_request(reqStruct, (Uint32*)reqBuff.buffer);
     if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
           drogon::HttpStatusCode::k200OK)) {
       resp->setBody(std::string(status.message));
+      DEB_PK_CTRL("Error message(4): %s", std::string(status.message).c_str());
       resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
       callback(resp);
       return;
@@ -144,18 +151,32 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
 
     resp->setStatusCode(static_cast<drogon::HttpStatusCode>(status.http_code));
     if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
-        drogon::HttpStatusCode::k200OK))
+        drogon::HttpStatusCode::k200OK)) {
+      DEB_PK_CTRL("Error message(5): %s", std::string(status.message).c_str());
       resp->setBody(std::string(status.message));
-    else {
+    } else {
       resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
       // convert resp to json
       char *respData = respBuff.buffer;
 
       PKReadResponseJSON respJson;
-      respJson.init();
-      process_pkread_response(respData, respJson);
-
-      resp->setBody(respJson.to_string());
+      size_t calc_size_json = 20; // Batch overhead
+      process_pkread_response(&amalloc, respData, &reqBuff, respJson);
+      calc_size_json += respJson.getSizeJson();
+      char *json_buf = (char*)amalloc.alloc_bytes(calc_size_json, 8);
+      if (likely(json_buf != nullptr)) {
+        size_t size_json = respJson.to_string_single(json_buf);
+        DEB_PK_CTRL("JSON response: len: %u, calc_len: %u: \n %s",
+                    json_buf,
+                    (Uint32)size_json,
+                    (Uint32)calc_size_json);
+        std::string json(json_buf, size_json);
+        resp->setBody(std::move(json));
+      } else {
+        amalloc.reset();
+        resp->setBody("Malloc failure");
+        resp->setStatusCode(drogon::HttpStatusCode::k500InternalServerError);
+      }
     }
     callback(resp);
     rsBufferArrayManager.return_resp_buffer(respBuff);

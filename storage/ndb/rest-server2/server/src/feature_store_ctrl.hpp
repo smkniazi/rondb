@@ -29,6 +29,7 @@
 #include "base_ctrl.hpp"
 #include "pk_data_structs.hpp"
 #include "fs_cache.hpp"
+#include <ArenaMalloc.hpp>
 
 #include <drogon/drogon.h>
 #include <drogon/HttpSimpleController.h>
@@ -104,7 +105,10 @@ void FillPassedFeatures(
   const std::unordered_map<std::string, int> &indexLookup);
 
 RS_Status process_responses(
-  std::vector<RS_Buffer> &respBuffs, BatchResponseJSON &response);
+  ArenaMalloc*,
+  std::vector<RS_Buffer> &respBuffs,
+  std::vector<RS_Buffer> &reqBuffs,
+  BatchResponseJSON &response);
 
 void FillPrimaryKey(
   const metadata::FeatureViewMetadata &featureView,

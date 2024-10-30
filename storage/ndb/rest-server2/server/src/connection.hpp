@@ -31,7 +31,7 @@
 class RonDBConnection {
  public:
   RonDBConnection(RonDB &data_cluster,
-                  RonDB &meta_data_cluster,
+                  RonDBMeta &meta_data_cluster,
                   Uint32 numThreads) {
     RS_Status status = init_rondb_connection(data_cluster,
                                              meta_data_cluster,
@@ -44,7 +44,7 @@ class RonDBConnection {
   }
 
   RonDBConnection(RonDB &&data_cluster,
-                  RonDB &&meta_data_cluster,
+                  RonDBMeta &&meta_data_cluster,
                   Uint32 numThreads) {
     RS_Status status = init_rondb_connection(data_cluster,
                                              meta_data_cluster,
@@ -67,7 +67,7 @@ class RonDBConnection {
   RonDBConnection &operator=(const RonDBConnection &other) = default;
   RonDBConnection(RonDBConnection &&other) = default;
   RonDBConnection &operator=(RonDBConnection &&other) = default;
-  static RS_Status init_rondb_connection(RonDB &, RonDB &, Uint32) noexcept;
+  static RS_Status init_rondb_connection(RonDB &, RonDBMeta &, Uint32) noexcept;
   static RS_Status shutdown_rondb_connection() noexcept;
   static RS_Status rondb_reconnect() noexcept;
 };

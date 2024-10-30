@@ -323,11 +323,12 @@ class NdbTableImpl : public NdbDictionary::Table, public NdbDictObjectImpl {
   NdbIndexImpl *m_index;
   NdbColumnImpl *getColumn(unsigned attrId);
   NdbColumnImpl *getColumn(const char *name);
+  const NdbColumnImpl *getColumn(std::string_view &name) const;
   const NdbColumnImpl *getColumn(unsigned attrId) const;
   const NdbColumnImpl *getColumn(const char *name) const;
 
  private:
-  NdbColumnImpl *getColumnByHash(const char *name) const;
+  NdbColumnImpl *getColumnByHash(const char *name, Uint32 len) const;
   void dumpColumnHash() const;
   bool checkColumnHash() const;
 
@@ -1222,7 +1223,7 @@ inline NdbColumnImpl *NdbTableImpl::getColumn(const char *name) {
   const Uint32 sz = m_columns.size();
 
   if (sz > ColNameHashThresh) {
-    return getColumnByHash(name);
+    return getColumnByHash(name, strlen(name));
   } else {
     NdbColumnImpl **cols = m_columns.getBase();
     for (Uint32 i = 0; i < sz; i++) {
@@ -1244,12 +1245,31 @@ inline const NdbColumnImpl *NdbTableImpl::getColumn(const char *name) const {
   Uint32 sz = m_columns.size();
 
   if (sz > ColNameHashThresh) {
-    return getColumnByHash(name);
+    return getColumnByHash(name, strlen(name));
   } else {
     NdbColumnImpl *const *cols = m_columns.getBase();
     for (Uint32 i = 0; i < sz; i++, cols++) {
       NdbColumnImpl *col = *cols;
       if (col != nullptr && strcmp(name, col->m_name.c_str()) == 0) return col;
+    }
+    return nullptr;
+  }
+}
+
+inline const NdbColumnImpl *NdbTableImpl::getColumn(
+  std::string_view &name) const {
+
+  Uint32 sz = m_columns.size();
+
+  if (sz > ColNameHashThresh) {
+    return getColumnByHash(name.data(), name.size());
+  } else {
+    NdbColumnImpl *const *cols = m_columns.getBase();
+    for (Uint32 i = 0; i < sz; i++, cols++) {
+      NdbColumnImpl *col = *cols;
+      if (col != nullptr && memcmp(name.data(),
+                                   col->m_name.c_str(),
+                                   name.size()) == 0) return col;
     }
     return nullptr;
   }

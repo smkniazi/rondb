@@ -202,8 +202,7 @@ void BatchPKReadCtrl::batchPKRead(
       respBuffs[i] = respBuff;
 
       status = create_native_request(reqStructs[i],
-                                     reqBuff.buffer,
-                                     respBuff.buffer);
+                                     (Uint32*)reqBuff.buffer);
       if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
           drogon::HttpStatusCode::k200OK)) {
         resp->setBody(std::string(status.message));
@@ -234,14 +233,31 @@ void BatchPKReadCtrl::batchPKRead(
       resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
       // convert resp to json
       std::vector<PKReadResponseJSON> responses;
+      size_t calc_size_json = 20; // Batch overhead
       for (unsigned int i = 0; i < noOps; i++) {
         PKReadResponseJSON response;
-        process_pkread_response(respBuffs[i].buffer, response);
+        process_pkread_response(&amalloc,
+                                respBuffs[i].buffer,
+                                &reqBuffs[i],
+                                response);
+        calc_size_json += response.getSizeJson();
         responses.push_back(response);
       }
-
-      std::string json = PKReadResponseJSON::batch_to_string(responses);
-      resp->setBody(json);
+      char *json_buf = (char*)amalloc.alloc_bytes(calc_size_json, 8);
+      if (likely(json_buf != nullptr)) {
+        size_t size_json =
+          PKReadResponseJSON::batch_to_string(responses, json_buf);
+        DEB_BPK_CTRL("Response string: len: %u, calc_len: %u: %s",
+                     (Uint32)size_json,
+                     (Uint32)calc_size_json,
+                     json_buf);
+        std::string json(json_buf, size_json);
+        resp->setBody(std::move(json));
+      } else {
+        amalloc.reset();
+        resp->setBody("Malloc failure");
+        resp->setStatusCode(drogon::HttpStatusCode::k500InternalServerError);
+      }
     }
     callback(resp);
     for (unsigned long i = 0; i < noOps; i++) {

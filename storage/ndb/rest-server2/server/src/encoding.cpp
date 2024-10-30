@@ -22,35 +22,102 @@
 #include "rdrs_dal.hpp"
 #include "buffer_manager.hpp"
 #include <my_compiler.h>
+#include "db_operations/pk/pkr_request.hpp"
+#include <ArenaMalloc.hpp>
+#include <EventLogger.hpp>
 
 #include <cstring>
 #include <string>
 
+extern EventLogger *g_eventLogger;
+
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+//#define DEBUG_ENC 1
+#endif
+
+#ifdef DEBUG_ENC
+#define DEB_ENC(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
+#else
+#define DEB_ENC(...) do { } while (0)
+#endif
+
+/**
+ * Build memory structure for Primary Key request. This is stored in
+ * a serial buffer, the PKRRequest object is used as a way to easily
+ * access this serial buffer making sure that the user of the serial
+ * buffer is hidden from the internal logic of it.
+ *
+ * Here is the memory structure explained. All things are stored aligned
+ * at 4 byte alignment, offsets, names and values.
+ *
+ * All names are stored null terminated as well as with a length word.
+ *
+ * The input data comes from the JSON request.
+ *
+ * ---------------------------------------
+ * | Length of Database name             |
+ * ---------------------------------------
+ * | Database name                       |
+ * ---------------------------------------
+ * | Length of Table name                |
+ * ---------------------------------------
+ * | Table name                          |
+ * ---------------------------------------
+ * | Number of Primary key columns       |
+ * ---------------------------------------
+ * | Array of Tuple offset PK col 0..n-1 |
+ * |                                     |
+ * | Tuple offset points to name + value |
+ * | offsets below.                      |
+ * ---------------------------------------
+ * ## Array of the following for each PK
+ * ## column.
+ * ---------------------------------------
+ * | Offset of PK name column            |
+ * | Offset of PK value                  |
+ * ---------------------------------------
+ * | Length of PK name                   |
+ * |--------------------------------------
+ * | PK column name                      |
+ * |--------------------------------------
+ * | PK value length                     |
+ * ---------------------------------------
+ * | PK Value                            |
+ * ---------------------------------------
+ * 
+ * ---------------------------------------
+ * | Number of read columns              |
+ * ---------------------------------------
+ * | Array of read column offsets 0..m-1 |
+ * ---------------------------------------
+ * ## Array of the following for each column
+ * ## read. The above array points to the
+ * ## offset of the start of this for
+ * ## each read column.
+ * ---------------------------------------
+ * | Data type of read column            |
+ * ---------------------------------------
+ * | Length of read column name          |
+ * ---------------------------------------
+ * | Read column name                    |
+ * ---------------------------------------
+ */ 
 RS_Status create_native_request(PKReadParams &pkReadParams,
-                                void *reqBuff,
-                                void * /*respBuff*/) {
-  Uint32 *buf = (Uint32 *)(reqBuff);
+                                Uint32 *reqBuff) {
+  Uint32 *buf = reqBuff;
   Uint32 head = PK_REQ_HEADER_END;
   Uint32 dbOffset = head;
-  EN_Status status = copy_str_to_buffer(pkReadParams.path.db, reqBuff, head);
-  if (likely(static_cast<drogon::HttpStatusCode>(status.http_code) ==
-      drogon::HttpStatusCode::k200OK)) {
-    head = status.retValue;
-  } else {
+  EN_Status status = {};
+  head = copy_str_to_buffer(pkReadParams.path.db, reqBuff, head, status);
+  if (unlikely(head == 0)) {
     return CRS_Status(status.http_code, status.message).status;
   }
-
   Uint32 tableOffset = head;
-  status = copy_str_to_buffer(pkReadParams.path.table, reqBuff, head);
-  if (likely(static_cast<drogon::HttpStatusCode>(status.http_code) ==
-      drogon::HttpStatusCode::k200OK)) {
-    head = status.retValue;
-  } else {
+  head = copy_str_to_buffer(pkReadParams.path.table, reqBuff, head, status);
+  if (unlikely(head == 0)) {
     return CRS_Status(status.http_code, status.message).status;
   }
-
   // PK Filters
-  head = align_word(head);
   Uint32 pkOffset = head;
   buf[head / ADDRESS_SIZE] = Uint32(pkReadParams.filters.size());
   head += ADDRESS_SIZE;
@@ -59,46 +126,34 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
   // skip for N number of offsets one for each key/value pair
   head += Uint32(pkReadParams.filters.size()) * ADDRESS_SIZE;
   for (auto filter : pkReadParams.filters) {
-    head = align_word(head);
     Uint32 tupleOffset = head;
     head += 8;
-    Uint32 keyOffset = head;
-    status = copy_str_to_buffer(filter.column, reqBuff, head);
-    if (likely(static_cast<drogon::HttpStatusCode>(status.http_code) ==
-          drogon::HttpStatusCode::k200OK)) {
-      head = status.retValue;
-    } else {
+    Uint32 keyNameOffset = head;
+    head = copy_str_to_buffer(filter.column, reqBuff, head, status);
+    if (unlikely(head == 0)) {
       return CRS_Status(status.http_code, status.message).status;
     }
-
-    Uint32 value_offset = head;
-    status = copy_ndb_str_to_buffer(filter.value, reqBuff, head);
-    if (likely(static_cast<drogon::HttpStatusCode>(status.http_code) ==
-          drogon::HttpStatusCode::k200OK)) {
-      head = status.retValue;
-    } else {
+    Uint32 valueOffset = head;
+    head = copy_ndb_str_to_buffer(filter.value, reqBuff, head, status);
+    if (unlikely(head == 0)) {
       return CRS_Status(status.http_code, status.message).status;
     }
-
     buf[kvi] = tupleOffset;
     kvi++;
-    buf[tupleOffset / ADDRESS_SIZE]     = keyOffset;
-    buf[tupleOffset / ADDRESS_SIZE + 1] = value_offset;
+    buf[tupleOffset / ADDRESS_SIZE] = keyNameOffset;
+    buf[tupleOffset / ADDRESS_SIZE + 1] = valueOffset;
   }
   // Read Columns
-  head = align_word(head);
   Uint32 readColsOffset = 0;
   if (likely(!pkReadParams.readColumns.empty())) {
-    readColsOffset           = head;
+    readColsOffset = head;
     buf[head / ADDRESS_SIZE] = (Uint32)(pkReadParams.readColumns.size());
     head += ADDRESS_SIZE;
     Uint32 rci = head / ADDRESS_SIZE;
     head += Uint32(pkReadParams.readColumns.size()) * ADDRESS_SIZE;
     for (auto col : pkReadParams.readColumns) {
-      head = align_word(head);
       buf[rci] = head;
       rci++;
-
       // return type not used for the moment
       Uint32 drt = DEFAULT_DRT;
       /*
@@ -114,12 +169,8 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
       buf[head / ADDRESS_SIZE] = drt;
       head += ADDRESS_SIZE;
       // col name
-      status = copy_str_to_buffer(col.column, reqBuff, head);
-
-      if (likely(static_cast<drogon::HttpStatusCode>(status.http_code) ==
-            drogon::HttpStatusCode::k200OK)) {
-        head = status.retValue;
-      } else {
+      head = copy_str_to_buffer(col.column, reqBuff, head, status);
+      if (unlikely(head == 0)) {
         return CRS_Status(status.http_code, status.message).status;
       }
     }
@@ -128,11 +179,8 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
   Uint32 op_id_offset = 0;
   if (likely(!pkReadParams.operationId.empty())) {
     op_id_offset = head;
-    status = copy_str_to_buffer(pkReadParams.operationId, reqBuff, head);
-    if (likely(static_cast<drogon::HttpStatusCode>(status.http_code) ==
-          drogon::HttpStatusCode::k200OK)) {
-      head = status.retValue;
-    } else {
+    head = copy_str_to_buffer(pkReadParams.operationId, reqBuff, head, status);
+    if (unlikely(head == 0)) {
       return CRS_Status(status.http_code, status.message).status;
     }
   }
@@ -140,7 +188,6 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
   buf[PK_REQ_OP_TYPE_IDX] = (Uint32)(RDRS_PK_REQ_ID);
   buf[PK_REQ_CAPACITY_IDX] = (Uint32)(globalConfigs.internal.respBufferSize);
   buf[PK_REQ_LENGTH_IDX] = (Uint32)(head);
-  // FIXME TODO fill in. is_grpc, is_http ...
   buf[PK_REQ_FLAGS_IDX] = (Uint32)(0);
   buf[PK_REQ_DB_IDX] = (Uint32)(dbOffset);
   buf[PK_REQ_TABLE_IDX] = (Uint32)(tableOffset);
@@ -151,10 +198,24 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
     drogon::HttpStatusCode::k200OK), "OK").status;
 }
 
-RS_Status process_pkread_response(void *respBuff,
+RS_Status process_pkread_response(ArenaMalloc *amalloc,
+                                  void *respBuff,
+                                  RS_Buffer *reqBuff,
                                   PKReadResponseJSON &response) {
+  DEB_ENC("process_pk_read_response");
+  PKRRequest req = PKRRequest(reqBuff);
   Uint32 *buf = (Uint32 *)(respBuff);
   Uint32 responseType = buf[PK_RESP_OP_TYPE_IDX];
+  Uint32 colCount = req.ReadColumnsCount();
+  ResultView *result_view = (ResultView*)
+    amalloc->alloc_bytes(colCount * sizeof(ResultView), 8);
+  response.init(colCount, result_view);
+  if (unlikely(result_view == nullptr)) {
+    std::string msg = "Failed to allocate memory";
+    return CRS_Status(static_cast<HTTP_CODE>(
+      drogon::HttpStatusCode::k500InternalServerError),
+      msg.c_str(), msg).status;
+  }
   if (responseType != RDRS_PK_RESP_ID) {
     std::string msg = "internal server error. Wrong response type";
     return CRS_Status(static_cast<HTTP_CODE>(
@@ -176,9 +237,9 @@ RS_Status process_pkread_response(void *respBuff,
   }
   Uint32 opIDX = buf[PK_RESP_OP_ID_IDX];
   if (opIDX != 0) {
-    UintPtr opIDXPtr = (UintPtr)respBuff + (UintPtr)opIDX;
-    std::string goOpID = std::string((char *)opIDXPtr);
-    response.setOperationID(goOpID);
+    const char* opIDXPtr = (const char*)respBuff + opIDX;
+    DEB_ENC("Set OperationID: %s", opIDXPtr);
+    response.setOperationID(opIDXPtr, (Uint32)strlen(opIDXPtr));
   }
 
   Int32 status = (Int32)(buf[PK_RESP_OP_STATUS_IDX]);
@@ -196,21 +257,27 @@ RS_Status process_pkread_response(void *respBuff,
       for (Uint32 j = 0; j < 4; j++) {
         colHeader[j] = colHeaderStart[j];
       }
-      Uint32 nameAdd = colHeader[0];
-      std::string name = std::string((char *)
-        (reinterpret_cast<UintPtr>(respBuff) + nameAdd));
+      //Uint32 nameAdd = colHeader[0];
+      const char* name = req.ReadColumnName(i);
+      Uint32 name_len = req.ReadColumnNameLen(i);
       Uint32 valueAdd = colHeader[1];
       Uint32 isNull = colHeader[2];
       Uint32 dataType = colHeader[3];
       if (isNull == 0) {
-        std::string value =
-          std::string((char *)
-            (reinterpret_cast<UintPtr>(respBuff) + valueAdd));
-        std::string quotedValue = quote_if_string(dataType, value);
-        response.setColumnData(
-          name, std::vector<char>(quotedValue.begin(), quotedValue.end()));
+        const char * value =
+          (reinterpret_cast<const char*>(respBuff) + valueAdd);
+        Uint32 value_len = strlen(value);
+        bool quoted = dataType != RDRS_INTEGER_DATATYPE &&
+                      dataType != RDRS_FLOAT_DATATYPE;
+        DEB_ENC("setColumnData(%u) name: %s, name_len: %u, value: %s,"
+                " value_len: %u, quoted: %u",
+          i, name, name_len, value, value_len, quoted);
+        response.setColumnData(i, name, name_len, value, value_len, quoted);
       } else {
-        response.setColumnData(name, std::vector<char>());
+        const char *null_value = "null";
+        Uint32 null_value_len = strlen(null_value);
+        response.setColumnData(
+          i, name, name_len, null_value, null_value_len, false);
       }
     }
   }
@@ -219,6 +286,13 @@ RS_Status process_pkread_response(void *respBuff,
   if (messageIDX != 0) {
     UintPtr messageIDXPtr = (UintPtr)respBuff + (UintPtr)messageIDX;
     message = std::string((char *)messageIDXPtr);
+    response.addSizeJsonMessage();
+    DEB_ENC("message: %s", message.c_str());
   }
+  DEB_ENC("OperationID: %s, view: %s, len_str: %u, len_view: %u",
+          response.getOperationIdString().c_str(),
+          response.getOperationID().data(),
+          (Uint32)response.getOperationIdString().size(),
+          (Uint32)response.getOperationID().size());
   return CRS_Status(static_cast<HTTP_CODE>(status), message.c_str()).status;
 }

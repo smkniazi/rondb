@@ -223,8 +223,7 @@ void BatchFeatureStoreCtrl::batch_featureStore(
       respBuffs[i] = respBuff;
 
       status = create_native_request(readParams[i],
-                                     reqBuff.buffer,
-                                     respBuff.buffer);
+                                     (Uint32*)reqBuff.buffer);
       if (static_cast<drogon::HttpStatusCode>(status.http_code) !=
             drogon::HttpStatusCode::k200OK) {
         resp->setBody(std::string(status.message));
@@ -254,7 +253,10 @@ void BatchFeatureStoreCtrl::batch_featureStore(
       callback(resp);
       return;
     }
-    status = process_responses(respBuffs, dbResponseIntf);
+    status = process_responses(&amalloc,
+                               respBuffs,
+                               reqBuffs,
+                               dbResponseIntf);
     if (unlikely(status.err_file_name[0] != '\0')) {
       auto fsError = TranslateRonDbError(status.http_code, status.message);
       resp->setBody(fsError->Error());
@@ -294,8 +296,9 @@ void BatchFeatureStoreCtrl::batch_featureStore(
   fsResp.features = features;
   fsResp.metadata = GetFeatureMetadata(metadata, reqStruct.metadataRequest);
   resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
-  auto fsRespStr = fsResp.to_string();
-  resp->setBody(fsRespStr);
+  std::string fsRespStr = fsResp.to_string();
+  DEB_BFS_CTRL("JSON response: %s", fsRespStr.c_str());
+  resp->setBody(std::move(fsRespStr));
   resp->setStatusCode(drogon::HttpStatusCode::k200OK);
   callback(resp);
 }
@@ -342,13 +345,17 @@ getFeatureValuesMultipleEntries(
   auto batchResult =
     std::vector<std::vector<std::vector<char>>>(batchStatus.size());
   for (auto &response : batchResponse.getResult()) {
-    auto operationId = response.getBody().getOperationID();
-    auto separatorPos = operationId.find(SEQUENCE_SEPARATOR);
-    auto splitOperationIdFirst = operationId.substr(0, separatorPos);
-    auto splitOperationIdSecond = operationId.substr(separatorPos + 1);
+    std::string_view operationId = response.getBody().getOperationID();
+    Uint32 separatorPos = operationId.find(SEQUENCE_SEPARATOR);
+    std::string_view splitOperationIdFirst =
+      operationId.substr(0, separatorPos);
+    std::string_view splitOperationIdSecond =
+      operationId.substr(separatorPos + 1);
     int seqNum = 0;
     try {
-      seqNum = std::stoi(splitOperationIdFirst);
+      std::string splitString =
+        std::string(splitOperationIdFirst.data(), splitOperationIdFirst.size());
+      seqNum = std::stoi(splitString);
     } catch (...) {
       return std::make_tuple(std::vector<std::vector<std::vector<char>>>(),
                              std::make_shared<RestErrorCode>(

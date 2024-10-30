@@ -94,6 +94,11 @@ std::string RonDB::generate_Mgmd_connect_string() {
   return mgmd.IP + ":" + std::to_string(mgmd.port);
 }
 
+std::string RonDBMeta::generate_Mgmd_connect_string() {
+  Mgmd mgmd = Mgmds[0];
+  return mgmd.IP + ":" + std::to_string(mgmd.port);
+}
+
 std::string MySQL::generate_mysqld_connect_string() {
   // user:password@tcp(IP:Port)/
   return user + ":" + password + "@tcp(" + servers[0].IP + ":" +

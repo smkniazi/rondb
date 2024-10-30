@@ -143,6 +143,42 @@ RS_Status reconnect();
 /**
  * Batched primary key read operation
  * Also used for single key read operation
+ *
+ * The process to handle REST API calls are the following:
+ * 1. Receive the request in Drogon, Drogon calls callback
+ *
+ * 2. Parse JSON request with references into the JSON buffer
+ *   - This requires no copying except handling the extra padding
+ *   - the JSON parser requires.
+ * This step is different for each endpoint since the request protocol
+ * differs for the endpoints.
+ *
+ * 3. Create NDB backend request from parsed JSON request.
+ *   - This copies information about databases, tables and columns
+ *   - and primary key values into a request buffer.
+ * The request buffer created by this is input to the below function.
+ *
+ * 4. The request is turned into NDB API request where the return
+ *   data is copied into an NdbRecord allocated by ArenaMalloc.
+ *
+ * 5. The actual request to RonDB data nodes is executed.
+ *   - Data is copied from receive messages into the NdbRecord row.
+ *
+ * 6. The JSON response requires changing the data to fit a text-based
+ *   protocol. This means that the response is prepared in the response
+ *   buffer.
+ *   - This step involves copying, but also conversion to Base64-encoding
+ *     and conversion from number to strings and other conversions.
+ *
+ * 7. The final step is to convert the response into a proper JSON
+ *  response according to the protocol of the endpoint. This step is
+ *  different for all of our endpoints since each endpoint defines its
+ *  own protocol.
+ *    - This step involves one more step of copying to ensure we add
+ *    - JSON {, }, CR, "," and quotation marks according to the protocol.
+ *
+ * We will also need to track if messages become so long that they require
+ * a streaming protocol.
  */
 RS_Status pk_batch_read(void *amalloc,
                         unsigned int no_req,

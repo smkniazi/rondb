@@ -323,101 +323,132 @@ RS_Status PKReadParams::validate_columns(void) {
     drogon::HttpStatusCode::k200OK)).status;
 }
 
-std::string PKReadResponseJSON::to_string() const {
-  std::stringstream ss;
-  ss << "{" << std::endl;
-  ss << "  \"code\": " << static_cast<int>(code) << "," << std::endl;
-  ss << "  \"operationId\": \"" << operationID << "\"," << std::endl;
-  ss << "  \"data\": {";
-  bool first = true;
-  for (auto &[column, value] : data) {
-    if (!first) {
-      ss << ",";
+size_t PKReadResponseJSON::to_string_single(char *json_buf) const {
+  char *buf = json_buf;
+  memcpy(buf, "{\"code\":", 8);
+  buf += 8;
+
+  char code_buf[10];
+  int code_char_count = sprintf(&code_buf[0], "%d", code);
+  memcpy(buf, &code_buf[0], code_char_count);
+  buf += code_char_count;
+  memcpy(buf, ",\"operationId\":\"", 16);
+  buf += 16;
+
+  if (opIdPtr != nullptr) {
+    memcpy(buf, opIdPtr, opIdLen);
+    buf += opIdLen;
+  }
+  memcpy(buf, "\",\"data\":{", 10);
+  buf += 10;
+
+  for (Uint32 i = 0; i < num_values; i++) {
+    if (i != 0) {
+      *buf = ',';
+      buf++;
     }
-    first = false;
-    ss << std::endl;
-    ss << "    \"" << column << "\": ";
-    if (value.empty()) {
-      ss << "null";
-    } else {
-      ss << std::string(value.begin(), value.end());
+    *buf = '\n';
+    buf++;
+    *buf = '\"';
+    buf++;
+    ResultView res_view = result_view[i];
+    memcpy(buf, res_view.name_ptr, res_view.name_len);
+    buf += res_view.name_len;
+    *buf = '\"';
+    buf++;
+    *buf = ':';
+    buf++;
+    if (res_view.quoted_flag) {
+      *buf = '\"';
+      buf++;
+    }
+    memcpy(buf, res_view.value_ptr, res_view.value_len);
+    buf += res_view.value_len;
+    if (res_view.quoted_flag) {
+      *buf = '\"';
+      buf++;
     }
   }
-  ss << std::endl << "  }" << std::endl;
-  ss << "}" << std::endl;
-  return ss.str();
+  memcpy(buf, "\n}}", 3);
+  buf += 3;
+  *buf = '\0';
+  size_t ret = (size_t)(buf - json_buf);
+  return ret;
 }
 
 // Indent the JSON string by `indent` spaces.
-std::string PKReadResponseJSON::to_string(int indent, bool batch) const {
-  std::stringstream ss;
-  std::string indentStr(indent, ' ');
-  std::string innerIndentStr     = indentStr + std::string(2, ' ');
-  std::string innerMostIndentStr = innerIndentStr + std::string(2, ' ');
+char* PKReadResponseJSON::to_string_batch(char *buf) const {
 
-  if (batch) {
-    ss << indentStr << "{" << std::endl;
-    ss << innerIndentStr << "\"code\": " << static_cast<int>(code)
-       << "," << std::endl;
-    ss << innerIndentStr << "\"body\": {" << std::endl;
-  } else {
-    ss << indentStr << "{" << std::endl;
+  memcpy(buf, "{\"code\":", 8);
+  buf += 8;
+
+  char code_buf[10];
+  int code_char_count = sprintf(&code_buf[0], "%d", code);
+  memcpy(buf, &code_buf[0], code_char_count);
+  buf += code_char_count;
+
+  memcpy(buf, ",\"body\":{\"operationId\":\"", 24);
+  buf += 24;
+  if (opIdPtr != nullptr) {
+    memcpy(buf, opIdPtr, opIdLen);
+    buf += opIdLen;
   }
-
-  ss << (batch ? innerMostIndentStr : innerIndentStr) << "\"operationId\": \""
-     << operationID << "\"," << std::endl;
-  ss << (batch ? innerMostIndentStr : innerIndentStr) << "\"data\": {";
-
-  bool first = true;
-  for (auto &[column, value] : data) {
-    if (!first) {
-      ss << ",";
+  memcpy(buf, "\",\"data\":{", 10);
+  buf += 10;
+  if (code == drogon::HttpStatusCode::k200OK) {
+    for (Uint32 i = 0; i < num_values; i++) {
+      if (i != 0) {
+        *buf = ',';
+        buf++;
+      }
+      ResultView res_view = result_view[i];
+      *buf = '\n';
+      buf++;
+      *buf = '\"';
+      buf++;
+      memcpy(buf, res_view.name_ptr, res_view.name_len);
+      buf += res_view.name_len;
+      *buf = '\"';
+      buf++;
+      *buf = ':';
+      buf++;
+      if (res_view.quoted_flag) {
+        *buf = '\"';
+        buf++;
+      }
+      memcpy(buf, res_view.value_ptr, res_view.value_len);
+      buf += res_view.value_len;
+      if (res_view.quoted_flag) {
+        *buf = '\"';
+        buf++;
+      }
     }
-    first = false;
-    ss << std::endl;
-    ss << (batch ? innerMostIndentStr + "  " : innerMostIndentStr)
-       << "\"" << column << "\": ";
-    if (value.empty()) {
-      ss << "null";
-    } else {
-      ss << std::string(value.begin(), value.end());
-    }
   }
-
-  ss << std::endl << (batch ? innerMostIndentStr : innerIndentStr) << "}";
-  ss << std::endl << (batch ? innerIndentStr : indentStr) << "}";
-
-  if (batch) {
-    ss << std::endl << indentStr << "}";
-  }
-
-  return ss.str();
+  memcpy(buf, "\n}}}", 4);
+  buf += 4;
+  return buf;
 }
 
-std::string PKReadResponseJSON::batch_to_string(
-  const std::vector<PKReadResponseJSON> &responses) {
-  std::stringstream ss;
-  ss << "{" << std::endl;
-  ss << "  \"result\": [";
+size_t PKReadResponseJSON::batch_to_string(
+  const std::vector<PKReadResponseJSON> &responses,
+  char *json_buf) {
+
+  char *buf = json_buf; 
+  memcpy(buf, "{\"result\":[", 11);
+  buf+= 11;
   bool first = true;
   for (auto &response : responses) {
     if (!first) {
-      ss << ",";
+      *buf = ',';
+      buf++;
     }
     first = false;
-    ss << std::endl;
-    ss << response.to_string(4, true);
+    *buf = '\n';
+    buf++;
+    buf = response.to_string_batch(buf);
   }
-  ss << std::endl << "  ]" << std::endl;
-  ss << "}" << std::endl;
-  return ss.str();
-}
-
-std::string PKReadResponseWithCodeJSON::to_string() const {
-  std::stringstream ss;
-  ss << "{" << std::endl;
-  ss << "  \"message\": \"" << message << "\"," << std::endl;
-  ss << "  \"body\": " << body.to_string() << std::endl;
-  ss << "}" << std::endl;
-  return ss.str();
+  memcpy(buf, "\n]}\n", 4);
+  buf += 4;
+  *buf = '\0';
+  return (size_t)(buf - json_buf);
 }

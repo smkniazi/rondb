@@ -24,13 +24,16 @@
 #include "pk_data_structs.hpp"
 #include "rdrs_dal.h"
 #include "rdrs_const.h"
+#include <ArenaMalloc.hpp>
 
 #include <drogon/HttpTypes.h>
 #include <drogon/drogon.h>
 #include <iostream>
 
-RS_Status create_native_request(PKReadParams &, void *, void *);
-
-RS_Status process_pkread_response(void *, PKReadResponseJSON &);
+RS_Status create_native_request(PKReadParams &, Uint32*);
+RS_Status process_pkread_response(ArenaMalloc*,
+                                  void *,
+                                  RS_Buffer *reqBuff,
+                                  PKReadResponseJSON &);
 
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_ENCODING_HPP_
