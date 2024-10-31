@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Hopsworks AB
+ * Copyright (C) 2023, 2024 Hopsworks AB
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -67,7 +67,7 @@ void BatchPKReadCtrl::batchPKRead(
   printf("\n\n JSON REQUEST: \n %s \n", json_str);
 #endif
   size_t length = req->getBody().length();
-  if (unlikely(length > globalConfigs.internal.reqBufferSize)) {
+  if (unlikely(length > globalConfigs.internal.maxReqSize)) {
     auto resp = drogon::HttpResponse::newHttpResponse();
     resp->setBody("Request too large");
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
@@ -81,7 +81,7 @@ void BatchPKReadCtrl::batchPKRead(
 
   RS_Status status = jsonParser.batch_parse(
       simdjson::padded_string_view(jsonParser.get_buffer().get(), length,
-                                   globalConfigs.internal.reqBufferSize +
+                                   globalConfigs.internal.maxReqSize +
                                    simdjson::SIMDJSON_PADDING),
       reqStructs);
 
@@ -199,16 +199,13 @@ void BatchPKReadCtrl::batchPKRead(
     Uint32 request_buffer_limit = request_buffer_size / 2;
     Uint32 current_head = 0;
     RS_Buffer current_request_buffer = rsBufferArrayManager.get_req_buffer();
+    respBuffs[0] = rsBufferArrayManager.get_resp_buffer();
     for (Uint32 i = 0; i < noOps; i++) {
-      RS_Buffer respBuff = rsBufferArrayManager.get_resp_buffer();
-
-      RS_Buffer reqBuff = getNextRS_Buffer(current_head,
-                                           request_buffer_limit,
-                                           current_request_buffer,
-                                           i);
+      RS_Buffer reqBuff = getNextReqRS_Buffer(current_head,
+                                              request_buffer_limit,
+                                              current_request_buffer,
+                                              i);
       reqBuffs[i]  = reqBuff;
-      respBuffs[i] = respBuff;
-
       DEB_BPK_CTRL("Buffer: %p, current_head: %u",
         reqBuff.buffer, current_head);
       status = create_native_request(reqStructs[i],
@@ -248,6 +245,8 @@ void BatchPKReadCtrl::batchPKRead(
       size_t calc_size_json = 20; // Batch overhead
       for (unsigned int i = 0; i < noOps; i++) {
         PKReadResponseJSON response;
+        DEB_BPK_CTRL("Response buffer[%u]: %p, size: %u",
+          i, respBuffs[i].buffer, respBuffs[i].size);
         process_pkread_response(&amalloc,
                                 respBuffs[i].buffer,
                                 &reqBuffs[i],

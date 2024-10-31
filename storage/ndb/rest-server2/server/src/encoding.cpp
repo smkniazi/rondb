@@ -213,10 +213,10 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
     drogon::HttpStatusCode::k200OK), "OK").status;
 }
 
-RS_Buffer getNextRS_Buffer(Uint32 &current_head,
-                           Uint32 request_buffer_limit,
-                           RS_Buffer &current_request_buffer,
-                           Uint32 index) {
+RS_Buffer getNextReqRS_Buffer(Uint32 &current_head,
+                              Uint32 request_buffer_limit,
+                              RS_Buffer &current_request_buffer,
+                              Uint32 index) {
   RS_Buffer reqBuff;
   if (index == 0) { // First buffer already allocated
     return current_request_buffer;
@@ -224,13 +224,41 @@ RS_Buffer getNextRS_Buffer(Uint32 &current_head,
     current_request_buffer.next_allocated_buffer = index;
     current_request_buffer = rsBufferArrayManager.get_req_buffer();
     current_head = 0;
+    DEB_ENC("Allocating a new request buffer index = %u, ptr: %p",
+      index, current_request_buffer.buffer);
     return current_request_buffer;
   } else {
     reqBuff.next_allocated_buffer = 0xFFFFFFFF; // Garbage
     reqBuff.buffer = current_request_buffer.buffer + current_head;
-    reqBuff.size = globalConfigs.internal.reqBufferSize;
+    reqBuff.size = (globalConfigs.internal.reqBufferSize * 2) - current_head;
+    DEB_ENC("Reuse request buffer index = %u at pos: %u, ptr: %p",
+      index, current_head, reqBuff.buffer);
   }
   return reqBuff;
+}
+
+RS_Buffer getNextRespRS_Buffer(Uint32 &current_head,
+                               Uint32 response_buffer_limit,
+                               RS_Buffer &current_response_buffer,
+                               Uint32 index) {
+  RS_Buffer respBuff;
+  if (index == 0) { // First buffer already allocated
+    return current_response_buffer;
+  } else if (current_head >= response_buffer_limit) {
+    current_response_buffer.next_allocated_buffer = index;
+    current_response_buffer = rsBufferArrayManager.get_resp_buffer();
+    current_head = 0;
+    DEB_ENC("Allocating a new response buffer index = %u, ptr: %p",
+      index, current_response_buffer.buffer);
+    return current_response_buffer;
+  } else {
+    respBuff.next_allocated_buffer = 0xFFFFFFFF; // Garbage
+    respBuff.buffer = current_response_buffer.buffer + current_head;
+    respBuff.size = (globalConfigs.internal.respBufferSize * 2) - current_head;
+    DEB_ENC("Reuse response buffer index = %u at pos: %u, ptr: %p",
+      index, current_head, respBuff.buffer);
+  }
+  return respBuff;
 }
 
 void release_array_buffers(RS_Buffer *reqBuffs,
@@ -239,12 +267,18 @@ void release_array_buffers(RS_Buffer *reqBuffs,
   if (unlikely(numOps == 0)) {
     return;
   }
-  for (Uint32 i = 0; i < numOps; i++) {
-    rsBufferArrayManager.return_resp_buffer(respBuffs[i]);
-  }
   Uint32 i = 0;
   do {
+    Uint32 next_i = respBuffs[i].next_allocated_buffer;
+    DEB_ENC("Release response buffer with index: %u", i);
+    rsBufferArrayManager.return_resp_buffer(respBuffs[i]);
+    i = next_i;
+    require(i < numOps);
+  } while (i != 0);
+  i = 0;
+  do {
     Uint32 next_i = reqBuffs[i].next_allocated_buffer;
+    DEB_ENC("Release request buffer with index: %u", i);
     rsBufferArrayManager.return_req_buffer(reqBuffs[i]);
     i = next_i;
     require(i < numOps);
@@ -255,7 +289,7 @@ RS_Status process_pkread_response(ArenaMalloc *amalloc,
                                   void *respBuff,
                                   RS_Buffer *reqBuff,
                                   PKReadResponseJSON &response) {
-  DEB_ENC("process_pk_read_response");
+  DEB_ENC("process_pk_read_response, respBuff: %p", respBuff);
   PKRRequest req = PKRRequest(reqBuff);
   Uint32 *buf = (Uint32 *)(respBuff);
   Uint32 responseType = buf[PK_RESP_OP_TYPE_IDX];

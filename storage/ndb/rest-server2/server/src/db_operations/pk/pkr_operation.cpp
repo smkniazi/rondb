@@ -32,6 +32,7 @@
 #include "src/mystring.hpp"
 #include "my_compiler.h"
 #include "src/rdrs_dal.h"
+#include "encoding.hpp"
 
 #include <memory>
 #include <mysql_time.h>
@@ -70,7 +71,6 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
                                           Uint32 numOps,
                                           bool is_batch,
                                           RS_Buffer *reqBuffer,
-                                          RS_Buffer *respBuffer,
                                           Ndb *ndb_object) {
   RS_Status status = RS_OK;
   m_isBatch = is_batch;
@@ -88,9 +88,6 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
   for (Uint32 i = 0; i < numOps; i++) {
     KeyOperation *key_op = &m_key_ops[i];
     PKRRequest *req = new (&key_op->m_req) PKRRequest(&reqBuffer[i]);
-    PKRResponse *resp =
-      new (&key_op->m_resp) PKRResponse(&respBuffer[i]);
-    (void)resp;
     if (unlikely(ndb_object->setCatalogName(req->DB()) != 0)) {
       RS_Status err = RS_CLIENT_404_WITH_MSG_ERROR(
         ERROR_011 + std::string(" Database: ") +
@@ -418,18 +415,29 @@ RS_Status BatchKeyOperations::execute() {
   return RS_OK;
 }
 
-RS_Status BatchKeyOperations::create_response() {
+RS_Status BatchKeyOperations::create_response(RS_Buffer *respBuffs) {
   bool found = true;
+  Uint32 response_buffer_size = respBuffs[0].size;
+  Uint32 response_buffer_limit = response_buffer_size / 2;
+  Uint32 current_head = 0;
+  Uint32 response_length = 0;
+  RS_Buffer current_response_buffer = respBuffs[0];;
   for (size_t i = 0; i < m_numOperations; i++) {
+    current_head += response_length;
+    respBuffs[i] = getNextRespRS_Buffer(current_head,
+                                        response_buffer_limit,
+                                        current_response_buffer,
+                                        i);
     KeyOperation *key_op = &m_key_ops[i];
+    PKRResponse *resp =
+      new (&key_op->m_resp) PKRResponse(&respBuffs[i]);
     PKRRequest *req = &key_op->m_req;
-    PKRResponse *resp = &key_op->m_resp;
     const NdbOperation *op = key_op->m_ndbOperation;
     resp->SetOperationID(req->OperationId());
     resp->SetNoOfColumns(key_op->m_num_read_columns);
     if (unlikely(req->IsInvalidOp())) {
       resp->SetStatus(req->GetError().http_code, req->GetError().message);
-      resp->Close();
+      resp->Close(response_length);
       continue;
     }
     if (req->ReadColumnsCount() == 0) {
@@ -459,7 +467,7 @@ RS_Status BatchKeyOperations::create_response() {
     } else {      
       //  immediately fail the entire batch
       resp->SetStatus(SERVER_ERROR, op->getNdbError().message);
-      resp->Close();
+      resp->Close(response_length);
       return RS_RONDB_SERVER_ERROR(
         op->getNdbError(), std::string("SubOperation ") +
         std::string(req->OperationId()) +
@@ -472,7 +480,7 @@ RS_Status BatchKeyOperations::create_response() {
         return ret;
       }
     }
-    resp->Close();
+    resp->Close(response_length);
   }
   if (unlikely(!found && !m_isBatch)) {
     return RS_CLIENT_404_ERROR();
@@ -1054,7 +1062,6 @@ RS_Status BatchKeyOperations::perform_operation(
     numOperations,
     is_batch,
     reqBuffer,
-    respBuffer,
     ndb_object);
   if (unlikely(status.http_code != SUCCESS)) {
     handle_ndb_error(status);
@@ -1079,7 +1086,7 @@ RS_Status BatchKeyOperations::perform_operation(
     return status;
   }
   DEB_NDB_BE("create_response");
-  status = create_response();
+  status = create_response(respBuffer);
   if (unlikely(status.http_code != SUCCESS)) {
     handle_ndb_error(status);
     return status;

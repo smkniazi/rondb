@@ -581,7 +581,7 @@ void FeatureStoreCtrl::featureStore(
   const char *json_str = req->getBody().data();
   DEB_FS_CTRL("\n\n JSON REQUEST: \n %s \n", json_str);
   size_t length        = req->getBody().length();
-  if (unlikely(length > globalConfigs.internal.reqBufferSize)) {
+  if (unlikely(length > globalConfigs.internal.maxReqSize)) {
     auto resp = drogon::HttpResponse::newHttpResponse();
     resp->setBody("Request too large");
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
@@ -596,7 +596,7 @@ void FeatureStoreCtrl::featureStore(
       simdjson::padded_string_view(
         jsonParser.get_buffer().get(),
         length,
-        globalConfigs.internal.reqBufferSize + simdjson::SIMDJSON_PADDING),
+        globalConfigs.internal.maxReqSize + simdjson::SIMDJSON_PADDING),
         reqStruct);
 
     if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
@@ -710,16 +710,13 @@ void FeatureStoreCtrl::featureStore(
     Uint32 request_buffer_limit = request_buffer_size / 2;
     Uint32 current_head = 0;
     RS_Buffer current_request_buffer = rsBufferArrayManager.get_req_buffer();
-    for (unsigned long i = 0; i < noOps; i++) {
-      RS_Buffer respBuff = rsBufferArrayManager.get_resp_buffer();
-
-      RS_Buffer reqBuff = getNextRS_Buffer(current_head,
-                                           request_buffer_limit,
-                                           current_request_buffer,
-                                           i);
+    respBuffs[0] = rsBufferArrayManager.get_resp_buffer();
+    for (Uint32 i = 0; i < noOps; i++) {
+      RS_Buffer reqBuff = getNextReqRS_Buffer(current_head,
+                                              request_buffer_limit,
+                                              current_request_buffer,
+                                              i);
       reqBuffs[i]  = reqBuff;
-      respBuffs[i] = respBuff;
-
       RS_Status status =
         create_native_request(readParams[i],
                               (Uint32*)reqBuff.buffer,

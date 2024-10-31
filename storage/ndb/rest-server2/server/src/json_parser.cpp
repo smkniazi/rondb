@@ -179,7 +179,7 @@ JSONParser* jsonParsers = nullptr;
 
 JSONParser::JSONParser() {
   buffer = std::make_unique<char[]>(
-    globalConfigs.internal.reqBufferSize + simdjson::SIMDJSON_PADDING);
+    globalConfigs.internal.maxReqSize + simdjson::SIMDJSON_PADDING);
 }
 
 std::unique_ptr<char[]> &JSONParser::get_buffer() {

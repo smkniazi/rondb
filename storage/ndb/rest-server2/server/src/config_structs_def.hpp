@@ -54,6 +54,7 @@
 CLASS
 (
  Internal,
+ CM(Uint32, maxReqSize,          maxReqSize,          4 * 1024 * 1024)
  CM(Uint32, reqBufferSize,       ReqBufferSize,       1024 * 1024)
  CM(Uint32, respBufferSize,      RespBufferSize,      5 * 1024 * 1024)
  CM(Uint32, preAllocatedBuffers, PreAllocatedBuffers, 32)

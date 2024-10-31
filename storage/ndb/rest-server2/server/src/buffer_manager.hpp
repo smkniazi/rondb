@@ -90,7 +90,7 @@ class RS_BufferArrayManager {
   }
 
   static RS_Buffer allocate_resp_buffer() {
-    auto respBufferSize = globalConfigs.internal.respBufferSize;
+    auto respBufferSize = globalConfigs.internal.respBufferSize * 2;
     auto buff = RS_Buffer();
     buff.buffer = new char[respBufferSize];
     buff.size = respBufferSize;
