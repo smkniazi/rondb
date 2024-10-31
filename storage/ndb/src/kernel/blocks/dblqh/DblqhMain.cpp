@@ -3373,11 +3373,6 @@ void Dblqh::execLQHFRAGREQ(Signal* signal)
     accreq->lhDirBits = addfragptr.p->m_lqhFragReq.lh3PageBits;
     accreq->keyLength = addfragptr.p->m_lqhFragReq.keyLength;
     accreq->hashFunctionFlag = tabptr.p->m_use_new_hash_function;
-    /*
-     * TTL
-     */
-    accreq->ttlSec = tabptr.p->m_ttl_sec;
-    accreq->ttlColumnNo = tabptr.p->m_ttl_col_no;
     /* --------------------------------------------------------------------- */
     /* Send ACCFRAGREQ, when confirmation is received send 2 * TUPFRAGREQ to */
     /* create 2 tuple fragments on this node.                                */
@@ -10054,16 +10049,6 @@ void Dblqh::exec_acckeyreq(Signal *signal, TcConnectionrecPtr regTcPtr) {
     taccreq = AccKeyReq::setNoWait(
         taccreq, ((regTcPtr.p->m_flags & TcConnectionrec::OP_NOWAIT) != 0));
     taccreq = AccKeyReq::setLockReq(taccreq, false);
-    /*
-     * Zart
-     * Set ttl flag for AccKeyReq, so that the c_acc->execACCKEYREQ
-     * can handle ZINSERT into TTL table correctly
-     */
-    if (is_ttl_table(regTcPtr.p->tableref)) {
-      taccreq = AccKeyReq::setTTL(taccreq, true);
-    } else {
-      taccreq = AccKeyReq::setTTL(taccreq, false);
-    }
 
     AccKeyReq * const req = reinterpret_cast<AccKeyReq*>(&signal->theData[0]);
     req->requestInfo = taccreq;
@@ -20626,6 +20611,7 @@ void Dblqh::execCOPY_FRAGREQ(Signal *signal) {
     jam();
     from_queue = true;
   }
+  // TODO(Zhao): ignore TTL
   const CopyFragReq copy = *(CopyFragReq *)&signal->theData[0];
   const CopyFragReq* copyFragReq = &copy;
   tabptr.i = copyFragReq->tableId;
