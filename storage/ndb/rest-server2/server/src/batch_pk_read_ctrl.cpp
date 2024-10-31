@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023 Hopsworks AB
+ * Copyright (C) 2023, 2024 Hopsworks AB
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -63,9 +63,11 @@ void BatchPKReadCtrl::batchPKRead(
 
   // Store it to the first string buffer
   const char *json_str = req->getBody().data();
-  DEB_BPK_CTRL("\n\n JSON REQUEST: \n %s \n", json_str);
+#ifdef DEBUG_BPK_CTRL
+  printf("\n\n JSON REQUEST: \n %s \n", json_str);
+#endif
   size_t length = req->getBody().length();
-  if (unlikely(length > globalConfigs.internal.reqBufferSize)) {
+  if (unlikely(length > globalConfigs.internal.maxReqSize)) {
     auto resp = drogon::HttpResponse::newHttpResponse();
     resp->setBody("Request too large");
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
@@ -79,7 +81,7 @@ void BatchPKReadCtrl::batchPKRead(
 
   RS_Status status = jsonParser.batch_parse(
       simdjson::padded_string_view(jsonParser.get_buffer().get(), length,
-                                   globalConfigs.internal.reqBufferSize +
+                                   globalConfigs.internal.maxReqSize +
                                    simdjson::SIMDJSON_PADDING),
       reqStructs);
 
@@ -193,21 +195,28 @@ void BatchPKReadCtrl::batchPKRead(
     auto noOps = reqStructs.size();
     std::vector<RS_Buffer> reqBuffs(noOps);
     std::vector<RS_Buffer> respBuffs(noOps);
-
-    for (unsigned long i = 0; i < noOps; i++) {
-      RS_Buffer reqBuff  = rsBufferArrayManager.get_req_buffer();
-      RS_Buffer respBuff = rsBufferArrayManager.get_resp_buffer();
-
+    Uint32 request_buffer_size = globalConfigs.internal.reqBufferSize * 2;
+    Uint32 request_buffer_limit = request_buffer_size / 2;
+    Uint32 current_head = 0;
+    RS_Buffer current_request_buffer = rsBufferArrayManager.get_req_buffer();
+    respBuffs[0] = rsBufferArrayManager.get_resp_buffer();
+    for (Uint32 i = 0; i < noOps; i++) {
+      RS_Buffer reqBuff = getNextReqRS_Buffer(current_head,
+                                              request_buffer_limit,
+                                              current_request_buffer,
+                                              i);
       reqBuffs[i]  = reqBuff;
-      respBuffs[i] = respBuff;
-
+      DEB_BPK_CTRL("Buffer: %p, current_head: %u",
+        reqBuff.buffer, current_head);
       status = create_native_request(reqStructs[i],
-                                     (Uint32*)reqBuff.buffer);
+                                     (Uint32*)reqBuff.buffer,
+                                     current_head);
       if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
           drogon::HttpStatusCode::k200OK)) {
         resp->setBody(std::string(status.message));
         resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
         callback(resp);
+        release_array_buffers(reqBuffs.data(), respBuffs.data(), i);
         return;
       }
       UintPtr length_ptr = reinterpret_cast<UintPtr>(reqBuff.buffer) +
@@ -236,6 +245,8 @@ void BatchPKReadCtrl::batchPKRead(
       size_t calc_size_json = 20; // Batch overhead
       for (unsigned int i = 0; i < noOps; i++) {
         PKReadResponseJSON response;
+        DEB_BPK_CTRL("Response buffer[%u]: %p, size: %u",
+          i, respBuffs[i].buffer, respBuffs[i].size);
         process_pkread_response(&amalloc,
                                 respBuffs[i].buffer,
                                 &reqBuffs[i],
@@ -247,10 +258,12 @@ void BatchPKReadCtrl::batchPKRead(
       if (likely(json_buf != nullptr)) {
         size_t size_json =
           PKReadResponseJSON::batch_to_string(responses, json_buf);
-        DEB_BPK_CTRL("Response string: len: %u, calc_len: %u: %s",
-                     (Uint32)size_json,
-                     (Uint32)calc_size_json,
-                     json_buf);
+#ifdef DEBUG_BPK_CTRL
+        printf("Response string: len: %u, calc_len: %u: %s",
+          (Uint32)size_json,
+          (Uint32)calc_size_json,
+          json_buf);
+#endif
         std::string json(json_buf, size_json);
         resp->setBody(std::move(json));
       } else {
@@ -260,9 +273,6 @@ void BatchPKReadCtrl::batchPKRead(
       }
     }
     callback(resp);
-    for (unsigned long i = 0; i < noOps; i++) {
-      rsBufferArrayManager.return_resp_buffer(respBuffs[i]);
-      rsBufferArrayManager.return_req_buffer(reqBuffs[i]);
-    }
+    release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
   }
 }

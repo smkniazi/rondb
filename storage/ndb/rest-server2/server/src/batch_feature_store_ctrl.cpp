@@ -91,7 +91,7 @@ void BatchFeatureStoreCtrl::batch_featureStore(
   const char *json_str = req->getBody().data();
   DEB_BFS_CTRL("\n\n JSON REQUEST: \n %s \n", json_str);
   size_t length = req->getBody().length();
-  if (unlikely(length > globalConfigs.internal.reqBufferSize)) {
+  if (unlikely(length > globalConfigs.internal.maxReqSize)) {
     auto resp = drogon::HttpResponse::newHttpResponse();
     resp->setBody("Request too large");
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
@@ -104,7 +104,7 @@ void BatchFeatureStoreCtrl::batch_featureStore(
   feature_store_data_structs::BatchFeatureStoreRequest reqStruct;
   auto status = jsonParser.batch_feature_store_parse(
       simdjson::padded_string_view(jsonParser.get_buffer().get(), length,
-                                   globalConfigs.internal.reqBufferSize +
+                                   globalConfigs.internal.maxReqSize +
                                    simdjson::SIMDJSON_PADDING),
       reqStruct);
 
@@ -196,6 +196,8 @@ void BatchFeatureStoreCtrl::batch_featureStore(
   auto features = std::vector<std::vector<std::vector<char>>>();
   auto noOps    = readParams.size();
   ArenaMalloc amalloc(256 * 1024);
+  std::vector<RS_Buffer> reqBuffs(noOps);
+  std::vector<RS_Buffer> respBuffs(noOps);
   if (unlikely(noOps != 0)) {
     // Validate batch pkread
     for (auto readParam : readParams) {
@@ -213,22 +215,26 @@ void BatchFeatureStoreCtrl::batch_featureStore(
     }
     auto dbResponseIntf = getPkReadResponseJson(numPassed, *metadata);
     // Execute batch pkread
-    std::vector<RS_Buffer> reqBuffs(noOps);
-    std::vector<RS_Buffer> respBuffs(noOps);
-    for (unsigned long i = 0; i < noOps; i++) {
-      RS_Buffer reqBuff  = rsBufferArrayManager.get_req_buffer();
-      RS_Buffer respBuff = rsBufferArrayManager.get_resp_buffer();
-
+    Uint32 request_buffer_size = globalConfigs.internal.reqBufferSize * 2;
+    Uint32 request_buffer_limit = request_buffer_size / 2;
+    Uint32 current_head = 0;
+    RS_Buffer current_request_buffer = rsBufferArrayManager.get_req_buffer();
+    respBuffs[0] = rsBufferArrayManager.get_resp_buffer();
+    for (Uint32 i = 0; i < noOps; i++) {
+      RS_Buffer reqBuff = getNextReqRS_Buffer(current_head,
+                                              request_buffer_limit,
+                                              current_request_buffer,
+                                              i);
       reqBuffs[i]  = reqBuff;
-      respBuffs[i] = respBuff;
-
       status = create_native_request(readParams[i],
-                                     (Uint32*)reqBuff.buffer);
+                                     (Uint32*)reqBuff.buffer,
+                                     current_head);
       if (static_cast<drogon::HttpStatusCode>(status.http_code) !=
             drogon::HttpStatusCode::k200OK) {
         resp->setBody(std::string(status.message));
         resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
         callback(resp);
+        release_array_buffers(reqBuffs.data(), respBuffs.data(), i);
         return;
       }
       UintPtr length_ptr =
@@ -251,6 +257,7 @@ void BatchFeatureStoreCtrl::batch_featureStore(
       resp->setStatusCode(
         static_cast<drogon::HttpStatusCode>(fsError->GetStatus()));
       callback(resp);
+      release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
       return;
     }
     status = process_responses(&amalloc,
@@ -263,11 +270,8 @@ void BatchFeatureStoreCtrl::batch_featureStore(
       resp->setStatusCode(
         static_cast<drogon::HttpStatusCode>(fsError->GetStatus()));
       callback(resp);
+      release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
       return;
-    }
-    for (unsigned long i = 0; i < noOps; i++) {
-      rsBufferArrayManager.return_resp_buffer(respBuffs[i]);
-      rsBufferArrayManager.return_req_buffer(reqBuffs[i]);
     }
     std::tie(features, err) = getFeatureValuesMultipleEntries(
         dbResponseIntf,
@@ -280,12 +284,14 @@ void BatchFeatureStoreCtrl::batch_featureStore(
       resp->setBody(err->Error());
       resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
       callback(resp);
+      release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
       return;
     }
   } else {
     auto emptyFeatures =
       std::vector<std::vector<std::vector<char>>>(reqStruct.entries.size());
     features = emptyFeatures;
+    noOps = 0;
   }
   fsResp.status = featureStatus;
   fillPassedFeaturesMultipleEntries(features,
@@ -301,6 +307,7 @@ void BatchFeatureStoreCtrl::batch_featureStore(
   resp->setBody(std::move(fsRespStr));
   resp->setStatusCode(drogon::HttpStatusCode::k200OK);
   callback(resp);
+  release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
 }
 
 unsigned checkFeatureStatus(

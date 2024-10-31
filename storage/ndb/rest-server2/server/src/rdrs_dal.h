@@ -70,8 +70,9 @@ typedef enum DataReturnType {
 
 // Buffer that contain request or response objects
 typedef struct RS_Buffer {
-  unsigned int size;  // Buffer size
   char *buffer;       // Buffer
+  unsigned int size;  // Buffer size
+  unsigned int next_allocated_buffer;
 } RS_Buffer;
 
 typedef RS_Buffer *pRS_Buffer;

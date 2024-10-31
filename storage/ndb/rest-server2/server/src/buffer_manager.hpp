@@ -49,8 +49,8 @@ class RS_BufferArrayManager {
       throw std::runtime_error("Buffer size must be a multiple of 4");
     }
     Int64 preAllocateBuffers = globalConfigs.internal.preAllocatedBuffers;
-    reqBuffersStats            = {preAllocateBuffers, 0, preAllocateBuffers, 0};
-    respBuffersStats           = {preAllocateBuffers, 0, preAllocateBuffers, 0};
+    reqBuffersStats = {preAllocateBuffers, 0, preAllocateBuffers, 0};
+    respBuffersStats = {preAllocateBuffers, 0, preAllocateBuffers, 0};
     for (int i = 0; i < preAllocateBuffers; i++) {
       reqBufferArray.push_back(allocate_req_buffer());
       respBufferArray.push_back(allocate_resp_buffer());
@@ -81,18 +81,20 @@ class RS_BufferArrayManager {
   }
 
   static RS_Buffer allocate_req_buffer() {
-    auto reqBufferSize = globalConfigs.internal.reqBufferSize;
+    auto reqBufferSize = globalConfigs.internal.reqBufferSize * 2;
     auto buff = RS_Buffer();
     buff.buffer = new char[reqBufferSize];
     buff.size = reqBufferSize;
+    buff.next_allocated_buffer = 0;
     return buff;
   }
 
   static RS_Buffer allocate_resp_buffer() {
-    auto respBufferSize = globalConfigs.internal.respBufferSize;
+    auto respBufferSize = globalConfigs.internal.respBufferSize * 2;
     auto buff = RS_Buffer();
     buff.buffer = new char[respBufferSize];
     buff.size = respBufferSize;
+    buff.next_allocated_buffer = 0;
     return buff;
   }
 

@@ -49,9 +49,9 @@ class PKRResponse {
   RS_Status SetStatus(Uint32 value, const char* message);
 
   /**
-   * Close response and set the data lenght.
+   * Close response and set the data length
    */
-  RS_Status Close();
+  RS_Status Close(Uint32 &length);
 
   /**
    * Set Operation ID

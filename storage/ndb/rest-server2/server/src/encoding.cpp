@@ -25,6 +25,7 @@
 #include "db_operations/pk/pkr_request.hpp"
 #include <ArenaMalloc.hpp>
 #include <EventLogger.hpp>
+#include <util/require.h>
 
 #include <cstring>
 #include <string>
@@ -103,7 +104,8 @@ extern EventLogger *g_eventLogger;
  * ---------------------------------------
  */ 
 RS_Status create_native_request(PKReadParams &pkReadParams,
-                                Uint32 *reqBuff) {
+                                Uint32 *reqBuff,
+                                Uint32 &next_head) {
   Uint32 *buf = reqBuff;
   Uint32 head = PK_REQ_HEADER_END;
   Uint32 dbOffset = head;
@@ -143,6 +145,15 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
     buf[tupleOffset / ADDRESS_SIZE] = keyNameOffset;
     buf[tupleOffset / ADDRESS_SIZE + 1] = valueOffset;
   }
+  // Operation ID
+  Uint32 op_id_offset = 0;
+  if (likely(!pkReadParams.operationId.empty())) {
+    op_id_offset = head;
+    head = copy_str_to_buffer(pkReadParams.operationId, reqBuff, head, status);
+    if (unlikely(head == 0)) {
+      return CRS_Status(status.http_code, status.message).status;
+    }
+  }
   // Read Columns
   Uint32 readColsOffset = 0;
   if (likely(!pkReadParams.readColumns.empty())) {
@@ -174,15 +185,19 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
         return CRS_Status(status.http_code, status.message).status;
       }
     }
-  }
-  // Operation ID
-  Uint32 op_id_offset = 0;
-  if (likely(!pkReadParams.operationId.empty())) {
-    op_id_offset = head;
-    head = copy_str_to_buffer(pkReadParams.operationId, reqBuff, head, status);
-    if (unlikely(head == 0)) {
-      return CRS_Status(status.http_code, status.message).status;
-    }
+    next_head += head;
+  } else {
+    /**
+     * Need to reserve space in request buffer for column names of all
+     * table columns.
+     */
+    next_head += head + 
+      1 + // Number of columns stored
+      16 + // Some extra space for security
+      MAX_ATTRIBUTES_IN_TABLE *
+      (1 + // length word
+       MAX_ATTR_NAME_SIZE + // Max column name size
+       2); // Reference to the column info and data type
   }
   // request buffer header
   buf[PK_REQ_OP_TYPE_IDX] = (Uint32)(RDRS_PK_REQ_ID);
@@ -198,11 +213,83 @@ RS_Status create_native_request(PKReadParams &pkReadParams,
     drogon::HttpStatusCode::k200OK), "OK").status;
 }
 
+RS_Buffer getNextReqRS_Buffer(Uint32 &current_head,
+                              Uint32 request_buffer_limit,
+                              RS_Buffer &current_request_buffer,
+                              Uint32 index) {
+  RS_Buffer reqBuff;
+  if (index == 0) { // First buffer already allocated
+    return current_request_buffer;
+  } else if (current_head >= request_buffer_limit) {
+    current_request_buffer.next_allocated_buffer = index;
+    current_request_buffer = rsBufferArrayManager.get_req_buffer();
+    current_head = 0;
+    DEB_ENC("Allocating a new request buffer index = %u, ptr: %p",
+      index, current_request_buffer.buffer);
+    return current_request_buffer;
+  } else {
+    reqBuff.next_allocated_buffer = 0xFFFFFFFF; // Garbage
+    reqBuff.buffer = current_request_buffer.buffer + current_head;
+    reqBuff.size = (globalConfigs.internal.reqBufferSize * 2) - current_head;
+    DEB_ENC("Reuse request buffer index = %u at pos: %u, ptr: %p",
+      index, current_head, reqBuff.buffer);
+  }
+  return reqBuff;
+}
+
+RS_Buffer getNextRespRS_Buffer(Uint32 &current_head,
+                               Uint32 response_buffer_limit,
+                               RS_Buffer &current_response_buffer,
+                               Uint32 index) {
+  RS_Buffer respBuff;
+  if (index == 0) { // First buffer already allocated
+    return current_response_buffer;
+  } else if (current_head >= response_buffer_limit) {
+    current_response_buffer.next_allocated_buffer = index;
+    current_response_buffer = rsBufferArrayManager.get_resp_buffer();
+    current_head = 0;
+    DEB_ENC("Allocating a new response buffer index = %u, ptr: %p",
+      index, current_response_buffer.buffer);
+    return current_response_buffer;
+  } else {
+    respBuff.next_allocated_buffer = 0xFFFFFFFF; // Garbage
+    respBuff.buffer = current_response_buffer.buffer + current_head;
+    respBuff.size = (globalConfigs.internal.respBufferSize * 2) - current_head;
+    DEB_ENC("Reuse response buffer index = %u at pos: %u, ptr: %p",
+      index, current_head, respBuff.buffer);
+  }
+  return respBuff;
+}
+
+void release_array_buffers(RS_Buffer *reqBuffs,
+                           RS_Buffer *respBuffs,
+                           Uint32 numOps) {
+  if (unlikely(numOps == 0)) {
+    return;
+  }
+  Uint32 i = 0;
+  do {
+    Uint32 next_i = respBuffs[i].next_allocated_buffer;
+    DEB_ENC("Release response buffer with index: %u", i);
+    rsBufferArrayManager.return_resp_buffer(respBuffs[i]);
+    i = next_i;
+    require(i < numOps);
+  } while (i != 0);
+  i = 0;
+  do {
+    Uint32 next_i = reqBuffs[i].next_allocated_buffer;
+    DEB_ENC("Release request buffer with index: %u", i);
+    rsBufferArrayManager.return_req_buffer(reqBuffs[i]);
+    i = next_i;
+    require(i < numOps);
+  } while (i != 0);
+}
+
 RS_Status process_pkread_response(ArenaMalloc *amalloc,
                                   void *respBuff,
                                   RS_Buffer *reqBuff,
                                   PKReadResponseJSON &response) {
-  DEB_ENC("process_pk_read_response");
+  DEB_ENC("process_pk_read_response, respBuff: %p", respBuff);
   PKRRequest req = PKRRequest(reqBuff);
   Uint32 *buf = (Uint32 *)(respBuff);
   Uint32 responseType = buf[PK_RESP_OP_TYPE_IDX];

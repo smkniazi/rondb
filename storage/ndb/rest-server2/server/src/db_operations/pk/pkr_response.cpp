@@ -47,8 +47,9 @@ RS_Status PKRResponse::SetStatus(Uint32 value, const char *message) {
   return WriteStringHeaderField(PK_RESP_OP_MESSAGE_IDX, message);
 }
 
-RS_Status PKRResponse::Close() {
+RS_Status PKRResponse::Close(Uint32 &response_length) {
   this->WriteHeaderField(PK_RESP_LENGTH_IDX, writeHeader);
+  response_length = writeHeader;
   return RS_OK;
 }
 
