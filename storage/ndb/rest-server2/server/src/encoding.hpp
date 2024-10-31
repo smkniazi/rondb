@@ -30,10 +30,17 @@
 #include <drogon/drogon.h>
 #include <iostream>
 
-RS_Status create_native_request(PKReadParams &, Uint32*);
+RS_Status create_native_request(PKReadParams &, Uint32*, Uint32&);
 RS_Status process_pkread_response(ArenaMalloc*,
                                   void *,
                                   RS_Buffer *reqBuff,
                                   PKReadResponseJSON &);
+RS_Buffer getNextRS_Buffer(Uint32 &head,
+                           Uint32 request_buffer_limit,
+                           RS_Buffer &current_request_buffer,
+                           Uint32 index);
+void release_array_buffers(RS_Buffer *req_buffers,
+                           RS_Buffer *resp_buffers,
+                           Uint32 numOps);
 
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_ENCODING_HPP_

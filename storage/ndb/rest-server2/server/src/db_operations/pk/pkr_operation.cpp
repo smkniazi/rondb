@@ -103,8 +103,8 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
     }
     const NdbDictionary::Dictionary *dict = ndb_object->getDictionary();
     const NdbDictionary::Table *tableDict = dict->getTable(req->Table());
-    DEB_NDB_BE("Request on DB: %s, Table: %s, op: %u",
-      req->DB(), req->Table(), i);
+    DEB_NDB_BE("Request on DB: %s, Table: %s, op: %u, reqBuffer: %p",
+      req->DB(), req->Table(), i, reqBuffer[i].buffer);
     if (unlikely(tableDict == nullptr)) {
       RS_Status err = RS_CLIENT_404_WITH_MSG_ERROR(
         ERROR_011 + std::string(" Database: ") +
@@ -282,9 +282,10 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
     } else {
       /**
        * When we arrive here we have not received any column names from
-       * the JSON request. Since we want the use the request buffer to
-       * construct the response, we need to fill in the missing column
-       * names here.
+       * the JSON request. It is too early to fill them in here since it
+       * is possible that the schema changes between now and a retry
+       * attempt. Thus we fill in this information in create_response
+       * instead.
        */
       DEB_NDB_BE("Start reading all columns: %u", numColumns);
       bool use_blob_values = false;

@@ -53,6 +53,7 @@ func sendHttpBatchRequest(
 	}
 	batch := api.BatchOpRequest{Operations: &subOps}
 	body, err := json.Marshal(batch)
+	//body, err := json.MarshalIndent(batch, "", "\t")
 	if err != nil {
 		t.Fatalf("Failed to marshall test request %v", err)
 	}

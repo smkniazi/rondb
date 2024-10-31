@@ -706,20 +706,30 @@ void FeatureStoreCtrl::featureStore(
     auto dbResponseIntf = getPkReadResponseJSON(*metadata);
     std::vector<RS_Buffer> reqBuffs(noOps);
     std::vector<RS_Buffer> respBuffs(noOps);
+    Uint32 request_buffer_size = globalConfigs.internal.reqBufferSize * 2;
+    Uint32 request_buffer_limit = request_buffer_size / 2;
+    Uint32 current_head = 0;
+    RS_Buffer current_request_buffer = rsBufferArrayManager.get_req_buffer();
     for (unsigned long i = 0; i < noOps; i++) {
-      RS_Buffer reqBuff  = rsBufferArrayManager.get_req_buffer();
       RS_Buffer respBuff = rsBufferArrayManager.get_resp_buffer();
 
+      RS_Buffer reqBuff = getNextRS_Buffer(current_head,
+                                           request_buffer_limit,
+                                           current_request_buffer,
+                                           i);
       reqBuffs[i]  = reqBuff;
       respBuffs[i] = respBuff;
 
       RS_Status status =
-        create_native_request(readParams[i], (Uint32*)reqBuff.buffer);
+        create_native_request(readParams[i],
+                              (Uint32*)reqBuff.buffer,
+                              current_head);
       if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
                      drogon::HttpStatusCode::k200OK)) {
         resp->setBody(std::string(status.message));
         resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
         callback(resp);
+        release_array_buffers(reqBuffs.data(), respBuffs.data(), i);
         return;
       }
       UintPtr length_ptr =
@@ -741,12 +751,12 @@ void FeatureStoreCtrl::featureStore(
                    drogon::HttpStatusCode::k200OK)) {
         DEB_FS_CTRL("pk_batch_read failed: http_code: %u, message: %s",
                     status.http_code, status.message);
-        NdbSleep_MilliSleep(10);
         auto fsError = TranslateRonDbError(status.http_code, status.message);
         resp->setBody(fsError->Error());
         resp->setStatusCode(
           static_cast<drogon::HttpStatusCode>(fsError->GetStatus()));
         callback(resp);
+        release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
         return;
       }
     }
@@ -762,6 +772,7 @@ void FeatureStoreCtrl::featureStore(
         resp->setStatusCode(
           static_cast<drogon::HttpStatusCode>(fsError->GetStatus()));
         callback(resp);
+        release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
         return;
       }
     }
@@ -769,10 +780,6 @@ void FeatureStoreCtrl::featureStore(
     DEB_FS_CTRL("Response to JSON for  Feature Store request");
     std::vector<PKReadResponseWithCodeJSON> responses =
       dbResponseIntf.getResult();
-    for (unsigned long i = 0; i < noOps; i++) {
-      rsBufferArrayManager.return_resp_buffer(respBuffs[i]);
-      rsBufferArrayManager.return_req_buffer(reqBuffs[i]);
-    }
     auto rondbResp = std::make_shared<BatchResponseJSON>();
     rondbResp->setResult(responses);
     auto fsError = checkRondbResponse(*rondbResp);
@@ -781,6 +788,7 @@ void FeatureStoreCtrl::featureStore(
       resp->setStatusCode(
         static_cast<drogon::HttpStatusCode>(fsError->GetStatus()));
       callback(resp);
+      release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
       return;
     }
     DEB_FS_CTRL("Get Feature values for  Feature Store request");
@@ -793,6 +801,7 @@ void FeatureStoreCtrl::featureStore(
       resp->setStatusCode(
         static_cast<drogon::HttpStatusCode>(fsError->GetStatus()));
       callback(resp);
+      release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
       return;
     }
     DEB_FS_CTRL("Fill Passed Feature values for  Feature Store request");
@@ -817,5 +826,6 @@ void FeatureStoreCtrl::featureStore(
     resp->setBody(std::move(respBody));
     resp->setStatusCode(drogon::HttpStatusCode::k200OK);
     callback(resp);
+    release_array_buffers(reqBuffs.data(), respBuffs.data(), noOps);
   }
 }

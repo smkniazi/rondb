@@ -126,14 +126,16 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
   {
     RS_Buffer reqBuff  = rsBufferArrayManager.get_req_buffer();
     RS_Buffer respBuff = rsBufferArrayManager.get_resp_buffer();
+    Uint32 dummy = 0;
 
-    status = create_native_request(reqStruct, (Uint32*)reqBuff.buffer);
+    status = create_native_request(reqStruct, (Uint32*)reqBuff.buffer, dummy);
     if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
           drogon::HttpStatusCode::k200OK)) {
       resp->setBody(std::string(status.message));
       DEB_PK_CTRL("Error message(4): %s", std::string(status.message).c_str());
       resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
       callback(resp);
+      release_array_buffers(&reqBuff, &respBuff, 1);
       return;
     }
     UintPtr length_ptr = reinterpret_cast<UintPtr>(reqBuff.buffer) +
@@ -179,7 +181,6 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
       }
     }
     callback(resp);
-    rsBufferArrayManager.return_resp_buffer(respBuff);
-    rsBufferArrayManager.return_req_buffer(reqBuff);
+    release_array_buffers(&reqBuff, &respBuff, 1);
   }
 }
