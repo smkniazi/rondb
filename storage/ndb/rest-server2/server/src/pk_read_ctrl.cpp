@@ -64,8 +64,10 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
 
   // Store it to the first string buffer
   const char *json_str = req->getBody().data();
-  DEB_PK_CTRL("\n\n JSON REQUEST: db: %s, tab: %s\n %s \n",
-              db.data(), table.data(), json_str);
+#ifdef DEBUG_PK_CTRL
+  printf("\n\n JSON REQUEST: db: %s, tab: %s\n %s \n",
+         db.data(), table.data(), json_str);
+#endif
   size_t length = req->getBody().length();
   if (unlikely(length > globalConfigs.internal.maxReqSize)) {
     auto resp = drogon::HttpResponse::newHttpResponse();
@@ -168,10 +170,12 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
       char *json_buf = (char*)amalloc.alloc_bytes(calc_size_json, 8);
       if (likely(json_buf != nullptr)) {
         size_t size_json = respJson.to_string_single(json_buf);
-        DEB_PK_CTRL("JSON response: len: %u, calc_len: %u: \n %s",
-                    json_buf,
-                    (Uint32)size_json,
-                    (Uint32)calc_size_json);
+#ifdef DEBUG_PK_CTRL
+        printf("JSON response: len: %u, calc_len: %u: \n %s",
+               (Uint32)size_json,
+               (Uint32)calc_size_json,
+               json_buf);
+#endif
         std::string json(json_buf, size_json);
         resp->setBody(std::move(json));
       } else {

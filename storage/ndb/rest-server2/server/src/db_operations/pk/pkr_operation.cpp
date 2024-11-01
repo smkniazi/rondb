@@ -443,7 +443,7 @@ RS_Status BatchKeyOperations::create_response(RS_Buffer *respBuffs) {
     if (req->ReadColumnsCount() == 0) {
       DEB_NDB_BE("Build request when all columns requested");
       Uint32 numColumns = key_op->m_num_table_columns;
-      if (req->addReadColumns(numColumns)) {
+      if (unlikely(req->addReadColumns(numColumns))) {
         RS_Status status = RS_SERVER_ERROR(ERROR_067);
         return status;
       }
@@ -797,6 +797,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     char buffer[BLOB_MAX_FETCH_SIZE];
     struct base64_state state;
     size_t encodeOutlen = 0;
+    size_t total_encoded_len = 0;
     base64_stream_encode_init(&state, 0);
 
     for (chunk = 0; chunk < (length / (BLOB_MAX_FETCH_SIZE)) + 1; chunk++) {
@@ -838,6 +839,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
                                (char *)response->GetWritePointer(),
                                &encodeOutlen);
           response->AdvanceWritePointer(encodeOutlen);
+          total_encoded_len += encodeOutlen;
         }
       }
     }
@@ -852,9 +854,13 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     base64_stream_encode_final(&state,
                               (char *)response->GetWritePointer(),
                               &encodeOutlen);
+    total_encoded_len += encodeOutlen;
     response->AdvanceWritePointer(encodeOutlen);
     (response->GetResponseBuffer())[response->GetWriteHeader()] = '\0';
     response->AdvanceWritePointer(1);
+    response->SetBlobLen(total_encoded_len);
+    DEB_NDB_BE("Written a blob of total encoded len: %u",
+      (Uint32)total_encoded_len);
     return RS_OK;
   }
   case NdbDictionary::Column::Text: {
