@@ -250,9 +250,8 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
             use_blob_values = true;
             key_op->m_blob_handles = (NdbBlob**)
               amalloc->alloc_bytes(sizeof(NdbBlob*) * numReadColumns, 8);
-            if (key_op->m_blob_handles == nullptr) {
-              status = RS_SERVER_ERROR(ERROR_067);
-              return status;
+            if (unlikely(key_op->m_blob_handles == nullptr)) {
+              return RS_SERVER_ERROR(ERROR_067);
             }
             DEB_NDB_BE("Allocating memory at %p for"
                        " m_key_ops[%u].m_blob_handles",
@@ -297,9 +296,8 @@ BatchKeyOperations::init_batch_operations(ArenaMalloc *amalloc,
             use_blob_values = true;
             key_op->m_blob_handles = (NdbBlob**)
               amalloc->alloc_bytes(sizeof(NdbBlob*) * numReadColumns, 8);
-            if (key_op->m_blob_handles == nullptr) {
-              status = RS_SERVER_ERROR(ERROR_067);
-              return status;
+            if (unlikely(key_op->m_blob_handles == nullptr)) {
+              return RS_SERVER_ERROR(ERROR_067);
             }
             DEB_NDB_BE("(2)Allocating memory at %p for"
                        " m_key_ops[%u].m_blob_handles",
@@ -392,9 +390,8 @@ start:
             opIdx,
             colIdx,
             m_key_ops[opIdx].m_blob_handles[colIdx]);
-          if (m_key_ops[opIdx].m_blob_handles[colIdx] == nullptr) {
-            RS_Status error = RS_SERVER_ERROR(ERROR_067);
-            return error;
+          if (unlikely(m_key_ops[opIdx].m_blob_handles[colIdx] == nullptr)) {
+            return RS_SERVER_ERROR(ERROR_067);
           }
         } else {
           DEB_NDB_BE("No Blob handle for %s in op %u in col: %u",
@@ -443,18 +440,16 @@ RS_Status BatchKeyOperations::create_response(RS_Buffer *respBuffs) {
     if (req->ReadColumnsCount() == 0) {
       DEB_NDB_BE("Build request when all columns requested");
       Uint32 numColumns = key_op->m_num_table_columns;
-      if (req->addReadColumns(numColumns)) {
-        RS_Status status = RS_SERVER_ERROR(ERROR_067);
-        return status;
+      if (unlikely(req->addReadColumns(numColumns))) {
+        return RS_SERVER_ERROR(ERROR_067);
       }
       for (Uint32 k = 0; k < numColumns; k++) {
         const NdbDictionary::Column *read_col =
           key_op->m_tableDict->getColumn(k);
-        if (req->addReadColumnName(k,
+        if (unlikely(req->addReadColumnName(k,
                                    read_col->getName(),
-                                   DEFAULT_DRT)) {
-          RS_Status status = RS_SERVER_ERROR(ERROR_067);
-          return status;
+                                   DEFAULT_DRT))) {
+          return RS_SERVER_ERROR(ERROR_067);
         }
       }
     }
@@ -797,6 +792,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     char buffer[BLOB_MAX_FETCH_SIZE];
     struct base64_state state;
     size_t encodeOutlen = 0;
+    size_t total_encoded_len = 0;
     base64_stream_encode_init(&state, 0);
 
     for (chunk = 0; chunk < (length / (BLOB_MAX_FETCH_SIZE)) + 1; chunk++) {
@@ -838,6 +834,7 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
                                (char *)response->GetWritePointer(),
                                &encodeOutlen);
           response->AdvanceWritePointer(encodeOutlen);
+          total_encoded_len += encodeOutlen;
         }
       }
     }
@@ -852,9 +849,13 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     base64_stream_encode_final(&state,
                               (char *)response->GetWritePointer(),
                               &encodeOutlen);
+    total_encoded_len += encodeOutlen;
     response->AdvanceWritePointer(encodeOutlen);
     (response->GetResponseBuffer())[response->GetWriteHeader()] = '\0';
     response->AdvanceWritePointer(1);
+    response->SetBlobLen(total_encoded_len);
+    DEB_NDB_BE("Written a blob of total encoded len: %u",
+      (Uint32)total_encoded_len);
     return RS_OK;
   }
   case NdbDictionary::Column::Text: {

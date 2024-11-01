@@ -76,7 +76,7 @@ func BenchmarkSimple(b *testing.B) {
 	start := time.Now()
         last := time.Now()
         var ops atomic.Uint64
-	runtime.GOMAXPROCS(2)
+	runtime.GOMAXPROCS(20)
 
 	/*
 		Assuming GOMAXPROCS is not set, a 10-core CPU

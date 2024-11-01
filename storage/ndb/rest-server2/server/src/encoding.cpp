@@ -340,25 +340,20 @@ RS_Status process_pkread_response(ArenaMalloc *amalloc,
         reinterpret_cast<UintPtr>(respBuff) + colIDX + ADDRESS_SIZE +
           i * 4 * ADDRESS_SIZE);
 
-      Uint32 colHeader[4];
-      for (Uint32 j = 0; j < 4; j++) {
-        colHeader[j] = colHeaderStart[j];
-      }
-      //Uint32 nameAdd = colHeader[0];
       const char* name = req.ReadColumnName(i);
       Uint32 name_len = req.ReadColumnNameLen(i);
-      Uint32 valueAdd = colHeader[1];
-      Uint32 isNull = colHeader[2];
-      Uint32 dataType = colHeader[3];
+      Uint32 value_len = colHeaderStart[0];
+      Uint32 value_add = colHeaderStart[1];
+      Uint32 isNull = colHeaderStart[2];
+      Uint32 dataType = colHeaderStart[3];
       if (isNull == 0) {
         const char * value =
-          (reinterpret_cast<const char*>(respBuff) + valueAdd);
-        Uint32 value_len = strlen(value);
+          (reinterpret_cast<const char*>(respBuff) + value_add);
         bool quoted = dataType != RDRS_INTEGER_DATATYPE &&
                       dataType != RDRS_FLOAT_DATATYPE;
-        DEB_ENC("setColumnData(%u) name: %s, name_len: %u, value: %s,"
-                " value_len: %u, quoted: %u",
-          i, name, name_len, value, value_len, quoted);
+        DEB_ENC("setColumnData(%u) name: %s, name_len: %u,"
+                " value_len: %u, quoted: %u, value: %s",
+          i, name, name_len, value_len, quoted, value);
         response.setColumnData(i, name, name_len, value, value_len, quoted);
       } else {
         const char *null_value = "null";
