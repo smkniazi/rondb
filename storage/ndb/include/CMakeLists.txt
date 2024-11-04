@@ -99,6 +99,7 @@ SET(NDB_NDBAPI_HEADERS
   ndbapi/ndberror.h
   ndbapi/NdbInterpretedCode.hpp
   ndbapi/NdbAggregator.hpp
+  ndbapi/NdbAggregationCommon.hpp
   )
 
 SET(NDB_MGMAPI_HEADERS
