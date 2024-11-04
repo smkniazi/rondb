@@ -4180,12 +4180,14 @@ void Dbtc::execTCKEYREQ(Signal *signal) {
   Uint8 TSimpleFlag = TcKeyReq::getSimpleFlag(Treqinfo);
   Uint8 TDirtyFlag = TcKeyReq::getDirtyFlag(Treqinfo);
   Uint8 TInterpretedFlag = TcKeyReq::getInterpretedFlag(Treqinfo);
+  Uint8 TInterpretedInsertFlag = TcKeyReq::getInterpretedInsertFlag(Treqinfo);
   Uint8 TDistrKeyFlag = TcKeyReq::getDistributionKeyFlag(Treqinfo);
   Uint8 TNoDiskFlag = TcKeyReq::getNoDiskFlag(Treqinfo);
 
   regTcPtr->dirtyOp = TDirtyFlag;
   regTcPtr->opSimple = TSimpleFlag;
   regCachePtr->opExec = TInterpretedFlag;
+  regCachePtr->m_interpreted_insert = TInterpretedInsertFlag;
   regCachePtr->distributionKeyIndicator = TDistrKeyFlag;
   regCachePtr->m_no_disk_flag = TNoDiskFlag;
 
@@ -5362,6 +5364,7 @@ void Dbtc::sendlqhkeyreq(Signal *signal, BlockReference TBRef,
   LqhKeyReq::setApplicationAddressFlag(Tdata10, 1);
   LqhKeyReq::setDirtyFlag(Tdata10, sig2);
   LqhKeyReq::setInterpretedFlag(Tdata10, regCachePtr->opExec);
+  LqhKeyReq::setInterpretedInsertFlag(Tdata10, regCachePtr->m_interpreted_insert);
   LqhKeyReq::setSimpleFlag(Tdata10, sig0);
   LqhKeyReq::setOperation(Tdata10, sig1);
   LqhKeyReq::setNoDiskFlag(Tdata10, regCachePtr->m_no_disk_flag);

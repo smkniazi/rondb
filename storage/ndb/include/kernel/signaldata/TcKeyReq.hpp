@@ -171,6 +171,7 @@ class TcKeyReq {
   static Uint8 getSimpleFlag(const UintR &requestInfo);
   static Uint8 getDirtyFlag(const UintR &requestInfo);
   static Uint8 getInterpretedFlag(const UintR &requestInfo);
+  static Uint8 getInterpretedInsertFlag(const UintR &requestInfo);
   static Uint8 getDistributionKeyFlag(const UintR &requestInfo);
   static Uint8 getViaSPJFlag(const UintR &requestInfo);
   static Uint8 getScanIndFlag(const UintR &requestInfo);
@@ -201,6 +202,7 @@ class TcKeyReq {
   static void setSimpleFlag(UintR &requestInfo, Uint32 flag);
   static void setDirtyFlag(UintR &requestInfo, Uint32 flag);
   static void setInterpretedFlag(UintR &requestInfo, Uint32 flag);
+  static void setInterpretedInsertFlag(UintR &requestInfo, Uint32 flag);
   static void setDistributionKeyFlag(UintR &requestInfo, Uint32 flag);
   static void setViaSPJFlag(UintR &requestInfo, Uint32 flag);
   static void setScanIndFlag(UintR &requestInfo, Uint32 flag);
@@ -385,11 +387,12 @@ class TcKeyReq {
  * ----------------------------------------------------------------------
  A = Replica applier       - 1  Bit 25
  I = IgnoreTTL             - 1  Bit 26
+ N = Interpreted Insert    - 1  Bit 27
 
            1111111111222222222233
  01234567890123456789012345678901
  dnb cooop lsyyeiaaarkkkkkkkkkkkk  (Short TCKEYREQ)
- dnbvcooopqlsyyeixDfrRwBUQAI        (Long TCKEYREQ)
+ dnbvcooopqlsyyeixDfrRwBUQAIN       (Long TCKEYREQ)
 */
 
 #define TCKEY_NODISK_SHIFT (1)
@@ -435,6 +438,7 @@ class TcKeyReq {
  * TTL
  */
 #define TC_TTL_IGNORE_SHIFT (26)
+#define INTERPRETED_INSERT_SHIFT (27)
 
 /**
  * Scan Info
@@ -514,6 +518,10 @@ inline Uint8 TcKeyReq::getInterpretedFlag(const UintR &requestInfo) {
   return (Uint8)((requestInfo >> INTERPRETED_SHIFT) & 1);
 }
 
+inline Uint8 TcKeyReq::getInterpretedInsertFlag(const UintR &requestInfo) {
+  return (Uint8)((requestInfo >> INTERPRETED_INSERT_SHIFT) & 1);
+}
+
 inline Uint8 TcKeyReq::getDistributionKeyFlag(const UintR &requestInfo) {
   return (Uint8)((requestInfo >> DISTR_KEY_SHIFT) & 1);
 }
@@ -591,6 +599,13 @@ inline void TcKeyReq::setInterpretedFlag(UintR &requestInfo, Uint32 flag) {
   ASSERT_BOOL(flag, "TcKeyReq::setInterpretedFlag");
   requestInfo &= ~(1 << INTERPRETED_SHIFT);
   requestInfo |= (flag << INTERPRETED_SHIFT);
+}
+
+inline void TcKeyReq::setInterpretedInsertFlag(UintR &requestInfo,
+                                               Uint32 flag) {
+  ASSERT_BOOL(flag, "TcKeyReq::setInterpretedInsertFlag");
+  requestInfo &= ~(1 << INTERPRETED_INSERT_SHIFT);
+  requestInfo |= (flag << INTERPRETED_INSERT_SHIFT);
 }
 
 inline void TcKeyReq::setDistributionKeyFlag(UintR &requestInfo, Uint32 flag) {

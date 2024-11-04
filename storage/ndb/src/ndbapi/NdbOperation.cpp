@@ -160,6 +160,7 @@ int NdbOperation::init(const NdbTableImpl *tab, NdbTransaction *myConnection) {
   theDirtyIndicator = 0;
   theReadCommittedBaseIndicator = 0;
   theInterpretIndicator = 0;
+  theInterpretInsertIndicator = 0;
   theDistrKeyIndicator_ = 0;
   theScanInfo = 0;
   theTotalNrOfKeyWordInSignal = 8;

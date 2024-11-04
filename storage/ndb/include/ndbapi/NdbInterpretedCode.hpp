@@ -207,6 +207,31 @@ class NdbInterpretedCode {
   int load_const_u16(Uint32 RegDest, Uint32 Constant);
   int load_const_u32(Uint32 RegDest, Uint32 Constant);
   int load_const_u64(Uint32 RegDest, Uint64 Constant);
+  /**
+   * Load operation type into a register
+   * -----------------------------------
+   *
+   * Space required      Buffer    Request message
+   *   load_op_type      1 word    1 word
+   *
+   * @param RegDest Register to load operation type into
+   * @return 0 if successful, -1 otherwise
+   *
+   * The operation types are:
+   * Read: 0
+   * Update: 1
+   * Insert: 2
+   * Delete: 3
+   * Write: 4 (Should not be possible to get in interpreter
+   * Read Exclusive: 5
+   * Refresh: 6
+   * Unlock: 7
+   *
+   * This operation is mainly interesting when using writeTuple,
+   * in this case we need to sometimes execute different code
+   * when the Write is turned into an Insert or an Update.
+   */
+  int load_op_type(Uint32 RegDest);
   /* Load constant with variable size into memory
    * This instruction is useful e.g. to use in appending
    * to a variable sized column, it can also be used in

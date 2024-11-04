@@ -72,8 +72,10 @@ public:
   Uint32 attrInfoIVal;
 
   static Uint32 getInterpretedFlag(Uint32 const &requestInfo);
+  static Uint32 getInterpretedInsertFlag(Uint32 const &requestInfo);
   static Uint32 getRowidFlag(Uint32 const &requestInfo);
   static void setInterpretedFlag(Uint32 &requestInfo, Uint32 value);
+  static void setInterpretedInsertFlag(Uint32 &requestInfo, Uint32 value);
   static void setRowidFlag(Uint32 &requestInfo, Uint32 value);
 
   /*
@@ -81,19 +83,25 @@ public:
 
               111111 1111222222222233
     0123456789012345 6789012345678901
-    ..........iz.... ................
+    ..........izn... ................
   */
 
   enum RequestInfo {
     INTERPRETED_POS = 10,
     INTERPRETED_MASK = 1,
     ROWID_POS = 11,
-    ROWID_MASK = 1
+    ROWID_MASK = 1,
+    INTERPRETED_INSERT_POS = 12,
+    INTERPRETED_INSERT_MASK = 1,
   };
 };
 
 inline Uint32 TupKeyReq::getInterpretedFlag(Uint32 const &requestInfo) {
   return (requestInfo >> INTERPRETED_POS) & INTERPRETED_MASK;
+}
+
+inline Uint32 TupKeyReq::getInterpretedInsertFlag(Uint32 const &requestInfo) {
+  return (requestInfo >> INTERPRETED_INSERT_POS) & INTERPRETED_INSERT_MASK;
 }
 
 inline Uint32 TupKeyReq::getRowidFlag(Uint32 const &requestInfo) {
@@ -104,6 +112,13 @@ inline void TupKeyReq::setInterpretedFlag(Uint32 &requestInfo, Uint32 value) {
   assert(value <= INTERPRETED_MASK);
   assert((requestInfo & (INTERPRETED_MASK << INTERPRETED_POS)) == 0);
   requestInfo |= value << INTERPRETED_POS;
+}
+
+inline void TupKeyReq::setInterpretedInsertFlag(Uint32 &requestInfo,
+                                                Uint32 value) {
+  assert(value <= INTERPRETED_INSERT_MASK);
+  assert((requestInfo & (INTERPRETED_INSERT_MASK << INTERPRETED_INSERT_POS)) == 0);
+  requestInfo |= value << INTERPRETED_INSERT_POS;
 }
 
 inline void TupKeyReq::setRowidFlag(Uint32 &requestInfo, Uint32 value) {

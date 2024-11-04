@@ -70,6 +70,8 @@ bool printLQHKEYREQ(FILE *output, const Uint32 *theData, Uint32 len,
       fprintf(output, "Dirty ");
   }
   if (LqhKeyReq::getInterpretedFlag(reqInfo)) fprintf(output, "Interpreted ");
+  if (LqhKeyReq::getInterpretedInsertFlag(reqInfo))
+    fprintf(output, "InterpretedInsert ");
   if (LqhKeyReq::getScanTakeOverFlag(attrLen)) fprintf(output, "ScanTakeOver ");
   if (LqhKeyReq::getReorgFlag(attrLen))
     fprintf(output, "reorg: %u ", LqhKeyReq::getReorgFlag(attrLen));

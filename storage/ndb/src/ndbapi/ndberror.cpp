@@ -894,7 +894,7 @@ ErrorBundle ErrorCodes[] = {
   { 4570, DMEC, AE, "Bad register, only register 0-7 exists" },
   { 4571, DMEC, AE, "Append/Partial write can only work with version >= 24.10.0" },
   { 4572, DMEC, AE, "Rate Limits and Quotas can only work with version >= 24.10.0" },
-
+  { 4573, DMEC, AE, "Interpreted Insert can only work with version >= 24.10.0 and Write requests" },
 
   { 4200, DMEC, AE, "Status Error when defining an operation" },
   { 4201, DMEC, AE, "Variable Arrays not yet supported" },

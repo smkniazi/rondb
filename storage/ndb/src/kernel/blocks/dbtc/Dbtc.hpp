@@ -1562,6 +1562,7 @@ class Dbtc : public SimulatedBlock {
      * 0 = NORMAL EXECUTION, 1 = INTERPRETED EXECUTION
      */
     Uint8 opExec;
+    Uint8 m_interpreted_insert;
     Uint8 m_read_committed_base;
     Uint8 m_noWait;
 

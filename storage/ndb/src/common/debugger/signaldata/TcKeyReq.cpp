@@ -77,6 +77,9 @@ bool printTCKEYREQ(FILE *output, const Uint32 *theData, Uint32 len,
     if(sig->getInterpretedFlag(requestInfo)){
       fprintf(output, " Interpreted");
     }
+    if(sig->getInterpretedInsertFlag(requestInfo)){
+      fprintf(output, " InterpretedInsert");
+    }
     if(sig->getDistributionKeyFlag(sig->requestInfo)){
       fprintf(output, " d-key");
     }

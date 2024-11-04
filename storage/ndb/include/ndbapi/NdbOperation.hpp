@@ -1129,7 +1129,8 @@ class NdbOperation {
        * Zart
        * TTL
        */
-      OO_TTL_IGNORE    = 0x8000
+      OO_TTL_IGNORE    = 0x8000,
+      OO_INTERPRETED_INSERT = 0x10000
     };
 
     /* An operation-specific abort option.
@@ -1552,6 +1553,8 @@ class NdbOperation {
   Uint8 theInterpretIndicator;  // Indicator of whether interpreted operation
                                 // Note that scan operations always have this
                                 // set true
+  Uint8 theInterpretInsertIndicator; // Indicator if Interpreted Insert is
+                                     // to be used
   Int8 theDistrKeyIndicator_;   // Indicates whether distr. key is used
 
   enum OP_FLAGS {
