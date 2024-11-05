@@ -6297,7 +6297,7 @@ void Dbdict::handleTabInfo(SimpleProperties::Reader &it,
     attrPtr.p->attributeDescriptor = desc;
     if (tableDesc.TTLColumnNo != RNIL &&
         attrPtr.p->attributeId == tableDesc.TTLColumnNo) {
-      ndbrequire(tableDesc.TTLSec != RNIL);
+      ndbrequire(tableDesc.TTLSec <= RNIL);
       ndbrequire(AttributeDescriptor::getType(attrPtr.p->attributeDescriptor)
                  == DictTabInfo::ExtDatetime2);
 #ifdef TTL_DEBUG
@@ -9145,6 +9145,8 @@ Dbdict::execALTER_TABLE_REQ(Signal* signal)
     impl_req->noOfNewAttr = 0;    // set these in master parse
     impl_req->newNoOfCharsets = 0;
     impl_req->newNoOfKeyAttrs = 0;
+    impl_req->ttlSec = RNIL;
+    impl_req->ttlColumnNo = RNIL;
 
     handleClientReq(signal, op_ptr, handle);
     return;
@@ -9303,6 +9305,12 @@ void Dbdict::alterTable_parse(Signal *signal, bool master, SchemaOpPtr op_ptr,
     D("alterTable_parse: obj id = " << alterTabPtr.p->m_newTable_realObjectId
                                     << " " V(*objEntry));
   }
+  impl_req->ttlSec = newTablePtr.p->ttlSec;
+  impl_req->ttlColumnNo = newTablePtr.p->ttlColumnNo;
+  g_eventLogger->info("[DICT], alterTable_parse(), AlterTableReq on Table "
+                       "%u, [%u, %u]",
+                       impl_req->tableId,
+                       impl_req->ttlSec, impl_req->ttlColumnNo);
 
   // set the new version now
   impl_req->newTableVersion =
@@ -10712,6 +10720,12 @@ void Dbdict::alterTable_toLocal(Signal *signal, SchemaOpPtr op_ptr) {
   req->noOfNewAttr = impl_req->noOfNewAttr;
   req->newNoOfCharsets = impl_req->newNoOfCharsets;
   req->newNoOfKeyAttrs = impl_req->newNoOfKeyAttrs;
+  req->ttlSec = impl_req->ttlSec;
+  req->ttlColumnNo = impl_req->ttlColumnNo;
+  g_eventLogger->info("[DICT], alterTable_toLocal(), AlterTableReq on Table "
+                       "%u, [%u, %u]",
+                       impl_req->tableId,
+                       impl_req->ttlSec, impl_req->ttlColumnNo);
 
   Callback c = {safe_cast(&Dbdict::alterTable_fromLocal), op_ptr.p->op_key};
   op_ptr.p->m_callback = c;
@@ -10730,7 +10744,10 @@ void Dbdict::alterTable_toLocal(Signal *signal, SchemaOpPtr op_ptr) {
 
   BlockReference blockRef = numberToRef(blockNo, getOwnNodeId());
 
-  if (blockNo == DBLQH && req->noOfNewAttr > 0) {
+  bool ttl_changed = (AlterTableReq::getTTLSecFlag(req->changeMask) ||
+                      AlterTableReq::getTTLColFlag(req->changeMask));
+
+  if (blockNo == DBLQH && (req->noOfNewAttr > 0 || ttl_changed)) {
     jam();
     LinearSectionPtr ptr[3];
     Uint32 newAttrData[2 * MAX_ATTRIBUTES_IN_TABLE];
@@ -10992,6 +11009,16 @@ void Dbdict::alterTable_commit(Signal *signal, SchemaOpPtr op_ptr) {
       newTablePtr.p->m_bits &= (~(TableRecord::TR_ReadBackup));
       tablePtr.p->m_bits |= save_new;
       newTablePtr.p->m_bits |= save_old;
+    }
+
+    if (AlterTableReq::getTTLSecFlag(impl_req->changeMask) ||
+        AlterTableReq::getTTLColFlag(impl_req->changeMask)) {
+      tablePtr.p->ttlSec = impl_req->ttlSec;
+      tablePtr.p->ttlColumnNo = impl_req->ttlColumnNo;
+      g_eventLogger->info("[DICT], alterTable_commit, update TTL on table "
+                           "%u, [%u, %u]",
+                           tablePtr.p->tableId,
+                           tablePtr.p->ttlSec, tablePtr.p->ttlColumnNo);
     }
   }
 

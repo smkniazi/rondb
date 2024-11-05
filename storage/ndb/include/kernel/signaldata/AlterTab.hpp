@@ -32,7 +32,7 @@
 #define JAM_FILE_ID 72
 
 struct AlterTabReq {
-  static constexpr Uint32 SignalLength = 12;
+  static constexpr Uint32 SignalLength = 14;
 
   enum RequestType {
     AlterTablePrepare = 0,  // Prepare alter table
@@ -64,6 +64,9 @@ struct AlterTabReq {
     Uint32 newNoOfKeyAttrs;
     Uint32 new_map_ptr_i;
   };
+
+  Uint32 ttlSec;
+  Uint32 ttlColumnNo;
 
   SECTION(DICT_TAB_INFO = 0);
   SECTION(FRAGMENTATION = 1);

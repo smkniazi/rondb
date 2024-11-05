@@ -4429,6 +4429,12 @@ int NdbDictInterface::compChangeMask(const NdbTableImpl &old_impl,
   } else {
     DBUG_PRINT("info", ("No ReadBackup change, val: %u", impl.m_read_backup));
   }
+  if (impl.m_ttl_sec != old_impl.m_ttl_sec) {
+    AlterTableReq::setTTLSecFlag(change_mask, true);
+  }
+  if (impl.m_ttl_col_no != old_impl.m_ttl_col_no) {
+    AlterTableReq::setTTLColFlag(change_mask, true);
+  }
 
   /*
     Check for new columns.

@@ -1697,6 +1697,8 @@ class Dbtc : public SimulatedBlock {
     Uint32 m_ttl_sec;
     Uint32 m_ttl_col_no;
     Uint32 m_primary_table_id;
+    Uint32 tmp_ttl_sec;
+    Uint32 tmp_ttl_col_no;
 
     bool checkTable(Uint32 schemaVersion) const {
       return !get_dropping() &&

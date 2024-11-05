@@ -1311,7 +1311,7 @@ class NdbDictionary {
     /*
      * Get TTL seconds
      */
-    Uint32 getTTLSec();
+    Uint32 getTTLSec() const;
 
     /*
      * Set TTL column no
@@ -1321,7 +1321,7 @@ class NdbDictionary {
     /*
      * Get TTL column no
      */
-    Uint32 getTTLColumnNo();
+    Uint32 getTTLColumnNo() const;
 
     /*
      * Is TTL enabled
