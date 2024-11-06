@@ -15,6 +15,7 @@ ARG OPEN_SSL_VERSION=3.0.14
 ARG GO_VERSION=1.20.3
 ARG JSONCPP_VERSION=1.9.5
 ARG AVRO_VERSION=1.12.0
+ARG PROMETHEUS_CPP_VERSION=1.3.0
 
 # Default build threads to 1; max is defined in Docker config (run `nproc` in Docker container)
 ARG BUILD_THREADS
@@ -146,6 +147,24 @@ RUN --mount=type=cache,target=/var/cache/apt,id=ubuntu22-apt \
     --mount=type=cache,target=/var/lib/apt/lists,id=ubuntu22-apt-lists \
     apt-get update -y \
     && apt-get install -y uuid-dev libudev-dev doxygen
+
+# Install prometheus-cpp
+RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
+    cd $DOWNLOADS_CACHE_DIR \
+    && rm -rf prometheus-cpp \
+    && git clone https://github.com/jupp0r/prometheus-cpp \
+    && cd prometheus-cpp \
+    && git checkout tags/v${PROMETHEUS_CPP_VERSION} \
+    && git submodule init \
+    && git submodule update \
+    && mkdir build \
+    && cd build \
+    && source scl_source enable gcc-toolset-12 \
+    && cmake .. -DBUILD_SHARED_LIBS=ON -DENABLE_PUSH=OFF -DENABLE_COMPRESSION=OFF \
+    && make -j$THREADS_ARG  \
+    && make install \ 
+    && cd ../.. \
+    && rm -rf prometheus-cpp
 
 RUN mkdir rondb-src rondb-bin rondb-tarball
 

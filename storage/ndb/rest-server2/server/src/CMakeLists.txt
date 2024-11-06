@@ -79,6 +79,14 @@ endif()
 find_package(Jsoncpp REQUIRED)
 find_package(Threads REQUIRED)
 
+#prometheus-cpp
+find_package(prometheus-cpp CONFIG REQUIRED)
+
+if(NOT DEFINED prometheus-cpp_VERSION)
+  message(FATAL_ERROR "prometheus-cpp_VERSION is not defined")
+endif()
+
+# openssl and crypto libs
 IF(CRYPTO_CUSTOM_LIBRARY) 
   SET(RDRS_CRYPTO_LIBRARY ${CRYPTO_CUSTOM_LIBRARY})
 ELSE()
