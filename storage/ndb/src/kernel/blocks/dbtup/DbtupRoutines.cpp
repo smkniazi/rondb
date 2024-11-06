@@ -2006,6 +2006,7 @@ int Dbtup::updateAttributes(KeyReqStruct *req_struct,
     if (likely(attributeId < numAttributes))
     {
       thrjamDebug(req_struct->jamBuffer);
+      thrjamDataDebug(req_struct->jamBuffer, attributeId);
       Uint32 attrDescriptorIndex= attributeId * ZAD_SIZE;
       Uint32 attrDescriptor = attr_descr[attrDescriptorIndex];
       Uint32 attrDes2 = attr_descr[attrDescriptorIndex + 1];
@@ -2120,8 +2121,6 @@ int Dbtup::updateAttributes(KeyReqStruct *req_struct,
         /* Appending/setPartial NULL makes no sense */
         return -(int)ZAPPEND_NULL_ERROR;
       }
-      g_eventLogger->info("(%u) ah_new: %x, word: %x",
-        instance(), ah_new.m_value, inBuffer[inBufIndex + 2]);
       Uint32 attrDescriptorIndex= attributeId * ZAD_SIZE;
       Uint32 attrDescriptor = attr_descr[attrDescriptorIndex];
       Uint32 attrDes2 = attr_descr[attrDescriptorIndex + 1];
@@ -3417,8 +3416,10 @@ int Dbtup::read_pseudo(const Uint32 *inBuffer, Uint32 inPos,
       if (attrId >= AttributeHeader::READ_INTERPRETER_OUTPUT_FIRST &&
           attrId <= AttributeHeader::READ_INTERPRETER_OUTPUT_LAST) {
         Uint32 inx = attrId - AttributeHeader::READ_INTERPRETER_OUTPUT_FIRST;
+        inx *= 2;
         outBuffer[1] = c_interpreter_output[inx];
-        sz = 1;
+        outBuffer[2] = c_interpreter_output[inx+1];
+        sz = 2;
         break;
       }
       return -ZATTRIBUTE_ID_ERROR;

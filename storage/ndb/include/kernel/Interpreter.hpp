@@ -918,7 +918,7 @@ inline Uint32 *Interpreter::getInstructionPreProcessingInfo(
    */
   processing= NONE;
   Uint32 opCode= getOpCode(*op);
-  
+
   switch( opCode )
   {
     case READ_ATTR_INTO_REG:
@@ -930,6 +930,7 @@ inline Uint32 *Interpreter::getInstructionPreProcessingInfo(
 
     case LOAD_CONST_NULL:
     case LOAD_CONST16:
+    case LOAD_OP_TYPE:
     case WRITE_INTERPRETER_OUTPUT:
       return op + 1;
     case LOAD_CONST32:

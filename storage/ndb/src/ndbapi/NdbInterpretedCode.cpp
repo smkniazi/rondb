@@ -1850,6 +1850,7 @@ int NdbInterpretedCode::compareMetaInfo(const void *va, const void *vb) {
 }
 
 int NdbInterpretedCode::finalise() {
+  if (m_error.code) return -1;
   if (m_instructions_length == 0) {
     /* We will attempt to add a single EXIT_OK instruction
      * rather than returning an error.
