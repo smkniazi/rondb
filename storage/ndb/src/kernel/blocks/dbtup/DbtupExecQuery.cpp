@@ -1309,6 +1309,7 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
     Uint32 opRef = lqhScanPtrP->scanApiOpPtr;
     Uint32 applRef = lqhScanPtrP->scanApiBlockref;
     Uint32 interpreted_exec = lqhOpPtrP->opExec;
+    Uint32 interpreted_insert = lqhOpPtrP->m_interpreted_insert;
 
     req_struct.log_size = attrBufLen;
     req_struct.attrinfo_len = attrBufLen;
@@ -1317,6 +1318,7 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
     req_struct.tc_operation_ptr = opRef;
     req_struct.rec_blockref = applRef;
     req_struct.interpreted_exec = interpreted_exec;
+    req_struct.interpreted_insert = interpreted_insert;
     req_struct.m_nr_copy_or_redo = 0;
     req_struct.m_use_rowid = 0;
 #ifdef ERROR_INSERT
@@ -1364,6 +1366,8 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
     Uint32 dirtyOp = lqhOpPtrP->dirtyOp;
     Uint32 row_id = TupKeyReq::getRowidFlag(tupKeyReq->request);
     Uint32 interpreted_exec = TupKeyReq::getInterpretedFlag(tupKeyReq->request);
+    Uint32 interpreted_insert =
+      TupKeyReq::getInterpretedInsertFlag(tupKeyReq->request);
     Uint32 opRef = lqhOpPtrP->applOprec;
     Uint32 applRef = lqhOpPtrP->applRef;
 
@@ -1374,6 +1378,7 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
     req_struct.tc_operation_ptr = opRef;
     req_struct.rec_blockref = applRef;
     req_struct.interpreted_exec = interpreted_exec;
+    req_struct.interpreted_insert = interpreted_insert;
 
     req_struct.m_prio_a_flag = 0;
     req_struct.m_nr_copy_or_redo =
@@ -3202,27 +3207,43 @@ int Dbtup::handleInsertReq(Signal* signal,
     }
   }
   if (unlikely(req_struct->interpreted_exec)) {
-    jam();
-
-    req_struct->m_write_log_memory_in_update = true;
-    req_struct->log_size = 0;
-
-    /* Interpreted insert only processes the finalUpdate section */
-    const Uint32 RinitReadLen = cinBuffer[0];
-    const Uint32 RexecRegionLen = cinBuffer[1];
-    const Uint32 RfinalUpdateLen = cinBuffer[2];
-    jamData(RfinalUpdateLen);
-    // const Uint32 RfinalRLen= cinBuffer[3];
-    // const Uint32 RsubLen= cinBuffer[4];
-
-    const Uint32 offset = 5 + RinitReadLen + RexecRegionLen;
-
-    if (unlikely((res = updateAttributes(req_struct, &cinBuffer[offset],
-              RfinalUpdateLen)) < 0))
-    {
+    if (likely(req_struct->interpreted_insert)) {
+      /**
+       * To support actions like INCR using Redis server and APPEND operations
+       * it is important to be able to have a complex interpreted program using
+       * Write operations. The interpreted program must in this be able to
+       * handle writes where the column had no value before its execution.
+       * This makes it possible to send efficient Attrinfo, other solutions
+       * would require sending the column data in several different places.
+       *
+       * This is a new RonDB feature as of RonDB 24.10.
+       *
+       * To support this we have a new instruction that loads the operation
+       * type into a register.
+       */
+      if (unlikely(interpreterStartLab(signal, req_struct) == -1)) return -1;
+    } else {
       jam();
-      terrorCode = Uint32(-res);
-      goto update_error;
+
+      req_struct->m_write_log_memory_in_update = true;
+      req_struct->log_size = 0;
+
+      /* Interpreted insert only processes the finalUpdate section */
+      const Uint32 RinitReadLen = cinBuffer[0];
+      const Uint32 RexecRegionLen = cinBuffer[1];
+      const Uint32 RfinalUpdateLen = cinBuffer[2];
+      jamData(RfinalUpdateLen);
+      // const Uint32 RfinalRLen= cinBuffer[3];
+      // const Uint32 RsubLen= cinBuffer[4];
+  
+      const Uint32 offset = 5 + RinitReadLen + RexecRegionLen;
+  
+      if (unlikely((res = updateAttributes(req_struct, &cinBuffer[offset],
+                RfinalUpdateLen)) < 0)) {
+        jam();
+        terrorCode = Uint32(-res);
+        goto update_error;
+      }
     }
   } else {
     /* Normal insert */
@@ -4144,6 +4165,7 @@ int Dbtup::interpreterStartLab(Signal *signal, KeyReqStruct *req_struct) {
    */
   req_struct->log_size = 0;
   req_struct->m_write_log_memory_in_update = true;
+  Uint32 op_type = regOperPtr->op_type;
   if (likely(((RtotalLen + 5) <= RattrinbufLen) &&
         (RattrinbufLen >= 5) &&
         (RtotalLen + 5 < ZATTR_BUFFER_SIZE)))
@@ -4156,7 +4178,7 @@ int Dbtup::interpreterStartLab(Signal *signal, KeyReqStruct *req_struct) {
     /* ---------------------------------------------------------------- */
 
     if (likely(RinitReadLen > 0)) {
-      if (likely(regOperPtr->op_type == ZREAD)) {
+      if (likely(op_type == ZREAD)) {
         jamDebug();
         RinstructionCounter += RinitReadLen;
       } else {
@@ -4210,7 +4232,7 @@ int Dbtup::interpreterStartLab(Signal *signal, KeyReqStruct *req_struct) {
       }
     }
 
-    if (((req_struct->log_size > 0) && (regOperPtr->op_type != ZDELETE)) ||
+    if (((req_struct->log_size > 0) && (op_type != ZDELETE)) ||
          (RfinalUpdateLen > 0)) {
       jamDebug();
       /* Operation updates row,
@@ -4235,7 +4257,7 @@ int Dbtup::interpreterStartLab(Signal *signal, KeyReqStruct *req_struct) {
       // We can also apply a set of updates without any conditions as part
       // of the interpreted execution.
       /* ---------------------------------------------------------------- */
-      if (regOperPtr->op_type == ZUPDATE) {
+      if (op_type == ZUPDATE || op_type == ZINSERT) {
         jamDebug();
         TnoDataRW= updateAttributes(req_struct,
             &cinBuffer[RinstructionCounter],
@@ -4569,6 +4591,13 @@ int Dbtup::interpreterNextLab(Signal* signal,
       jamDebug();
       jamDataDebug(opCode);
       switch (opCode) {
+        case Interpreter::LOAD_OP_TYPE:
+        {
+          Uint32 op_type = req_struct->operPtrP->op_type;
+	  TregMemBuffer[theRegister] = NOT_NULL_INDICATOR;
+	  * (Int64*)(TregMemBuffer+theRegister+2) = op_type & 7;
+	  break;
+        }
         case Interpreter::READ_ATTR_INTO_REG:
           RnoOfInstructions += 3; //A bit heavier instruction
           /* ---------------------------------------------------------------- */
@@ -4640,6 +4669,8 @@ int Dbtup::interpreterNextLab(Signal* signal,
           Uint32 TattrId = theInstruction >> 16;
           Uint32 TattrDescrIndex = (TattrId * ZAD_SIZE);
           Uint32 TregType= TregMemBuffer[theRegister];
+          jamDebug();
+          jamDataDebug(TattrId);
 
           if (unlikely(TattrId >= req_struct->tablePtrP->m_no_of_attributes)) {
             return TUPKEY_abort(req_struct, ZATTRIBUTE_ID_ERROR);
@@ -4664,7 +4695,7 @@ int Dbtup::interpreterNextLab(Signal* signal,
           TdataForUpdate[1] = TregMemBuffer[theRegister + 2];
           TdataForUpdate[2] = TregMemBuffer[theRegister + 3];
           Tlen = TattrNoOfWords + 1;
-          if (Toptype == ZUPDATE) {
+          if (Toptype == ZUPDATE || Toptype == ZINSERT) {
             if (TattrNoOfWords <= 2) {
               if (TattrNoOfWords == 1) {
                 // arithmetic conversion if big-endian
@@ -4702,6 +4733,8 @@ int Dbtup::interpreterNextLab(Signal* signal,
         {
           RnoOfInstructions += 3; //A bit heavier instruction
           Uint32 attrId = theInstruction >> 16;
+          jamDebug();
+          jamDataDebug(attrId);
           Uint32 attrDescrIndex = (attrId * ZAD_SIZE);
           Uint32 TsizeRegister = Interpreter::getReg2(theInstruction) << 2;
           Uint32 TregOffsetType = TregMemBuffer[theRegister];
@@ -4729,7 +4762,7 @@ int Dbtup::interpreterNextLab(Signal* signal,
                        (Tsize > attrNoOfBytes))) {
             return TUPKEY_abort(req_struct, ZWRITE_SIZE_TOO_BIG_ERROR);
           }
-          if (unlikely(Toptype != ZUPDATE)) {
+          if (unlikely(Toptype != ZUPDATE && Toptype != ZINSERT)) {
             return TUPKEY_abort(req_struct, ZTRY_TO_UPDATE_ERROR);
           }
           /**
@@ -4798,7 +4831,7 @@ int Dbtup::interpreterNextLab(Signal* signal,
           if (unlikely(Tsize == Int64(0))) {
             return TUPKEY_abort(req_struct, ZAPPEND_NULL_ERROR);
           }
-          if (unlikely(Toptype != ZUPDATE)) {
+          if (unlikely(Toptype != ZUPDATE && Toptype != ZINSERT)) {
             return TUPKEY_abort(req_struct, ZTRY_TO_UPDATE_ERROR);
           }
           if ((array != NDB_ARRAYTYPE_SHORT_VAR) &&
@@ -5060,7 +5093,7 @@ int Dbtup::interpreterNextLab(Signal* signal,
            */
           Uint32 valueType = TregMemBuffer[theRegister];
           Uint32 outputInx = theInstruction >> 16;
-	  Int64 value = * (Int64*)(TregMemBuffer + theRegister + 2);
+	  Int64 *value_ptr = (Int64*)(TregMemBuffer + theRegister + 2);
           if (unlikely((valueType == NULL_INDICATOR))) {
 #ifdef TRACE_INTERPRETER
             g_eventLogger->info("(%u)Reg %u NULL, LINE: %u",
@@ -5070,20 +5103,16 @@ int Dbtup::interpreterNextLab(Signal* signal,
 #endif
 	    return TUPKEY_abort(req_struct, ZREGISTER_INIT_ERROR);
           }
-          Int64 upper_value = value >> 32;
-          if (upper_value != 0) {
-	    return TUPKEY_abort(req_struct, ZVALUE_OVERFLOW_OUTPUT_REGISTER);
-          }
           if (unlikely(outputInx >= AttributeHeader::MaxInterpreterOutputIndex)) {
 	    return TUPKEY_abort(req_struct, ZOUTPUT_INDEX_ERROR);
           }
-          Uint32 value32 = Uint32(value);
-          c_interpreter_output[outputInx] = value32;
+          outputInx *= 2;
+          memcpy(&c_interpreter_output[outputInx], value_ptr, 8);
 #ifdef TRACE_INTERPRETER
-          g_eventLogger->info("(%u)write_interpreter_output[%u] = %u",
+          g_eventLogger->info("(%u)write_interpreter_output[%u] = %lld",
                               instance(),
-                              outputInx,
-                              value32);
+                              outputInx/2,
+                              *value_ptr);
 #endif
           break;
         }
@@ -5517,11 +5546,13 @@ int Dbtup::interpreterNextLab(Signal* signal,
             return TUPKEY_abort(req_struct, ZMEMORY_OFFSET_ERROR);
           }
           {
+            char *memory_start = &TheapMemoryChar[memoryOffset];
+            char *memory_end = memory_start + size;
             char *end_ptr = nullptr;
-            Int64 val = strtoll(&TheapMemoryChar[memoryOffset],
+            Int64 val = strtoll(memory_start,
                                 &end_ptr,
                                 10);
-            if (unlikely(errno == ERANGE || end_ptr != nullptr)) {
+            if (unlikely(errno == ERANGE || end_ptr != memory_end)) {
               return TUPKEY_abort(req_struct, ZINVALID_LONG_LONG_STRING);
             }
             * (Int64*)(TregMemBuffer+destValReg + 2) = val;
@@ -6063,7 +6094,6 @@ int Dbtup::interpreterNextLab(Signal* signal,
         }
         case Interpreter::BRANCH_EQ_REG_CONST:
         {
-          jamDebug();
           Uint32 TleftType = TregMemBuffer[theRegister];
           Int64 Tleft0 = * (Int64*)(TregMemBuffer + theRegister + 2);
           Int64 Tright0 = Int64(((theInstruction >> 9) & 0x3F));

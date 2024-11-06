@@ -440,6 +440,9 @@ void Dbtup::early_tupkey_error(KeyReqStruct *req_struct) {
 void Dbtup::tupkeyErrorLab(KeyReqStruct *req_struct) {
   Operationrec *const regOperPtr = req_struct->operPtrP;
   Uint32 undo_buffer_space = regOperPtr->m_undo_buffer_space;
+  if (regOperPtr->op_type == ZINSERT && regOperPtr->is_first_operation()) {
+    regOperPtr->m_tuple_location.setNull();
+  }
   bool is_tuple_loc_null = regOperPtr->m_tuple_location.isNull();
 
   set_trans_state(regOperPtr, TRANS_IDLE);
@@ -456,6 +459,7 @@ void Dbtup::tupkeyErrorLab(KeyReqStruct *req_struct) {
 
   Uint32 *ptr = 0;
   if (!is_tuple_loc_null) {
+    jamDebug();
     PagePtr tmp;
     ptr = get_ptr(&tmp, &regOperPtr->m_tuple_location, prepare_tabptr.p);
   }

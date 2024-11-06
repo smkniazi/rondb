@@ -481,6 +481,7 @@ int NdbOperation::prepareSend(Uint32 aTC_ConnectPtr, Uint64 aTransId,
   tTransId2 = (Uint32)(aTransId >> 32);
 
   Uint8 tInterpretIndicator = theInterpretIndicator;
+  Uint8 tInterpretInsertIndicator = theInterpretInsertIndicator;
 
   /**
    * A dirty read, can not abort the transaction
@@ -493,6 +494,7 @@ int NdbOperation::prepareSend(Uint32 aTC_ConnectPtr, Uint64 aTransId,
 
   tReqInfo = 0;
   tcKeyReq->setInterpretedFlag(tReqInfo, tInterpretIndicator);
+  tcKeyReq->setInterpretedInsertFlag(tReqInfo, tInterpretInsertIndicator);
 
   Uint8 abortOption =
       (ao == DefaultAbortOption) ? (Uint8)m_abortOption : (Uint8)ao;
@@ -1379,6 +1381,7 @@ Uint32 NdbOperation::fillTcKeyReqHdr(TcKeyReq *tcKeyReq, Uint32 connectPtr,
 
   UintR reqInfo = 0;
   TcKeyReq::setInterpretedFlag(reqInfo, (m_interpreted_code != nullptr));
+  TcKeyReq::setInterpretedInsertFlag(reqInfo, theInterpretInsertIndicator);
   // AbortOption set later in prepareSendNdbRecord()
   tcKeyReq->requestInfo = reqInfo;
 

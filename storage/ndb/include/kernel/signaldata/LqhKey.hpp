@@ -114,6 +114,7 @@ class LqhKeyReq {
   static Uint8 getLockType(const UintR &requestInfo);
   static Uint8 getDirtyFlag(const UintR &requestInfo);
   static Uint8 getInterpretedFlag(const UintR &requestInfo);
+  static Uint8 getInterpretedInsertFlag(const UintR &requestInfo);
   static Uint8 getSimpleFlag(const UintR &requestInfo);
   static Uint8 getOperation(const UintR &requestInfo);
   static Uint8 getSeqNoReplica(const UintR &requestInfo);
@@ -145,6 +146,7 @@ class LqhKeyReq {
   static void setLockType(UintR &requestInfo, UintR val);
   static void setDirtyFlag(UintR &requestInfo, UintR val);
   static void setInterpretedFlag(UintR &requestInfo, UintR val);
+  static void setInterpretedInsertFlag(UintR &requestInfo, UintR val);
   static void setSimpleFlag(UintR &requestInfo, UintR val);
   static void setOperation(UintR &requestInfo, UintR val);
   static void setSeqNoReplica(UintR &requestInfo, UintR val);
@@ -241,8 +243,8 @@ class LqhKeyReq {
      * TTL
      */
     RI_TTL_IGNORE_SHIFT = 6,
+    RI_INTERPRETED_INSERT_SHIFT = 7,
     /* Currently unused */
-    RI_CLEAR_SHIFT7 = 7,
     RI_CLEAR_SHIFT8 = 8,
     RI_CLEAR_SHIFT9 = 9,
 
@@ -318,7 +320,9 @@ class LqhKeyReq {
  * U = Operation came from UTIL - 1 Bit (2)
  * w = NoWait flag            = 1 Bit (3)
  * Q = Query Thread Flag      = 1 Bit (4)
- * A = Replica Applier        = 1 Bit (5)
+ * R = Replica Applier        = 1 Bit (5)
+ * L = TTL flag               = 1 Bit (6)
+ * N = Interpreted Insert flag= 1 Bit (7)
 
  * Short LQHKEYREQ :
  *             1111111111222222222233
@@ -329,7 +333,7 @@ class LqhKeyReq {
  * Long LQHKEYREQ :
  *             1111111111222222222233
  *   01234567890123456789012345678901
- *   FTUwQA    llgnqpdisooorrAPDcumxz
+ *   FTUwQRLN  llgnqpdisooorrAPDcumxz
  *
  */
 
@@ -395,6 +399,10 @@ inline Uint8 LqhKeyReq::getDirtyFlag(const UintR &requestInfo) {
 
 inline Uint8 LqhKeyReq::getInterpretedFlag(const UintR &requestInfo) {
   return (requestInfo >> RI_INTERPRETED_SHIFT) & 1;
+}
+
+inline Uint8 LqhKeyReq::getInterpretedInsertFlag(const UintR &requestInfo) {
+  return (requestInfo >> RI_INTERPRETED_INSERT_SHIFT) & 1;
 }
 
 inline Uint8 LqhKeyReq::getSimpleFlag(const UintR &requestInfo) {
@@ -491,6 +499,11 @@ inline void LqhKeyReq::setDirtyFlag(UintR &requestInfo, UintR val) {
 inline void LqhKeyReq::setInterpretedFlag(UintR &requestInfo, UintR val) {
   ASSERT_BOOL(val, "LqhKeyReq::setInterpretedFlag");
   requestInfo |= (val << RI_INTERPRETED_SHIFT);
+}
+
+inline void LqhKeyReq::setInterpretedInsertFlag(UintR &requestInfo, UintR val) {
+  ASSERT_BOOL(val, "LqhKeyReq::setInterpretedInsertFlag");
+  requestInfo |= (val << RI_INTERPRETED_INSERT_SHIFT);
 }
 
 inline void LqhKeyReq::setSimpleFlag(UintR &requestInfo, UintR val) {
@@ -633,8 +646,7 @@ inline UintR LqhKeyReq::getDisableFkConstraints(const UintR &requestInfo) {
 }
 
 inline UintR LqhKeyReq::getLongClearBits(const UintR &requestInfo) {
-  const Uint32 mask = (1 << RI_CLEAR_SHIFT7) | (1 << RI_CLEAR_SHIFT8) |
-                      (1 << RI_CLEAR_SHIFT9);
+  const Uint32 mask = (1 << RI_CLEAR_SHIFT8) | (1 << RI_CLEAR_SHIFT9);
 
   return (requestInfo & mask);
 }

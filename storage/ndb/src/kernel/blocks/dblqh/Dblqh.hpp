@@ -2903,6 +2903,7 @@ class Dblqh : public SimulatedBlock {
     Uint8 nextSeqNoReplica;
     Uint8 opSimple;
     Uint8 opExec;
+    Uint8 m_interpreted_insert;
     Uint8 opAgg;
     Uint8 operation;
     Uint8 m_reorg;

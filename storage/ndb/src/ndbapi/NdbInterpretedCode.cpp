@@ -728,6 +728,14 @@ NdbInterpretedCode::load_const_u16(Uint32 RegDest, Uint32 Constant) {
   return add1(Interpreter::LoadConst16((RegDest), Constant));
 }
 
+int
+NdbInterpretedCode::load_op_type(Uint32 RegDest) {
+  if (RegDest >= MaxReg)
+    return error(BadRegister);
+  return add1(Interpreter::LoadOpType(RegDest));
+}
+
+
 static inline
 void
 zero32(Uint8* dstPtr, const Uint32 len) {
@@ -1842,6 +1850,7 @@ int NdbInterpretedCode::compareMetaInfo(const void *va, const void *vb) {
 }
 
 int NdbInterpretedCode::finalise() {
+  if (m_error.code) return -1;
   if (m_instructions_length == 0) {
     /* We will attempt to add a single EXIT_OK instruction
      * rather than returning an error.

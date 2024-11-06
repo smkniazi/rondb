@@ -9006,6 +9006,8 @@ void Dblqh::execLQHKEYREQ(Signal *signal) {
   regTcPtr->lastReplicaNo = LqhKeyReq::getLastReplicaNo(Treqinfo);
   regTcPtr->dirtyOp = LqhKeyReq::getDirtyFlag(Treqinfo);
   regTcPtr->opExec = LqhKeyReq::getInterpretedFlag(Treqinfo);
+  regTcPtr->m_interpreted_insert =
+    LqhKeyReq::getInterpretedInsertFlag(Treqinfo);
   regTcPtr->opSimple = LqhKeyReq::getSimpleFlag(Treqinfo);
   regTcPtr->seqNoReplica = LqhKeyReq::getSeqNoReplica(Treqinfo);
   regTcPtr->m_use_rowid = LqhKeyReq::getRowidFlag(Treqinfo);
@@ -11540,6 +11542,7 @@ Dblqh::acckeyconf_tupkeyreq(Signal* signal, TcConnectionrec* regTcPtr,
   Uint32 row_page_idx = regTcPtr->m_row_id.m_page_idx;
   Uint32 use_rowid = regTcPtr->m_use_rowid;
   Uint32 interpreted_exec = regTcPtr->opExec;
+  Uint32 interpreted_insert_exec = regTcPtr->m_interpreted_insert;
 
   tupKeyReq->keyRef1 = page_no;
   tupKeyReq->keyRef2 = page_idx;
@@ -11547,6 +11550,7 @@ Dblqh::acckeyconf_tupkeyreq(Signal* signal, TcConnectionrec* regTcPtr,
   tupKeyReq->m_row_id_page_idx = row_page_idx;
   TupKeyReq::setRowidFlag(Ttupreq, use_rowid);
   TupKeyReq::setInterpretedFlag(Ttupreq, interpreted_exec);
+  TupKeyReq::setInterpretedInsertFlag(Ttupreq, interpreted_insert_exec);
   tupKeyReq->request = Ttupreq;
 
   TRACE_OP(regTcPtr, "TUPKEYREQ");
@@ -11572,6 +11576,7 @@ Dblqh::acckeyconf_tupkeyreq(Signal* signal, TcConnectionrec* regTcPtr,
    * use interpreted mode. The next replica will receive a normal write.
    * --------------------------------------------------------------------- */
   regTcPtr->opExec = 0;
+  regTcPtr->m_interpreted_insert = 0;
 
 #ifdef ERROR_INSERT
   /* Ensure c_executing_redo_log isn't set when a read happens */
@@ -19678,6 +19683,7 @@ void Dblqh::initScanTc(const ScanFragReq *req, Uint32 transid1, Uint32 transid2,
   regTcPtr->m_dealloc_data.m_dealloc_ref_count = RNIL;
   regTcPtr->operation = ZREAD;
   regTcPtr->opExec = 0;  // Default 'not interpret', set later if needed
+  regTcPtr->m_interpreted_insert = 0;
   regTcPtr->opAgg = 0; // set it with opExec later
   regTcPtr->abortState = TcConnectionrec::ABORT_IDLE;
   regTcPtr->m_flags = 0;
@@ -22574,6 +22580,7 @@ void Dblqh::initCopyTc(Signal *signal, Operation_t op,
                        TcConnectionrec *regTcPtr) {
   regTcPtr->operation = ZREAD;
   regTcPtr->opExec = 0; /* NOT INTERPRETED MODE */
+  regTcPtr->m_interpreted_insert = 0;
   regTcPtr->schemaVersion = scanptr.p->scanSchemaVersion;
   Uint32 reqinfo = 0;
   LqhKeyReq::setDirtyFlag(reqinfo, 1);
@@ -33302,6 +33309,7 @@ void Dblqh::initReqinfoExecSr(Signal *signal,
   regTcPtr->lastReplicaNo = 0;
   regTcPtr->nextSeqNoReplica = 0;
   regTcPtr->opExec = 0; /* NOT INTERPRETED MODE */
+  regTcPtr->m_interpreted_insert = 0;
   regTcPtr->readlenAi = 0;
   regTcPtr->nodeAfterNext[0] = ZNIL;
   regTcPtr->nodeAfterNext[1] = ZNIL;

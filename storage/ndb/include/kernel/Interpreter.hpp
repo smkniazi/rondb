@@ -181,7 +181,8 @@ class Interpreter {
   static constexpr Uint32 CONVERT_SIZE = 60;
   static constexpr Uint32 WRITE_SIZE_MEM =
                           CONVERT_SIZE + OVERFLOW_OPCODE;
-  /* 61-62 free */
+  static constexpr Uint32 LOAD_OP_TYPE = 61;
+  /* 62 free */
 
   static constexpr Uint32 SPECIAL_INSTR = 63;
 
@@ -218,6 +219,8 @@ class Interpreter {
   static Uint32 LoadConstMem(Uint32 RegMemoryOffset,
                              Uint32 RegSize,
                              Uint16 ConstantSize); //Value in words after
+
+  static Uint32 LoadOpType(Uint32 Register);
 
   static Uint32 Add(Uint32 DstReg, Uint32 SrcReg1, Uint32 SrcReg2);
   static Uint32 Sub(Uint32 DstReg, Uint32 SrcReg1, Uint32 SrcReg2);
@@ -495,6 +498,10 @@ Interpreter::LoadConstMem(Uint32 RegisterOffset,
          (RegSize << 9) +
          (ConstantSize << 16) +
          LOAD_CONST_MEM;
+}
+
+inline Uint32 Interpreter::LoadOpType(Uint32 Register) {
+  return (Register << 6) + LOAD_OP_TYPE;
 }
 
 inline Uint32 Interpreter::Add(Uint32 Dcoleg, Uint32 SrcReg1, Uint32 SrcReg2) {
@@ -911,7 +918,7 @@ inline Uint32 *Interpreter::getInstructionPreProcessingInfo(
    */
   processing= NONE;
   Uint32 opCode= getOpCode(*op);
-  
+
   switch( opCode )
   {
     case READ_ATTR_INTO_REG:
@@ -923,6 +930,7 @@ inline Uint32 *Interpreter::getInstructionPreProcessingInfo(
 
     case LOAD_CONST_NULL:
     case LOAD_CONST16:
+    case LOAD_OP_TYPE:
     case WRITE_INTERPRETER_OUTPUT:
       return op + 1;
     case LOAD_CONST32:

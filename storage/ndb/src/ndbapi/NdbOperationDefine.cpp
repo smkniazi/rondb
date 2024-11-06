@@ -1450,6 +1450,15 @@ int NdbOperation::handleOperationOptions(const OperationType type,
             op->theNdbCon->getNdb()->getMinDbNodeVersion())) {
       return 4003;
     }
+    /* Interpreted insert onlys supported in 24.10.0 and above */
+    if (opts->optionsPresent & OperationOptions::OO_INTERPRETED_INSERT) {
+      if (type != WriteRequest ||
+          !ndbd_interpreted_insert_supported(
+              op->theNdbCon->getNdb()->getMinDbNodeVersion())) {
+        return 4573;
+      }
+      op->theInterpretInsertIndicator = 1;
+    }
 
     /* Check the program's for the same table as the
      * operation, within a major version number

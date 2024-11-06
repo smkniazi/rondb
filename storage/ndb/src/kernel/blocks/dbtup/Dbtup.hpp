@@ -2070,6 +2070,7 @@ Uint32 cnoOfMaxAllocatedTriggerRec;
 
     bool dirty_op;
     bool interpreted_exec;
+    bool interpreted_insert;
     bool last_row;
     bool m_use_rowid;
     bool m_nr_copy_or_redo;

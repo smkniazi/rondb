@@ -1005,4 +1005,18 @@ ndbd_partial_update_supported(Uint32 v)
   return v >= NDBD_PARTIAL_UPDATE;
 }
 
+/*
+ * To better handle Write operations we now support interpreted execution
+ * even if it becomes and Insert operation.
+ */
+#define NDBD_INTERPRETED_INSERT NDB_MAKE_VERSION(24, 10, 0)
+static
+inline
+bool
+ndbd_interpreted_insert_supported(Uint32 v)
+{
+  return v >= NDBD_INTERPRETED_INSERT;
+}
+
+
 #endif
