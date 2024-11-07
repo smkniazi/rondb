@@ -3368,10 +3368,7 @@ void Dbtc::initApiConnectRec(Signal *signal, ApiConnectRecord *const regApiPtr,
                                     loop_count,
                                     true);
   }
-  else
-  {
-    regApiPtr->m_start_ticks = getHighResTimer();
-  }
+  regApiPtr->m_start_ticks = getHighResTimer();
   regApiPtr->immediateTriggerId = RNIL;
 
   c_counters.ctransCount++;
@@ -5467,6 +5464,7 @@ void Dbtc::sendlqhkeyreq(Signal *signal, BlockReference TBRef,
   regTcPtr->numFiredTriggers = 0;
   regTcPtr->triggerExecutionCount = 0;
   regTcPtr->m_start_ticks = getHighResTimer();
+  g_eventLogger->info("LQHKEYREQ: start_ticks = %llu", regTcPtr->m_start_ticks.getUint64());
 
   {
     /* Build long LQHKeyReq using Key + AttrInfo sections */
@@ -6419,9 +6417,11 @@ void Dbtc::execLQHKEYCONF(Signal *signal) {
   }
   bool do_releaseTcCon = false;
   TcConnectRecordPtr save_tcConnectptr;
-  if (TdirtyOp == ZTRUE) {
+  if (unlikely(TdirtyOp == ZTRUE)) {
     UintR Tlqhkeyreqrec = regApiPtr.p->lqhkeyreqrec;
     jam();
+    do_releaseTcCon = true;
+    save_tcConnectptr = tcConnectptr;
     releaseDirtyWrite(signal, apiConnectptr);
     regApiPtr.p->lqhkeyreqrec = Tlqhkeyreqrec - 1;
   } else if (Toperation == ZREAD && TopSimple) {
@@ -8890,10 +8890,6 @@ void Dbtc::releaseDirtyWrite(Signal *signal,
                              ApiConnectRecordPtr const apiConnectptr) {
   clearCommitAckMarker(apiConnectptr.p, tcConnectptr.p);
   unlinkReadyTcCon(apiConnectptr.p);
-  Uint32 dummy = 0;
-  releaseTcCon(signal, dummy, true, apiConnectptr.p);
-  checkPoolShrinkNeed(DBTC_CONNECT_RECORD_TRANSIENT_POOL_INDEX,
-                      tcConnectRecord);
   ApiConnectRecord *const regApiPtr = apiConnectptr.p;
   if (regApiPtr->apiConnectstate == CS_START_COMMITTING) {
     if (regApiPtr->tcConnect.isEmpty()) {
@@ -20857,7 +20853,6 @@ void Dbtc::execFIRE_TRIG_ORD(Signal *signal) {
 
   if (unlikely(transPtr.i == RNIL) ||
       unlikely(!c_apiConnectRecordPool.getValidPtr(transPtr))) {
-    jam();
     /* Looks like the connect record was released
      * Treat as a bad transid
      */

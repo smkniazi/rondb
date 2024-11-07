@@ -1552,6 +1552,7 @@ int NdbOperation::handleOperationOptions(const OperationType type,
   if (opts->optionsPresent & OperationOptions::OO_DIRTY_FLAG)
   {
     op->theDirtyIndicator = 1;
+    op->theSimpleIndicator = 1;
   }
   return 0;
 }
