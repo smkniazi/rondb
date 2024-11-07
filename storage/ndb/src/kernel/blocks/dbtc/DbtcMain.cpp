@@ -2868,6 +2868,13 @@ Dbtc::TCKEY_abort(Signal* signal, int place, ApiConnectRecordPtr const apiConnec
       abortErrorLab(signal, apiConnectptr);
       return;
     }
+    case 70:
+    {
+      jam();
+      terrorCode = ZDIRTY_OPERATION_ERROR;
+      abortErrorLab(signal, apiConnectptr);
+      return;
+    }
     default:
       jam();
       systemErrorLab(signal, __LINE__);
@@ -4188,6 +4195,14 @@ void Dbtc::execTCKEYREQ(Signal *signal) {
   regCachePtr->distributionKeyIndicator = TDistrKeyFlag;
   regCachePtr->m_no_disk_flag = TNoDiskFlag;
 
+  if (TDirtyFlag &&
+      (!(TOperationType == ZREAD ||
+         (TOperationType == ZWRITE &&
+          TSimpleFlag)))) {
+    releaseSections(handle);
+    TCKEY_abort(signal, 70, apiConnectptr);
+    return;
+  }
   Uint8 TexecuteFlag        = TexecFlag;
   Uint8 Treorg              = TcKeyReq::getReorgFlag(Treqinfo);
   Uint8 batchSafe           = TcKeyReq::getBatchSafeFlag(Treqinfo);

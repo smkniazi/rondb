@@ -514,6 +514,7 @@ ErrorBundle ErrorCodes[] = {
   { 1867,  DMEC, AE, "Invalid const type in LoadConst, check error log on data node for more details" },
   { 1868,  DMEC, AE, "Invalid Operation in aggregation interpreter, check error log on data node for more details" },
   { 1869,  DMEC, AE, "Error in aggregation interpreter, check error log on data node for more details" },
+  { 2200,  DMEC, AE, "Dirty reads and dirty writes are supported, not other operation types" },
 
   /** 
    * Scan application errors
