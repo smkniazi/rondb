@@ -1549,6 +1549,9 @@ int NdbOperation::handleOperationOptions(const OperationType type,
   {
     op->m_flags |= OF_TTL_IGNORE;
   }
-
+  if (opts->optionsPresent & OperationOptions::OO_DIRTY_FLAG)
+  {
+    op->theDirtyIndicator = 1;
+  }
   return 0;
 }
