@@ -11470,6 +11470,7 @@ void Dblqh::continueACCKEYCONF(Signal *signal, Uint32 localKey1,
 
     ndbassert((is_ttl_table(regTcPtr->tableref) ||
               regTcPtr->seqNoReplica == 0) ||
+              regTcPtr->dirtyOp ||
               regTcPtr->activeCreat == Fragrecord::AC_NR_COPY);
     Uint32 op = signal->theData[1];
     Uint32 requestInfo = regTcPtr->reqinfo;
@@ -12372,6 +12373,13 @@ void Dblqh::packLqhkeyreqLab(Signal *signal,
   UintR TotReclenAi = 0;
   LqhKeyReq::setReorgFlag(TotReclenAi, regTcPtr->m_reorg);
 
+  if (unlikely(regTcPtr->dirtyOp)) {
+    /* Only supports replication of dirty write operations */
+    ndbrequire(regTcPtr->operation == ZINSERT ||
+               regTcPtr->operation == ZUPDATE);
+    LqhKeyReq::setDirtyFlag(Treqinfo, 1);
+    LqhKeyReq::setOperation(Treqinfo, ZWRITE);
+  }
   /* -------------------------------------------------------------------------
    */
   /* WE ARE NOW PREPARED TO SEND THE LQHKEYREQ. WE HAVE TO DECIDE IF ATTRINFO */

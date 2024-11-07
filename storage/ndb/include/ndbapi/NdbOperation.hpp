@@ -1130,7 +1130,8 @@ class NdbOperation {
        * TTL
        */
       OO_TTL_IGNORE    = 0x8000,
-      OO_INTERPRETED_INSERT = 0x10000
+      OO_INTERPRETED_INSERT = 0x10000,
+      OO_DIRTY_FLAG = 0x20000
     };
 
     /* An operation-specific abort option.

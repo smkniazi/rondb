@@ -2868,6 +2868,13 @@ Dbtc::TCKEY_abort(Signal* signal, int place, ApiConnectRecordPtr const apiConnec
       abortErrorLab(signal, apiConnectptr);
       return;
     }
+    case 70:
+    {
+      jam();
+      terrorCode = ZDIRTY_OPERATION_ERROR;
+      abortErrorLab(signal, apiConnectptr);
+      return;
+    }
     default:
       jam();
       systemErrorLab(signal, __LINE__);
@@ -3368,10 +3375,7 @@ void Dbtc::initApiConnectRec(Signal *signal, ApiConnectRecord *const regApiPtr,
                                     loop_count,
                                     true);
   }
-  else
-  {
-    regApiPtr->m_start_ticks = getHighResTimer();
-  }
+  regApiPtr->m_start_ticks = getHighResTimer();
   regApiPtr->immediateTriggerId = RNIL;
 
   c_counters.ctransCount++;
@@ -4191,6 +4195,14 @@ void Dbtc::execTCKEYREQ(Signal *signal) {
   regCachePtr->distributionKeyIndicator = TDistrKeyFlag;
   regCachePtr->m_no_disk_flag = TNoDiskFlag;
 
+  if (TDirtyFlag &&
+      (!(TOperationType == ZREAD ||
+         (TOperationType == ZWRITE &&
+          TSimpleFlag)))) {
+    releaseSections(handle);
+    TCKEY_abort(signal, 70, apiConnectptr);
+    return;
+  }
   Uint8 TexecuteFlag        = TexecFlag;
   Uint8 Treorg              = TcKeyReq::getReorgFlag(Treqinfo);
   Uint8 batchSafe           = TcKeyReq::getBatchSafeFlag(Treqinfo);
@@ -5467,6 +5479,7 @@ void Dbtc::sendlqhkeyreq(Signal *signal, BlockReference TBRef,
   regTcPtr->numFiredTriggers = 0;
   regTcPtr->triggerExecutionCount = 0;
   regTcPtr->m_start_ticks = getHighResTimer();
+  g_eventLogger->info("LQHKEYREQ: start_ticks = %llu", regTcPtr->m_start_ticks.getUint64());
 
   {
     /* Build long LQHKeyReq using Key + AttrInfo sections */
@@ -6419,9 +6432,11 @@ void Dbtc::execLQHKEYCONF(Signal *signal) {
   }
   bool do_releaseTcCon = false;
   TcConnectRecordPtr save_tcConnectptr;
-  if (TdirtyOp == ZTRUE) {
+  if (unlikely(TdirtyOp == ZTRUE)) {
     UintR Tlqhkeyreqrec = regApiPtr.p->lqhkeyreqrec;
     jam();
+    do_releaseTcCon = true;
+    save_tcConnectptr = tcConnectptr;
     releaseDirtyWrite(signal, apiConnectptr);
     regApiPtr.p->lqhkeyreqrec = Tlqhkeyreqrec - 1;
   } else if (Toperation == ZREAD && TopSimple) {
@@ -8890,10 +8905,6 @@ void Dbtc::releaseDirtyWrite(Signal *signal,
                              ApiConnectRecordPtr const apiConnectptr) {
   clearCommitAckMarker(apiConnectptr.p, tcConnectptr.p);
   unlinkReadyTcCon(apiConnectptr.p);
-  Uint32 dummy = 0;
-  releaseTcCon(signal, dummy, true, apiConnectptr.p);
-  checkPoolShrinkNeed(DBTC_CONNECT_RECORD_TRANSIENT_POOL_INDEX,
-                      tcConnectRecord);
   ApiConnectRecord *const regApiPtr = apiConnectptr.p;
   if (regApiPtr->apiConnectstate == CS_START_COMMITTING) {
     if (regApiPtr->tcConnect.isEmpty()) {
@@ -20857,7 +20868,6 @@ void Dbtc::execFIRE_TRIG_ORD(Signal *signal) {
 
   if (unlikely(transPtr.i == RNIL) ||
       unlikely(!c_apiConnectRecordPool.getValidPtr(transPtr))) {
-    jam();
     /* Looks like the connect record was released
      * Treat as a bad transid
      */

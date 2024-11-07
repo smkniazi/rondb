@@ -1549,6 +1549,15 @@ int NdbOperation::handleOperationOptions(const OperationType type,
   {
     op->m_flags |= OF_TTL_IGNORE;
   }
-
+  if (opts->optionsPresent & OperationOptions::OO_DIRTY_FLAG)
+  {
+    if (type != WriteRequest ||
+        !ndbd_interpreted_write_supported(
+            op->theNdbCon->getNdb()->getMinDbNodeVersion())) {
+      return 4003;
+    }
+    op->theDirtyIndicator = 1;
+    op->theSimpleIndicator = 1;
+  }
   return 0;
 }
