@@ -9731,8 +9731,13 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
     std::string ttl_comment(mod_ttl->m_val_str.str, mod_ttl->m_val_str.len);
     std::size_t pos = ttl_comment.find('@');
     if (pos == std::string::npos) {
-      return create.failed_illegal_create_option(
-          "Invalid TTL format, please use: 'Seconds@Column (uint@string)'");
+      if (!my_strcasecmp(system_charset_info,
+          mod_ttl->m_val_str.str, "off")) {
+        ndb_log_info("[API] TTL = OFF");
+      } else {
+        return create.failed_illegal_create_option(
+            "Invalid TTL format, please use: 'Seconds@Column (uint@string)'");
+      }
     } else {
       if (pos == 0) {
         return create.failed_illegal_create_option(
@@ -9754,8 +9759,8 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
       ttl_column = ttl_comment.substr(pos + 1);
       for (uint i = 0; i < table->s->fields; i++) {
         Field *const field = table->field[i];
-        if (strlen(field->field_name) == ttl_column.length() &&
-            strcmp(field->field_name, ttl_column.data()) == 0) {
+        if (!my_strcasecmp(system_charset_info,
+            field->field_name, ttl_column.c_str())) {
           if (field->real_type() != MYSQL_TYPE_DATETIME2) {
             return create.failed_illegal_create_option(
                 "Invalid TTL format, column type must be DATETIME");
@@ -16352,9 +16357,16 @@ bool ha_ndbcluster::inplace_parse_comment(NdbDictionary::Table *new_tab,
     std::string ttl_comment(mod_ttl->m_val_str.str, mod_ttl->m_val_str.len);
     std::size_t pos = ttl_comment.find('@');
     if (pos == std::string::npos) {
+      if (!my_strcasecmp(system_charset_info,
+          mod_ttl->m_val_str.str, "off")) {
+        ndb_log_info("Disable TTL on table: %s", old_tab->getName());
+        new_tab->setTTLSec(new_ttl_sec);
+        new_tab->setTTLColumnNo(new_ttl_column_no);
+      } else {
         *reason = "Invalid TTL format, please use: "
                   "'Seconds@Column (uint@string)'";
         return true;
+      }
     } else {
       if (pos == 0) {
          *reason = "Invalid TTL format, please use: "

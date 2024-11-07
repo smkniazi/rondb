@@ -279,8 +279,8 @@ struct GenericSectionPtr {
  * Zart
  * Turn on them to debug TTL
  */
-// #undef TTL_DEBUG
-#define TTL_DEBUG 1
+#undef TTL_DEBUG
+// #define TTL_DEBUG 1
 #define TTL_TABLE_ID 17
 #define NEED_PRINT(X) ((X) >= TTL_TABLE_ID)
 
