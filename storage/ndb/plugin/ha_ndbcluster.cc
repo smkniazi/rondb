@@ -8975,7 +8975,8 @@ enum COMMENT_ITEMS {
   NOLOGGING = 0,
   READ_BACKUP = 1,
   FULLY_REPLICATED = 2,
-  PARTITION_BALANCE = 3
+  PARTITION_BALANCE = 3,
+  TTL = 4
 };
 
 /**
@@ -9001,12 +9002,16 @@ int ha_ndbcluster::get_old_table_comment_items(THD *thd,
   const NDB_Modifier *mod_fully_replicated =
       table_modifiers.get("FULLY_REPLICATED");
   const NDB_Modifier *mod_frags = table_modifiers.get("PARTITION_BALANCE");
+  const NDB_Modifier *mod_ttl = table_modifiers.get("TTL");
 
   if (mod_nologging->m_found) comment_items_shown[NOLOGGING] = true;
   if (mod_read_backup->m_found) comment_items_shown[READ_BACKUP] = true;
   if (mod_fully_replicated->m_found)
     comment_items_shown[FULLY_REPLICATED] = true;
   if (mod_frags->m_found) comment_items_shown[PARTITION_BALANCE] = true;
+  if (mod_ttl) {
+    comment_items_shown[TTL] = true;
+  }
   return 0;
 }
 
@@ -9060,6 +9065,7 @@ void ha_ndbcluster::update_comment_info(THD *thd, HA_CREATE_INFO *create_info,
   const NDB_Modifier *mod_fully_replicated =
       table_modifiers.get("FULLY_REPLICATED");
   const NDB_Modifier *mod_frags = table_modifiers.get("PARTITION_BALANCE");
+  const NDB_Modifier * mod_ttl = table_modifiers.get("TTL");
 
   // Get the comment items from the old Ndb table
   bool old_nologging = !ndbtab->getLogging();
@@ -9070,7 +9076,7 @@ void ha_ndbcluster::update_comment_info(THD *thd, HA_CREATE_INFO *create_info,
 
   // Merge any previous comment changes from the old table from share
   // into the current changes specified in create_info
-  bool old_table_comment[4] = {false, false, false, false};
+  bool old_table_comment[5] = {false, false, false, false, false};
   if (get_old_table_comment_items(thd, old_table_comment, table->s->comment.str,
                                   table->s->comment.length)) {
     return;
@@ -9207,8 +9213,36 @@ void ha_ndbcluster::update_comment_info(THD *thd, HA_CREATE_INFO *create_info,
     }
   }
 
+  bool add_ttl = false;
+  if (!mod_ttl->m_found) {
+    if (old_table_comment[TTL]) {
+      add_ttl = true;
+      NDB_Modifiers old_table_modifiers(ndb_table_modifier_prefix,
+                                        ndb_table_modifiers);
+      if (old_table_modifiers.loadComment(
+            table->s->comment.str, table->s->comment.length) == -1) {
+        push_warning_printf(thd, Sql_condition::SL_WARNING,
+                            ER_ILLEGAL_HA_CREATE_OPTION, "%s",
+                            table_modifiers.getErrMsg());
+        my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0), ndbcluster_hton_name,
+                 "Syntax error in COMMENT modifier");
+        return;
+      }
+
+      char old_ttl_str[256] = {0};
+      strncpy(old_ttl_str,
+             old_table_modifiers.get("TTL")->m_val_str.str,
+             old_table_modifiers.get("TTL")->m_val_str.len);
+
+      table_modifiers.set("TTL", old_ttl_str);
+      ndb_log_info("No new TTL comment is set, will use the old one: %s",
+                   table_modifiers.get("TTL")->m_val_str.str);
+    }
+  }
+
+
   if (!(add_nologging || add_read_backup || add_fully_replicated ||
-        add_part_bal)) {
+        add_part_bal || add_ttl)) {
     /* No change of comment is needed. */
     return;
   }
@@ -9686,6 +9720,7 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
   const NDB_Modifier *mod_ttl = table_modifiers.get("TTL");
   bool found_ttl = false;
   uint32_t ttl_sec = RNIL;
+  int64_t ttl_sec_raw = RNIL;
   std::string ttl_column;
   uint32_t ttl_column_no = RNIL;
   if (mod_ttl->m_found) {
@@ -9696,8 +9731,13 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
     std::string ttl_comment(mod_ttl->m_val_str.str, mod_ttl->m_val_str.len);
     std::size_t pos = ttl_comment.find('@');
     if (pos == std::string::npos) {
-      return create.failed_illegal_create_option(
-          "Invalid TTL format, please use: 'Seconds@Column (uint@string)'");
+      if (!my_strcasecmp(system_charset_info,
+          mod_ttl->m_val_str.str, "off")) {
+        ndb_log_info("[API] TTL = OFF");
+      } else {
+        return create.failed_illegal_create_option(
+            "Invalid TTL format, please use: 'Seconds@Column (uint@string)'");
+      }
     } else {
       if (pos == 0) {
         return create.failed_illegal_create_option(
@@ -9709,13 +9749,18 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
               "Invalid TTL format, please use: 'Seconds@Column (uint@string)'");
         }
       }
-      ttl_sec = std::stoi(std::string(mod_ttl->m_val_str.str,
-                          mod_ttl->m_val_str.len - pos + 1));
+      ttl_sec_raw = std::stoll(std::string(mod_ttl->m_val_str.str, pos));
+      if (ttl_sec_raw > RNIL) {
+        return create.failed_illegal_create_option(
+            "The maximum ttl is 4294967039 seconds");
+      } else {
+        ttl_sec = static_cast<uint32_t>(ttl_sec_raw);
+      }
       ttl_column = ttl_comment.substr(pos + 1);
       for (uint i = 0; i < table->s->fields; i++) {
         Field *const field = table->field[i];
-        if (strlen(field->field_name) == ttl_column.length() &&
-            strcmp(field->field_name, ttl_column.data()) == 0) {
+        if (!my_strcasecmp(system_charset_info,
+            field->field_name, ttl_column.c_str())) {
           if (field->real_type() != MYSQL_TYPE_DATETIME2) {
             return create.failed_illegal_create_option(
                 "Invalid TTL format, column type must be DATETIME");
@@ -9735,7 +9780,7 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
     }
   }
   if (found_ttl) {
-    ndb_log_info("Zart, [API]parse TTL successfully: TTL = %d sec, TTL_COLUMN = %s",
+    ndb_log_info("[API]parse TTL successfully: TTL = %u sec, TTL_COLUMN = %s",
                   ttl_sec, ttl_column.c_str());
   }
   NdbDictionary::Object::PartitionBalance part_bal =
@@ -10034,8 +10079,8 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
       if (col.getPrimaryKey()) pk_length += (field->pack_length() + 3) / 4;
 
       if (found_ttl) {
-        if (strlen(col.getName()) == ttl_column.length() &&
-            strcmp(col.getName(), ttl_column.data()) == 0) {
+        if (!my_strcasecmp(system_charset_info,
+            col.getName(), ttl_column.c_str())) {
           NdbDictionary::Column* ttl_col = tab.getColumn(col.getName());
           if (ttl_col->getStorageType() == NDBCOL::StorageTypeDisk) {
             return create.failed_illegal_create_option(
@@ -10053,10 +10098,10 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
     }
   }
   if (found_ttl) {
-    assert(ttl_sec != RNIL && ttl_column_no != RNIL);
+    assert(ttl_sec <= RNIL && ttl_column_no <= RNIL);
     tab.setTTLSec(ttl_sec);
     tab.setTTLColumnNo(ttl_column_no);
-    assert(tab.isTTLEnabled());
+    // assert(tab.isTTLEnabled());
   }
 
   tmp_restore_column_map(table->read_set, old_map);
@@ -16240,6 +16285,39 @@ enum_alter_inplace_result ha_ndbcluster::check_if_supported_inplace_alter(
                                                   ha_alter_info);
     }
   }
+
+  NDB_Modifiers old_table_modifiers(ndb_table_modifier_prefix,
+                                    ndb_table_modifiers);
+  if (old_table_modifiers.loadComment(
+        table->s->comment.str, table->s->comment.length) == -1) {
+    my_error(ER_ALTER_OPERATION_FAIELD_TO_LOAD_TTL_COMMENT, MYF(0),
+             old_table_modifiers.getErrMsg());
+    return HA_ALTER_ERROR;
+  }
+
+  const NDB_Modifier *mod_ttl = old_table_modifiers.get("TTL");
+  std::string ttl_column = "";
+  if (mod_ttl != nullptr) {
+    std::string ttl_comment(mod_ttl->m_val_str.str, mod_ttl->m_val_str.len);
+    std::size_t pos = ttl_comment.find('@');
+    if (pos == std::string::npos) {
+      // TODO(Zhao)
+    } else {
+      ttl_column = ttl_comment.substr(pos + 1);
+    }
+
+    Alter_info *alter_info = ha_alter_info->alter_info;
+    for (const Alter_drop *drop : alter_info->drop_list) {
+      if (drop->type == Alter_drop::COLUMN &&
+          !my_strcasecmp(system_charset_info,
+            ttl_column.c_str(), drop->name)) {
+        ha_alter_info->unsupported_reason = "It's used as the TTL column";
+        ha_alter_info->report_unsupported_error("Dropping the TTL column",
+                                               "disable TTL");
+        return HA_ALTER_ERROR;
+      }
+    }
+  }
   return result;
 }
 
@@ -16265,6 +16343,76 @@ bool ha_ndbcluster::inplace_parse_comment(NdbDictionary::Table *new_tab,
   const NDB_Modifier *mod_read_backup = table_modifiers.get("READ_BACKUP");
   const NDB_Modifier *mod_fully_replicated =
       table_modifiers.get("FULLY_REPLICATED");
+
+  const NDB_Modifier *mod_ttl = table_modifiers.get("TTL");
+  int64_t new_ttl_sec_raw = RNIL;
+  uint32_t new_ttl_sec = RNIL;
+  std::string ttl_column;
+  uint32_t new_ttl_column_no = RNIL;
+  if (mod_ttl->m_found) {
+    ndb_log_info("[API]find TTL in comment while "
+                 "creating %s: [%lu] %s, start parsing...",
+                  new_tab->getName(),
+                  mod_ttl->m_val_str.len, mod_ttl->m_val_str.str);
+    std::string ttl_comment(mod_ttl->m_val_str.str, mod_ttl->m_val_str.len);
+    std::size_t pos = ttl_comment.find('@');
+    if (pos == std::string::npos) {
+      if (!my_strcasecmp(system_charset_info,
+          mod_ttl->m_val_str.str, "off")) {
+        ndb_log_info("Disable TTL on table: %s", old_tab->getName());
+        new_tab->setTTLSec(new_ttl_sec);
+        new_tab->setTTLColumnNo(new_ttl_column_no);
+      } else {
+        *reason = "Invalid TTL format, please use: "
+                  "'Seconds@Column (uint@string)'";
+        return true;
+      }
+    } else {
+      if (pos == 0) {
+         *reason = "Invalid TTL format, please use: "
+                  "'Seconds@Column (uint@string)'";
+         return true;
+      }
+      for (std::size_t i = 0; i < pos; i++) {
+        if (ttl_comment.at(i) < '0' || ttl_comment.at(i) > '9') {
+          *reason = "Invalid TTL format, please use: "
+                   "'Seconds@Column (uint@string)'";
+          return true;
+        }
+      }
+      new_ttl_sec_raw = std::stoll(std::string(mod_ttl->m_val_str.str, pos));
+      if (new_ttl_sec_raw > RNIL) {
+          *reason = "The maximum ttl is 4294967039 seconds";
+          return true;
+      } else {
+        new_ttl_sec = static_cast<uint32_t>(new_ttl_sec_raw);
+      }
+      ttl_column = ttl_comment.substr(pos + 1);
+
+      NdbDictionary::Column* ttl_col = new_tab->getColumn(ttl_column.c_str());
+      if (ttl_col == nullptr) {
+        *reason = "Invalid TTL format, column name"
+                 "must match a real column";
+        return true;
+      } else if (ttl_col->getType() != NdbDictionary::Column::Type::Datetime2) {
+        *reason = "Invalid TTL format, column type "
+                 "must be DATETIME";
+        return true;
+      }
+      ndb_log_info("[API]parse TTL successfully: TTL = %u sec, "
+                   "TTL_COLUMN = %s",
+          new_ttl_sec, ttl_column.c_str());
+      // Zart ttl_col->getAttrId() here is always RNIL.
+      new_ttl_column_no = ttl_col->getColumnNo();
+      int ttl_column_id = ttl_col->getAttrId();
+      ndb_log_info("[API]TTL will work on column %s, no: %u, "
+          "id: %d, type: %u",
+          ttl_col->getName(), new_ttl_column_no, ttl_column_id,
+          ttl_col->getType());
+          new_tab->setTTLSec(new_ttl_sec);
+          new_tab->setTTLColumnNo(new_ttl_column_no);
+    }
+  }
 
   NdbDictionary::Object::PartitionBalance part_bal =
       g_default_partition_balance;

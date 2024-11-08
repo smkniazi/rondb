@@ -7021,6 +7021,9 @@ ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_CHANGE_FTS
 ER_ALTER_OPERATION_NOT_SUPPORTED_REASON_FTS
   eng "Fulltext index creation requires a lock"
 
+ER_ALTER_OPERATION_FAIELD_TO_LOAD_TTL_COMMENT
+  eng "Failed to load the TTL comment. Error: %s"
+
 OBSOLETE_ER_SQL_REPLICA_SKIP_COUNTER_NOT_SETTABLE_IN_GTID_MODE
   eng "sql_replica_skip_counter can not be set when the server is running with @@GLOBAL.GTID_MODE = ON. Instead, for each transaction that you want to skip, generate an empty transaction with the same GTID as the transaction"
 

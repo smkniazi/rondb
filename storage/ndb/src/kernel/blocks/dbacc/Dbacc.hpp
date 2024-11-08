@@ -378,7 +378,7 @@ typedef LocalDLCFifoList<Page8_pool, IA_Page8> LocalContainerPageList;
 /* --------------------------------------------------------------------------------- */
 #define NUM_ACC_FRAGMENT_MUTEXES 4
 struct Fragmentrec {
-  Fragmentrec() : ttlSec(RNIL), ttlColumnNo(RNIL) {
+  Fragmentrec() {
   }
   Uint64 tupFragptr;
   Uint32 m_magic;
@@ -673,11 +673,6 @@ struct Fragmentrec {
   };
 
   LockStats m_lockStats;
-  /*
-   * TTL
-   */
-  Uint32 ttlSec;
-  Uint32 ttlColumnNo;
 
 public:
   Uint32 getPageNumber(Uint32 bucket_number) const;
@@ -1209,11 +1204,7 @@ private:
 #else
   void debug_lh_vars(const char *where) const {}
 #endif
-  bool is_ttl_table(Fragmentrec* fragptr) {
-    ndbrequire(fragptr != nullptr);
-    return (fragptr->ttlSec != RNIL &&
-            fragptr->ttlColumnNo != RNIL);
-  }
+  bool is_ttl_table(Fragmentrec* fragptr);
 
  public:
   // Variables

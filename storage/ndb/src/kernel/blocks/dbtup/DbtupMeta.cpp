@@ -1130,6 +1130,9 @@ void Dbtup::execALTER_TAB_REQ(Signal *signal) {
       ndbrequire(handle.m_cnt == 1);
       ::copy(signal->theData + 25, handle.m_ptr[0]);
       releaseSections(handle);
+    } else if (AlterTableReq::getTTLSecFlag(req->changeMask) ||
+               AlterTableReq::getTTLColFlag(req->changeMask)) {
+      signal->header.m_noOfSections = 0;
     }
     handleAlterTablePrepare(signal, req, regTabPtr);
     return;
@@ -1465,6 +1468,15 @@ Dbtup::handleAlterTablePrepare(Signal *signal,
       }
       regAlterTabOpPtr.p->dynTableDescriptor[inx] = dynTableDescriptorRef;
     }
+    regAlterTabOpPtr.p->ttlSec = req->ttlSec;
+    regAlterTabOpPtr.p->ttlColumnNo = req->ttlColumnNo;
+    connectPtr = regAlterTabOpPtr.i;
+  } else if (AlterTableReq::getTTLSecFlag(req->changeMask) ||
+             AlterTableReq::getTTLSecFlag(req->changeMask)) {
+    AlterTabOperationPtr regAlterTabOpPtr;
+    seizeAlterTabOperation(regAlterTabOpPtr);
+    regAlterTabOpPtr.p->ttlSec = req->ttlSec;
+    regAlterTabOpPtr.p->ttlColumnNo = req->ttlColumnNo;
     connectPtr = regAlterTabOpPtr.i;
   }
 
@@ -1581,6 +1593,21 @@ void Dbtup::handleAlterTableCommit(Signal *signal, const AlterTabReq *req,
         }
       }
     }
+  }
+
+  if (AlterTableReq::getTTLSecFlag(req->changeMask) ||
+      AlterTableReq::getTTLColFlag(req->changeMask)) {
+    jam();
+    AlterTabOperationPtr regAlterTabOpPtr;
+    regAlterTabOpPtr.i = req->connectPtr;
+    ptrCheckGuard(regAlterTabOpPtr, cnoOfAlterTabOps, alterTabOperRec);
+    regTabPtr->m_ttl_sec = regAlterTabOpPtr.p->ttlSec;
+    regTabPtr->m_ttl_col_no = regAlterTabOpPtr.p->ttlColumnNo;
+    g_eventLogger->info("[DBTUP], execALTER_TAB_REQ, update TTL on table "
+                         "%u, [%u, %u]",
+                         req->tableId,
+                         regTabPtr->m_ttl_sec,
+                         regTabPtr->m_ttl_col_no);
   }
 
   sendAlterTabConf(signal, RNIL);

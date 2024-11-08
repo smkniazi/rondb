@@ -1311,6 +1311,11 @@ void Dbtc::execALTER_TAB_REQ(Signal *signal) {
           return;
         }
       }
+      if (AlterTableReq::getTTLSecFlag(req->changeMask) ||
+          AlterTableReq::getTTLColFlag(req->changeMask)) {
+        tabPtr.p->tmp_ttl_sec = req->ttlSec;
+        tabPtr.p->tmp_ttl_col_no = req->ttlColumnNo;
+      }
       break;
     case AlterTabReq::AlterTableRevert:
       jam();
@@ -1326,6 +1331,11 @@ void Dbtc::execALTER_TAB_REQ(Signal *signal) {
           tabPtr.p->m_flags &= (~(TableRecord::TR_DELAY_COMMIT));
         }
       }
+      if (AlterTableReq::getTTLSecFlag(req->changeMask) ||
+          AlterTableReq::getTTLColFlag(req->changeMask)) {
+        tabPtr.p->tmp_ttl_sec = RNIL;
+        tabPtr.p->tmp_ttl_col_no = RNIL;
+      }
       break;
     case AlterTabReq::AlterTableCommit:
       jam();
@@ -1340,6 +1350,18 @@ void Dbtc::execALTER_TAB_REQ(Signal *signal) {
           D("Commit set ReadBackup Flag for table: " << tabPtr.i);
           tabPtr.p->m_flags |= TableRecord::TR_READ_BACKUP;
         }
+      }
+      if (AlterTableReq::getTTLSecFlag(req->changeMask) ||
+          AlterTableReq::getTTLColFlag(req->changeMask)) {
+        tabPtr.p->m_ttl_sec = tabPtr.p->tmp_ttl_sec;
+        tabPtr.p->m_ttl_col_no = tabPtr.p->tmp_ttl_col_no;
+        tabPtr.p->tmp_ttl_sec = RNIL;
+        tabPtr.p->tmp_ttl_col_no = RNIL;
+        g_eventLogger->info("[DBTC], execALTER_TAB_REQ, update TTL on table "
+                             "%u, [%u, %u]",
+                             req->tableId,
+                             tabPtr.p->m_ttl_sec,
+                             tabPtr.p->m_ttl_col_no);
       }
       tabPtr.p->currentSchemaVersion = newTableVersion;
       break;
@@ -18458,6 +18480,8 @@ void Dbtc::initTable(Signal *signal) {
     tabptr.p->m_ttl_sec = RNIL;
     tabptr.p->m_ttl_col_no = RNIL;
     tabptr.p->m_primary_table_id = RNIL;
+    tabptr.p->tmp_ttl_sec = RNIL;
+    tabptr.p->tmp_ttl_col_no = RNIL;
   }  // for
 }  // Dbtc::initTable()
 

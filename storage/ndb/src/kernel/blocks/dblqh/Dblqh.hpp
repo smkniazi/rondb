@@ -2566,7 +2566,9 @@ class Dblqh : public SimulatedBlock {
      * Initialize Tablerec of other blocks
      */
     Tablerec() : m_ttl_sec(RNIL),
-                 m_ttl_col_no(RNIL) {
+                 m_ttl_col_no(RNIL),
+                 tmp_ttl_sec(RNIL),
+                 tmp_ttl_col_no(RNIL) {
     }
     enum TableStatus {
       TABLE_DEFINED = 0,
@@ -2626,6 +2628,8 @@ class Dblqh : public SimulatedBlock {
      */
     Uint32 m_ttl_sec;
     Uint32 m_ttl_col_no;
+    Uint32 tmp_ttl_sec;
+    Uint32 tmp_ttl_col_no;
   };  // Size 100 bytes
   typedef Ptr<Tablerec> TablerecPtr;
   bool is_ttl_table(Uint32 table_id);

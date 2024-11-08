@@ -412,6 +412,8 @@ struct Fragoperrec {
     Uint32 *tableDescriptor;
     Uint32 dynTabDesOffset[2][3];
     Uint32 *dynTableDescriptor[2];
+    Uint32 ttlSec;
+    Uint32 ttlColumnNo;
   };
   typedef Ptr<AlterTabOperation> AlterTabOperationPtr;
 

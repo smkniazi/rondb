@@ -612,25 +612,6 @@ void Dbacc::execACCFRAGREQ(Signal *signal) {
   BlockReference retRef = req->userRef;
   fragrecptr.p->rootState = ACTIVEROOT;
 
-  /*
-   * Zart
-   * TODO (Zhao)
-   * Try to avoid add TTL info in ACC, just use the info
-   * from LQH instead, which could make the alter table (TTL) implementation
-   * simplier
-   *
-   * ACC is just a class, not a thread, so it's possible to do it.
-   * I don't want to introduce potential inconsist issues...
-   */
-#ifdef TTL_DEBUG
-  if (NEED_PRINT(fragrecptr.p->myTableId)) {
-    g_eventLogger->info("Zart, [ACC]Gen Fragmentrec, table_id: %u, frag_id: %u,"
-        " TTL sec: %u, TTL column no: %u", fragrecptr.p->myTableId,
-        fragrecptr.p->fragmentid, fragrecptr.p->ttlSec,
-        fragrecptr.p->ttlColumnNo);
-  }
-#endif  // TTL_DEBUG
-
   AccFragConf *const conf = (AccFragConf *)&signal->theData[0];
   conf->userPtr = userPtr;
   conf->rootFragPtr = RNIL;
@@ -1395,7 +1376,8 @@ void Dbacc::execACCKEYREQ(Signal *signal, Uint32 opPtrI,
   operationRecPtr.p = opPtrP;
   initOpRec(req, signal->getLength());
   ndbrequire(Magic::check_ptr(operationRecPtr.p));
-  bool is_ttl = AccKeyReq::getTTL(req->requestInfo);
+
+  bool is_ttl = is_ttl_table(prepare_fragptr.p);
 
   /*---------------------------------------------------------------*/
   /*                                                               */
@@ -3353,18 +3335,7 @@ void Dbacc::execACC_LOCKREQ(Signal *signal) {
         accreq = AccKeyReq::setReplicaType(accreq, 0);  // ?
         accreq = AccKeyReq::setTakeOver(accreq, false);
         accreq = AccKeyReq::setLockReq(accreq, true);
-        /*
-         * Zart
-         * Set ttl flag for AccKeyReq, so that the c_acc->execACCKEYREQ
-         * can handle ZINSERT into TTL table correctly
-         */
-        if (is_ttl_table(prepare_fragptr.p)
-            /*prepare_fragptr.p->ttlSec != RNIL &&
-            prepare_fragptr.p->ttlColumnNo != RNIL*/) {
-          accreq = AccKeyReq::setTTL(accreq, true);
-        } else {
-          accreq = AccKeyReq::setTTL(accreq, false);
-        }
+
         AccKeyReq *keyreq = reinterpret_cast<AccKeyReq *>(&signal->theData[0]);
         keyreq->fragmentPtr = fragrecptr.i;
         keyreq->requestInfo = accreq;
@@ -3498,10 +3469,9 @@ bool Dbacc::WhetherSkipTTL(Signal* signal)
     accreq = AccKeyReq::setReplicaType(accreq, 0); // ?
     accreq = AccKeyReq::setTakeOver(accreq, false);
     accreq = AccKeyReq::setLockReq(accreq, true);
-    // ndbrequire(prepare_fragptr.p->ttlSec != RNIL &&
-    //           prepare_fragptr.p->ttlColumnNo != RNIL);
+
     ndbrequire(is_ttl_table(prepare_fragptr.p));
-    accreq = AccKeyReq::setTTL(accreq, true);
+
     AccKeyReq* keyreq = reinterpret_cast<AccKeyReq*>(&signal->theData[0]);
     keyreq->fragmentPtr = fragrecptr.i;
     keyreq->requestInfo = accreq;
@@ -3577,8 +3547,8 @@ bool Dbacc::WhetherSkipTTL(Signal* signal)
   } // Dbacc::initOpRec()
 
   ndbrequire(Magic::check_ptr(operationRecPtr.p));
-  bool is_ttl = AccKeyReq::getTTL(req->requestInfo);
-  ndbrequire(is_ttl);
+
+  ndbrequire(is_ttl_table(prepare_fragptr.p));
 
   OperationrecPtr lockOwnerPtr;
   Page8Ptr bucketPageptr;
@@ -8132,11 +8102,6 @@ void Dbacc::initFragAdd(Signal *signal, FragmentrecPtr regFragPtr) const {
   for (Uint32 i = 0; i < NUM_ACC_FRAGMENT_MUTEXES; i++) {
     NdbMutex_Init(&regFragPtr.p->acc_frag_mutex[i]);
   }
-  /*
-   * TTL
-   */
-  regFragPtr.p->ttlSec = req->ttlSec;
-  regFragPtr.p->ttlColumnNo = req->ttlColumnNo;
 }  // Dbacc::initFragAdd()
 
 void Dbacc::initFragGeneral(FragmentrecPtr regFragPtr) const {
@@ -8162,11 +8127,6 @@ void Dbacc::initFragGeneral(FragmentrecPtr regFragPtr) const {
   regFragPtr.p->activeScanMask = 0;
 
   regFragPtr.p->m_lockStats.init();
-  /*
-   * TTL
-   */
-  regFragPtr.p->ttlSec = RNIL;
-  regFragPtr.p->ttlColumnNo = RNIL;
 }  // Dbacc::initFragGeneral()
 
 void Dbacc::execACC_SCANREQ(Signal *signal)  // Direct Executed
@@ -10757,4 +10717,9 @@ void Dbacc::shrinkTransientPools(Uint32 pool_index) {
   } else {
     c_transient_pools_shrinking.clear(pool_index);
   }
+}
+
+bool Dbacc::is_ttl_table(Fragmentrec* fragptr) {
+  ndbrequire(fragptr != nullptr);
+  return (c_lqh->is_ttl_table(fragptr->myTableId));
 }

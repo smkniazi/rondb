@@ -823,7 +823,7 @@ NdbDictionary::Table::setTTLSec(Uint32 sec) {
 }
 
 Uint32
-NdbDictionary::Table::getTTLSec() {
+NdbDictionary::Table::getTTLSec() const {
   return m_impl.m_ttl_sec;
 }
 
@@ -833,7 +833,7 @@ NdbDictionary::Table::setTTLColumnNo(Uint32 no) {
 }
 
 Uint32
-NdbDictionary::Table::getTTLColumnNo() {
+NdbDictionary::Table::getTTLColumnNo() const {
   return m_impl.m_ttl_col_no;
 }
 
