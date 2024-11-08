@@ -159,7 +159,6 @@ RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
     && git submodule update \
     && mkdir build \
     && cd build \
-    && source scl_source enable gcc-toolset-12 \
     && cmake .. -DBUILD_SHARED_LIBS=ON -DENABLE_PUSH=OFF -DENABLE_COMPRESSION=OFF \
     && make -j$THREADS_ARG  \
     && make install \ 

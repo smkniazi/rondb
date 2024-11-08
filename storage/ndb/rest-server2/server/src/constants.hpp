@@ -39,7 +39,7 @@
 #define RONSQL_PATH "/" API_VERSION "/" RONSQL
 #define FEATURE_STORE_PATH       "/" API_VERSION "/feature_store"
 #define BATCH_FEATURE_STORE_PATH "/" API_VERSION "/batch_feature_store"
-
+#define PROMETHEUS_METRICS_PATH  "/metrics"
 
 constexpr const char *POST                           = "POST";
 constexpr const char *GET                            = "GET";

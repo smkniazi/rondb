@@ -205,20 +205,6 @@ RS_Status ronsql_dal(const char* database,
  */
 RS_Status get_rondb_stats(RonDB_Stats *stats);
 
-/**
- * Call back function for log messages
- */
-typedef void (*LogCallBackFn)(RS_LOG_MSG msg);
-
-typedef struct {
-  LogCallBackFn logger;
-} Callbacks;
-
-/**
- * Register call back function
- */
-void register_callbacks(Callbacks cbs);
-
 #endif
 
 #ifdef __cplusplus

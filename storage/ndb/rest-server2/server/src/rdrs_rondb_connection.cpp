@@ -373,7 +373,7 @@ RS_Status RDRSRonDBConnection::Reconnect() {
                                         "reconnection_thread",
                                         NDB_THREAD_PRIO_MEAN);
   if (reconnectionThread == nullptr) {
-    RDRSLogger::LOG_PANIC("Failed to start reconnection thread");
+    RDRSLogger::LOG_ERROR("Failed to start reconnection thread");
   }
   NdbMutex_Unlock(connectionMutex);
   NdbMutex_Unlock(connectionInfoMutex);

@@ -18,15 +18,13 @@
  */
 
 #include "rdrs_dal.h"
-#include "db_operations/pk/common.hpp"
 #include "db_operations/pk/pkr_operation.hpp"
 #include "db_operations/ronsql/ronsql_operation.hpp"
-#include "error_strings.h"
-#include "logger.hpp"
 #include "rdrs_dal.hpp"
 #include "rdrs_rondb_connection_pool.hpp"
 #include "retry_handler.hpp"
 #include "status.hpp"
+#include "logger.hpp"
 
 #include <storage/ndb/include/ndb_global.h>
 #include <util/require.h>
@@ -36,10 +34,6 @@
 #include <NdbApi.hpp>
 #include <cstdlib>
 #include <cstring>
-#include <iostream>
-#include <iterator>
-#include <sstream>
-#include <memory>
 #include <EventLogger.hpp>
 
 extern EventLogger *g_eventLogger;
@@ -199,13 +193,6 @@ RS_Status get_rondb_stats(RonDB_Stats *stats) {
   stats->ndb_objects_available = ret.ndb_objects_available;
   stats->connection_state = ret.connection_state;
   return RS_OK;
-}
-
-/**
- * Register callbacks
- */
-void register_callbacks(Callbacks cbs) {
-  RDRSLogger::setLogCallBackFns(cbs);
 }
 
 CRS_Status CRS_Status::SUCCESS = CRS_Status(HTTP_CODE::SUCCESS);

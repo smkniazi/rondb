@@ -26,11 +26,6 @@
 #include <drogon/HttpTypes.h>
 #include <string>
 #include <vector>
-#include <map>
-#include <iostream>
-#include <sstream>
-#include <iomanip>
-#include <unordered_map>
 
 std::string to_string(DataReturnType);
 Uint32 decode_utf8_to_unicode(const std::string_view &, size_t &);

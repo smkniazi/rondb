@@ -29,7 +29,7 @@ constexpr const char* const usageHelp =
   "\n"
   "-v, --version       Print version information.\n"
   "\n"
-  "-?, --help          Show this usage help.\n"
+  "-h, --help          Show this usage help.\n"
   "\n"
   "--help-config       List the available config options.\n"
   ;
@@ -172,22 +172,16 @@ constexpr const char* const configHelp =
 #include "rdrs_dal.h"
 #include "json_parser.hpp"
 #include "json_printer.hpp"
-#include "pk_read_ctrl.hpp"
+#include "prometheus_ctrl.hpp"
 #include "src/api_key.hpp"
 #include "src/fs_cache.hpp"
 #include "tls_util.hpp"
 #include <ndb_opts.h>
 #include <NdbMutex.h>
 
-#include <chrono>
-#include <cmath>
 #include <cstdio>
-#include <cstdlib>
 #include <iostream>
-#include <memory>
 #include <sys/errno.h>
-#include <thread>
-#include <sstream>
 #include <unistd.h>
 #include <csignal>
 
@@ -317,7 +311,7 @@ int main(int argc, char *argv[]) {
       optPrintConfig = true;
       continue;
     }
-    if (strcmp(argv[i], "-?") == 0 ||
+    if (strcmp(argv[i], "-h") == 0 ||
         strcmp(argv[i], "--help") == 0) {
       optHelp = true;
       continue;
@@ -382,6 +376,9 @@ int main(int argc, char *argv[]) {
     fclose(pidFILE);
     printf("Wrote PID=%d to %s\n", pid, g_pidfile);
   }
+
+  // Initialize Prometheus Metrics
+  rdrs_metrics::initMetrics();
 
   // Initialize JSON parsers
   assert(jsonParsers == nullptr);

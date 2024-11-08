@@ -20,7 +20,6 @@
 #ifndef STORAGE_NDB_REST_SERVER2_SERVER_SRC_RETRY_HANDLER_HPP_
 #define STORAGE_NDB_REST_SERVER2_SERVER_SRC_RETRY_HANDLER_HPP_
 
-#include "logger.hpp"
 
 #include <ndb_types.h>
 

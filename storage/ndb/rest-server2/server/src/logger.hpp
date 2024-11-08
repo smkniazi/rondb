@@ -23,27 +23,15 @@
 
 #include <string>
 
-#define PanicLevel 0
-#define FatalLevel 1
+namespace RDRSLogger {
+
 #define ErrorLevel 2
 #define WarnLevel  3
 #define InfoLevel  4
 #define DebugLevel 5
 #define TraceLevel 6
 
-// FIXME TODO  Make small function inline and pass log level from go layer  JIRA RONDB-287
-namespace RDRSLogger {
 void log(const int level, const char *msg);
-
-void setLogCallBackFns(const Callbacks cbs);
-
-void LOG_PANIC(const char *msg);
-
-void LOG_PANIC(const std::string msg);
-
-void LOG_FATAL(const char *msg);
-
-void LOG_FATAL(const std::string msg);
 
 void LOG_ERROR(const char *msg);
 

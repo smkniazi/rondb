@@ -21,26 +21,13 @@
 
 #include <string>
 #include <cstring>
-#include <iostream>
 #include <EventLogger.hpp>
 
 extern EventLogger *g_eventLogger;
 
-Callbacks my_cb_fns;
-
 namespace RDRSLogger {
-void setLogCallBackFns(const Callbacks cbs) {
-  my_cb_fns.logger = cbs.logger;
-}
 
 void log(const int level, const char *msg) {
-  if (my_cb_fns.logger != nullptr) {
-    RS_LOG_MSG log_msg;
-    log_msg.level = level;
-    strncpy(log_msg.message, msg, RS_LOG_MSG_LEN - 1);
-    log_msg.message[RS_LOG_MSG_LEN - 1] = 0;
-    my_cb_fns.logger(log_msg);
-  } else {
     if (level <= ErrorLevel) {
       g_eventLogger->error("%s", msg);
     } else if (level <= WarnLevel) {
@@ -50,23 +37,6 @@ void log(const int level, const char *msg) {
     } else {
       g_eventLogger->debug("%s", msg);
     }
-  }
-}
-
-void LOG_PANIC(const char *msg) {
-  log(PanicLevel, msg);
-}
-
-void LOG_PANIC(const std::string msg) {
-  log(PanicLevel, msg.c_str());
-}
-
-void LOG_FATAL(const char *msg) {
-  log(FatalLevel, msg);
-}
-
-void LOG_FATAL(const std::string msg) {
-  log(FatalLevel, msg.c_str());
 }
 
 void LOG_ERROR(const char *msg) {
@@ -104,4 +74,5 @@ void LOG_DEBUG(const std::string msg) {
 void LOG_TRACE(char *msg) {
   log(TraceLevel, msg);
 }
+
 }  // namespace RDRSLogger
