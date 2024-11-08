@@ -1,5 +1,6 @@
 name: Publish RonDB Tarball
 on:
+  workflow_dispatch:
   push:
     branches:
       - "21.04.[0-9]+"
@@ -78,7 +79,17 @@ jobs:
           echo "Found tarball: $tarball"
 
           host_user="$REPO_HOPSWORKS_USER@$REPO_HOPSWORKS_HOSTNAME"
-          user_code_path="/home/$REPO_HOPSWORKS_USER/upload_area"
+
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            # Manual dispatches will only be dev tarballs
+            echo "This workflow was triggered via a dispatch."
+            user_code_path="/opt/repository/master/rondb-dev"
+          else
+            echo "This workflow was not triggered by a dispatch."
+            user_code_path="/home/$REPO_HOPSWORKS_USER/upload_area"
+          fi
 
           echo "Copying $tarball to $host_user:$user_code_path/"
           scp ./$tarball $host_user:$user_code_path/
+          # Delete the tarball after it has been uploaded
+          rm -f $tarball
