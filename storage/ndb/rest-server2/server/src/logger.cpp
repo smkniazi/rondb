@@ -25,7 +25,7 @@
 
 extern EventLogger *g_eventLogger;
 
-namespace RDRSLogger {
+namespace rdrs_logger {
 
 void log(const int level, const char *msg) {
     if (level <= ErrorLevel) {
@@ -39,40 +39,36 @@ void log(const int level, const char *msg) {
     }
 }
 
-void LOG_ERROR(const char *msg) {
+void error(const char *msg) {
   log(ErrorLevel, msg);
 }
 
-void LOG_ERROR(const std::string msg) {
+void error(const std::string msg) {
   log(ErrorLevel, msg.c_str());
 }
 
-void LOG_WARN(const char *msg) {
+void warn(const char *msg) {
   log(WarnLevel, msg);
 }
 
-void LOG_WARN(const std::string msg) {
+void warn(const std::string msg) {
   log(WarnLevel, msg.c_str());
 }
 
-void LOG_INFO(const char *msg) {
+void info(const char *msg) {
   log(InfoLevel, msg);
 }
 
-void LOG_INFO(const std::string msg) {
+void info(const std::string msg) {
   log(InfoLevel, msg.c_str());
 }
 
-void LOG_DEBUG(const char *msg) {
+void debug(const char *msg) {
   log(DebugLevel, msg);
 }
 
-void LOG_DEBUG(const std::string msg) {
+void debug(const std::string msg) {
   log(DebugLevel, msg.c_str());
 }
 
-void LOG_TRACE(char *msg) {
-  log(TraceLevel, msg);
-}
-
-}  // namespace RDRSLogger
+}  // namespace rdrs_logger

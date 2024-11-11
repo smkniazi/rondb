@@ -23,6 +23,7 @@
 #include "rdrs_dal.h"
 #include "constants.hpp"
 
+#include "logger.hpp"
 #include <drogon/drogon.h>
 #include <drogon/HttpSimpleController.h>
 #include <ndb_types.h>

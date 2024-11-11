@@ -490,7 +490,7 @@ RS_Status set_operation_pk_col(const NdbDictionary::Column *col,
             " Decoded data length is greater than column length." +
             " Column: " + std::string(col->getName()) +
             " Length: " + std::to_string(col->getLength()));
-      RDRSLogger::LOG_ERROR(error.message);
+      rdrs_logger::error(error.message);
       break;
     }
     // insert the length at the beginning of the array
@@ -776,7 +776,7 @@ bool CanRetryOperation(RS_Status status) {
     }
   }
   if (retry) {
-    RDRSLogger::LOG_DEBUG(std::string("Transient error. ") + status.message);
+    rdrs_logger::debug(std::string("Transient error. ") + status.message);
   }
   return retry;
 }
@@ -850,7 +850,7 @@ RS_Status HandleSchemaErrors(
         // invalidate table
         dict->invalidateTable(table);
         dict->removeCachedTable(table);
-        RDRSLogger::LOG_INFO(
+        rdrs_logger::info(
           "Unloading schema " + std::string(db) + "/" + std::string(table));
       }
     }

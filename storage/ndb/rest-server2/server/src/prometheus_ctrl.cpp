@@ -19,7 +19,6 @@
 
 #include "prometheus_ctrl.hpp"
 #include "rdrs_dal.h"
-//#include "logger.hpp"
 
 #include <drogon/HttpTypes.h>
 #include <prometheus/text_serializer.h>
@@ -33,7 +32,7 @@
 
 using namespace prometheus;
 
-//using namespace RDRSLogger;
+using namespace rdrs_logger;
 
 namespace rdrs_metrics {
 
@@ -96,7 +95,7 @@ void setRonDBStats() {
     ndbObjectsTotalCountGauge->Set(stats.ndb_objects_count);
     ronDBConnectionStateGauge->Set(stats.connection_state);
   } else {
-    // RDRSLogger::LOG_ERROR("Failed to read metrics for RonDB");
+    rdrs_logger::error("Failed to read metrics for RonDB");
   }
 }
 

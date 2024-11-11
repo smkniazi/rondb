@@ -23,7 +23,18 @@
 
 #include <string>
 
-namespace RDRSLogger {
+namespace rdrs_logger {
+
+// Undefine the conflicting macros in trantor
+#ifdef LOG_DEBUG
+#undef LOG_DEBUG
+#endif
+#ifdef LOG_INFO
+#undef LOG_INFO
+#endif
+#ifdef LOG_WARN
+#undef LOG_WARN
+#endif
 
 #define ErrorLevel 2
 #define WarnLevel  3
@@ -33,23 +44,22 @@ namespace RDRSLogger {
 
 void log(const int level, const char *msg);
 
-void LOG_ERROR(const char *msg);
+void error(const char *msg);
 
-void LOG_ERROR(const std::string msg);
+void error(const std::string msg);
 
-void LOG_WARN(const char *msg);
+void warn(const char *msg);
 
-void LOG_WARN(const std::string msg);
+void warn(const std::string msg);
 
-void LOG_INFO(const char *msg);
+void info(const char *msg);
 
-void LOG_INFO(const std::string msg);
+void info(const std::string msg);
 
-void LOG_DEBUG(const char *msg);
+void debug(const char *msg);
 
-void LOG_DEBUG(const std::string msg);
+void debug(const std::string msg);
 
-void LOG_TRACE(char *msg);
-}  // namespace RDRSLogger
+}  // namespace rdrs_logger
 
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_LOGGER_HPP_

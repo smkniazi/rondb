@@ -115,7 +115,7 @@ Uint32 data_return_type(std::string_view drt) {
   if (drt == to_string(DataReturnType::DEFAULT_DRT)) {
     return DataReturnType::DEFAULT_DRT;
   }
-  RDRSLogger::LOG_ERROR("Unknown data return type: " + std::string(drt));
+  rdrs_logger::error("Unknown data return type: " + std::string(drt));
   return UINT32_MAX;
 }
 

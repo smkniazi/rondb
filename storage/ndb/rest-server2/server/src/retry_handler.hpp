@@ -46,7 +46,7 @@ extern Uint32 METADATA_CONN_OP_RETRY_JITTER_IN_MS;
            DATA_CONN_OP_RETRY_INITIAL_DELAY_IN_MS, \
            DATA_CONN_OP_RETRY_JITTER_IN_MS) * \
            1000); \
-    RDRSLogger::LOG_DEBUG( \
+    rdrs_logger::debug( \
       "Retrying failed metadata operation. Code: " + \
       std::to_string(status.code) + \
       " MySQL Code: " + std::to_string(status.mysql_code) + \
@@ -66,7 +66,7 @@ extern Uint32 METADATA_CONN_OP_RETRY_JITTER_IN_MS;
            METADATA_CONN_OP_RETRY_INITIAL_DELAY_IN_MS, \
            METADATA_CONN_OP_RETRY_JITTER_IN_MS) * \
            1000); \
-    RDRSLogger::LOG_DEBUG( \
+    rdrs_logger::debug( \
       "Retrying failed metadata operation. Code: " + \
       std::to_string(status.code) + \
       " MySQL Code: " + std::to_string(status.mysql_code) + \
