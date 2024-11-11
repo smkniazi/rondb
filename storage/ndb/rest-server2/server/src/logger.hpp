@@ -25,17 +25,6 @@
 
 namespace rdrs_logger {
 
-// Undefine the conflicting macros in trantor
-#ifdef LOG_DEBUG
-#undef LOG_DEBUG
-#endif
-#ifdef LOG_INFO
-#undef LOG_INFO
-#endif
-#ifdef LOG_WARN
-#undef LOG_WARN
-#endif
-
 #define ErrorLevel 2
 #define WarnLevel  3
 #define InfoLevel  4

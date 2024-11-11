@@ -23,12 +23,11 @@
 #include "rdrs_dal.h"
 #include "constants.hpp"
 
-#include "logger.hpp"
 #include <drogon/drogon.h>
 #include <drogon/HttpSimpleController.h>
 #include <ndb_types.h>
 
-namespace rdrs_metrics {
+// Class for Promethus Controller
 class PrometheusCtrl : public drogon::HttpController<PrometheusCtrl> {
  public:
   METHOD_LIST_BEGIN
@@ -38,11 +37,5 @@ class PrometheusCtrl : public drogon::HttpController<PrometheusCtrl> {
   static void metrics(const drogon::HttpRequestPtr &req,
                       std::function<void(const drogon::HttpResponsePtr &)> &&callback);
 };
-
-void initMetrics();
-void incrementEndpointAccessCount(std::string endPointLabel, std::string methodType, int status);
-void observeEndpointLatency(std::string endPointLabel, std::string methodType, int latency);
-void setRonDBStats();
-}  // namespace rdrs_metrics
 
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_PROMETHEUS_CTRL_HPP_

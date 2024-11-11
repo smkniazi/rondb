@@ -172,7 +172,7 @@ constexpr const char* const configHelp =
 #include "rdrs_dal.h"
 #include "json_parser.hpp"
 #include "json_printer.hpp"
-#include "prometheus_ctrl.hpp"
+#include "metrics.hpp"
 #include "src/api_key.hpp"
 #include "src/fs_cache.hpp"
 #include "tls_util.hpp"

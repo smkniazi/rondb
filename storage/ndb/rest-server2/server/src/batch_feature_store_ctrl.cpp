@@ -26,8 +26,8 @@
 #include "feature_store_error_code.hpp"
 #include "json_parser.hpp"
 #include "metadata.hpp"
-#include "fs_cache.hpp"
 #include "pk_data_structs.hpp"
+#include "metrics.hpp"
 
 #include <drogon/HttpTypes.h>
 #include <memory>
@@ -77,7 +77,9 @@ void BatchFeatureStoreCtrl::batch_featureStore(
    * 14. Callback to Drogon to send response HTTP packet
    */
 
-  auto resp = drogon::HttpResponse::newHttpResponse();
+  drogon::HttpResponsePtr resp = drogon::HttpResponse::newHttpResponse();
+  rdrs_metrics::EndPointMetricsUpdater metricsUpdater(BATCH_FEATURE_STORE, POST, resp);
+
   size_t currentThreadIndex = drogon::app().getCurrentThreadIndex();
   if (unlikely(currentThreadIndex >= globalConfigs.rest.numThreads)) {
     resp->setBody("Too many threads");

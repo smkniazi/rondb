@@ -24,6 +24,7 @@ file(GLOB_RECURSE SRC
         logger.cpp
         main.cc
         metadata.cpp
+        metrics.cpp
         mystring.cpp
         ndb_api_helper.cpp
         operations_feature_store.cpp
