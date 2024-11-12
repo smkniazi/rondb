@@ -93,8 +93,6 @@ endif()
 
 if(NOT DEFINED prometheus-cpp_VERSION)
   message(FATAL_ERROR "prometheus-cpp_VERSION is not defined")
-  message(FATAL_ERROR "Install brew ")
-
 endif()
 
 
