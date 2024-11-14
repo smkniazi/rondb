@@ -19,44 +19,45 @@ my $MYSQLTEST_FILE = $ENV{'MYSQLTEST_FILE'};
 
 # Directories
 my $TEST_GO_DIR     = File::Spec->catdir($MYSQL_BASEDIR, 'storage', 'ndb', 'rest-server2', 'server', 'test_go');
-my $RDRS2_SUITE_DIR = File::Spec->catdir($MYSQL_TEST_DIR, 'suite', 'rdrs2', 't');
+my $RDRS2_GOLANG_SUITE_DIR = File::Spec->catdir($MYSQL_TEST_DIR, 'suite', 'rdrs2-golang', 't');
 die "Directory $TEST_GO_DIR does not exist\n" unless -d $TEST_GO_DIR;
-die "Directory $RDRS2_SUITE_DIR does not exist\n" unless -d $RDRS2_SUITE_DIR;
+die "Directory $RDRS2_GOLANG_SUITE_DIR does not exist\n" unless -d $RDRS2_GOLANG_SUITE_DIR;
 
 # Mapping from MTR test to Go test.
-# After adding a Golang test package, add a ../t/rdrs2_*.test file with a single
-# line "--source suite/rdrs2/include/run_gotest.inc" and add a mapping below.
+# After adding a Golang test package, add a ../t/rdrs2-golang_*.test file with a
+# single line "--source suite/rdrs2-golang/include/run_gotest.inc" and add a
+# mapping below.
 my %mtr_to_go = (
-#  MTR test file name            #   Golang test package name                                         #
-#--------------------------------#--------------------------------------------------------------------#
-  'rdrs2_api.test'               => 'hopsworks.ai/rdrs2/pkg/api',                                     #
-  'rdrs2_batchfeaturestore.test' => 'hopsworks.ai/rdrs2/internal/integrationtests/batchfeaturestore', #
-  'rdrs2_batchpkread.test'       => 'hopsworks.ai/rdrs2/internal/integrationtests/batchpkread',       #
-  'rdrs2_common.test'            => 'hopsworks.ai/rdrs2/internal/common',                             #
-  'rdrs2_config.test'            => 'hopsworks.ai/rdrs2/internal/config',                             #
-  'rdrs2_feature_store.test'     => 'hopsworks.ai/rdrs2/internal/feature_store',                      #
-  'rdrs2_health.test'            => 'hopsworks.ai/rdrs2/internal/integrationtests/health',            #
-  'rdrs2_int_feature_store.test' => 'hopsworks.ai/rdrs2/internal/integrationtests/feature_store',     #
-  'rdrs2_integrationtests.test'  => 'hopsworks.ai/rdrs2/internal/integrationtests',                   #
-  'rdrs2_log.test'               => 'hopsworks.ai/rdrs2/internal/log',                                #
-  'rdrs2_metrics.test'           => 'hopsworks.ai/rdrs2/internal/metrics',                            #
-  'rdrs2_ping.test'              => 'hopsworks.ai/rdrs2/internal/integrationtests/ping',              #
-  'rdrs2_pkread.test'            => 'hopsworks.ai/rdrs2/internal/integrationtests/pkread',            #
-  'rdrs2_stat.test'              => 'hopsworks.ai/rdrs2/internal/integrationtests/stat',              #
-  'rdrs2_testclient.test'        => 'hopsworks.ai/rdrs2/internal/integrationtests/testclient',        #
-  'rdrs2_testdbs.test'           => 'hopsworks.ai/rdrs2/resources/testdbs',                           #
-  'rdrs2_testutils.test'         => 'hopsworks.ai/rdrs2/internal/testutils',                          #
-  'rdrs2_tlsutils.test'          => 'hopsworks.ai/rdrs2/internal/security/tlsutils',                  #
-  'rdrs2_version.test'           => 'hopsworks.ai/rdrs2/version',                                     #
-#--------------------------------#--------------------------------------------------------------------#
+#  MTR test file name            #   Golang test package name                                                #
+#--------------------------------#---------------------------------------------------------------------------#
+  'rdrs2-golang_api.test'               => 'hopsworks.ai/rdrs2/pkg/api',                                     #
+  'rdrs2-golang_batchfeaturestore.test' => 'hopsworks.ai/rdrs2/internal/integrationtests/batchfeaturestore', #
+  'rdrs2-golang_batchpkread.test'       => 'hopsworks.ai/rdrs2/internal/integrationtests/batchpkread',       #
+  'rdrs2-golang_common.test'            => 'hopsworks.ai/rdrs2/internal/common',                             #
+  'rdrs2-golang_config.test'            => 'hopsworks.ai/rdrs2/internal/config',                             #
+  'rdrs2-golang_feature_store.test'     => 'hopsworks.ai/rdrs2/internal/feature_store',                      #
+  'rdrs2-golang_health.test'            => 'hopsworks.ai/rdrs2/internal/integrationtests/health',            #
+  'rdrs2-golang_int_feature_store.test' => 'hopsworks.ai/rdrs2/internal/integrationtests/feature_store',     #
+  'rdrs2-golang_integrationtests.test'  => 'hopsworks.ai/rdrs2/internal/integrationtests',                   #
+  'rdrs2-golang_log.test'               => 'hopsworks.ai/rdrs2/internal/log',                                #
+  'rdrs2-golang_metrics.test'           => 'hopsworks.ai/rdrs2/internal/metrics',                            #
+  'rdrs2-golang_ping.test'              => 'hopsworks.ai/rdrs2/internal/integrationtests/ping',              #
+  'rdrs2-golang_pkread.test'            => 'hopsworks.ai/rdrs2/internal/integrationtests/pkread',            #
+  'rdrs2-golang_stat.test'              => 'hopsworks.ai/rdrs2/internal/integrationtests/stat',              #
+  'rdrs2-golang_testclient.test'        => 'hopsworks.ai/rdrs2/internal/integrationtests/testclient',        #
+  'rdrs2-golang_testdbs.test'           => 'hopsworks.ai/rdrs2/resources/testdbs',                           #
+  'rdrs2-golang_testutils.test'         => 'hopsworks.ai/rdrs2/internal/testutils',                          #
+  'rdrs2-golang_tlsutils.test'          => 'hopsworks.ai/rdrs2/internal/security/tlsutils',                  #
+  'rdrs2-golang_version.test'           => 'hopsworks.ai/rdrs2/version',                                     #
+#--------------------------------#---------------------------------------------------------------------------#
 );
 
 # Switching to test_go dir for `go list` and `go test`.
 chdir $TEST_GO_DIR or die "Cannot change directory to $TEST_GO_DIR: $!";
 
 # Make sure the existing MTR tests match the keys in the map above
-opendir(my $dh, $RDRS2_SUITE_DIR) or die "Cannot open directory $RDRS2_SUITE_DIR: $!";
-my @actual_mtr = sort grep { /\.test$/ && -f File::Spec->catfile($RDRS2_SUITE_DIR, $_) } readdir($dh);
+opendir(my $dh, $RDRS2_GOLANG_SUITE_DIR) or die "Cannot open directory $RDRS2_GOLANG_SUITE_DIR: $!";
+my @actual_mtr = sort grep { /\.test$/ && -f File::Spec->catfile($RDRS2_GOLANG_SUITE_DIR, $_) } readdir($dh);
 closedir($dh);
 my @expected_mtr = sort keys %mtr_to_go;
 if (join("\n", @actual_mtr) ne join("\n", @expected_mtr)) {
