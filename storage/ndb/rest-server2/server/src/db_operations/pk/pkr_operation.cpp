@@ -681,7 +681,8 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     }
     return response->Append_char(dataStart,
                                  attrBytes,
-                                 col->getCharset());
+                                 col->getCharset(),
+                                 col->getType() == NdbDictionary::Column::Char);
   }
   case NdbDictionary::Column::Binary:
     [[fallthrough]];
@@ -941,7 +942,8 @@ RS_Status KeyOperation::write_col_to_resp(Uint32 colIdx,
     return response->Append_char(
       static_cast<char *>(response->GetWritePointer()),
       length,
-      col->getCharset());
+      col->getCharset(),
+      false);
   }
   case NdbDictionary::Column::Bit: {
     Uint32 len = col->getLength();

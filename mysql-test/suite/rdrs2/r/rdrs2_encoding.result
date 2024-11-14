@@ -1,0 +1,141 @@
+===== Prepare table for encoding tests =====
+CREATE DATABASE db1;
+USE db1;
+CREATE TABLE encoding_test (
+sintkey SMALLINT NOT NULL,
+ch_greek   CHAR(80)    CHARACTER SET greek   NOT NULL,
+ch_latin1  CHAR(80)    CHARACTER SET latin1  NOT NULL,
+ch_utf16   CHAR(80)    CHARACTER SET utf16   NOT NULL,
+ch_utf8mb4 CHAR(80)    CHARACTER SET utf8mb4 NOT NULL,
+tx_greek   TEXT        CHARACTER SET greek   NOT NULL,
+tx_latin1  TEXT        CHARACTER SET latin1  NOT NULL,
+tx_utf16   TEXT        CHARACTER SET utf16   NOT NULL,
+tx_utf8mb4 TEXT        CHARACTER SET utf8mb4 NOT NULL,
+vc_greek   VARCHAR(80) CHARACTER SET greek   NOT NULL,
+vc_latin1  VARCHAR(80) CHARACTER SET latin1  NOT NULL,
+vc_utf16   VARCHAR(80) CHARACTER SET utf16   NOT NULL,
+vc_utf8mb4 VARCHAR(80) CHARACTER SET utf8mb4 NOT NULL,
+PRIMARY KEY USING HASH (sintkey)) ENGINE=NDB CHARSET=latin1;
+INSERT INTO encoding_test VALUES
+(1,
+'ABCabc', 'ABCabc', 'ABCabc', 'ABCabc',
+'ABCabc', 'ABCabc', 'ABCabc', 'ABCabc',
+'ABCabc', 'ABCabc', 'ABCabc', 'ABCabc'),
+(2,
+'(unsupported)', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_',
+'(unsupported)', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_',
+'(unsupported)', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_'),
+(3,
+'ΑΒΓαβγ_', '(unsupported)', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_',
+'ΑΒΓαβγ_', '(unsupported)', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_',
+'ΑΒΓαβγ_', '(unsupported)', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_'),
+(4,
+'   spaces   ', '   spaces   ', '   spaces   ', '   spaces   ',
+'   spaces   ', '   spaces   ', '   spaces   ', '   spaces   ',
+'   spaces   ', '   spaces   ', '   spaces   ', '   spaces   '),
+(5,
+'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/');
+SELECT * FROM encoding_test order by sintkey;
+sintkey	ch_greek	ch_latin1	ch_utf16	ch_utf8mb4	tx_greek	tx_latin1	tx_utf16	tx_utf8mb4	vc_greek	vc_latin1	vc_utf16	vc_utf8mb4
+1	ABCabc	ABCabc	ABCabc	ABCabc	ABCabc	ABCabc	ABCabc	ABCabc	ABCabc	ABCabc	ABCabc	ABCabc
+2	(unsupported)	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_	(unsupported)	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_	(unsupported)	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_	XYZ<C3><85><C3><84><C3><96>xyz<C3><A5><C3><A4><C3><B6>_
+3	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_	(unsupported)	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_	(unsupported)	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_	(unsupported)	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_	<CE><91><CE><92><CE><93><CE><B1><CE><B2><CE><B3>_
+4	   spaces	   spaces	   spaces	   spaces	   spaces   	   spaces   	   spaces   	   spaces   	   spaces   	   spaces   	   spaces   	   spaces   
+5	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/	NUL<00> SQ' DQ" BS<08> NL
+ CR<0D> TA	 SUB<1A> BS\ S/
+===== Test encoding handling in pk_read =====
+{"code":200,"operationId":"","data":{
+"sintkey":1,
+"ch_greek":"ABCabc",
+"ch_latin1":"ABCabc",
+"ch_utf16":"ABCabc",
+"ch_utf8mb4":"ABCabc",
+"tx_greek":"ABCabc",
+"tx_latin1":"ABCabc",
+"tx_utf16":"ABCabc",
+"tx_utf8mb4":"ABCabc",
+"vc_greek":"ABCabc",
+"vc_latin1":"ABCabc",
+"vc_utf16":"ABCabc",
+"vc_utf8mb4":"ABCabc"
+}}{"code":200,"operationId":"","data":{
+"sintkey":2,
+"ch_greek":"(unsupported)",
+"ch_latin1":"XYZÅÄÖxyzåäö_",
+"ch_utf16":"XYZÅÄÖxyzåäö_",
+"ch_utf8mb4":"XYZÅÄÖxyzåäö_",
+"tx_greek":"(unsupported)",
+"tx_latin1":"XYZÅÄÖxyzåäö_",
+"tx_utf16":"XYZÅÄÖxyzåäö_",
+"tx_utf8mb4":"XYZÅÄÖxyzåäö_",
+"vc_greek":"(unsupported)",
+"vc_latin1":"XYZÅÄÖxyzåäö_",
+"vc_utf16":"XYZÅÄÖxyzåäö_",
+"vc_utf8mb4":"XYZÅÄÖxyzåäö_"
+}}{"code":200,"operationId":"","data":{
+"sintkey":3,
+"ch_greek":"ΑΒΓαβγ_",
+"ch_latin1":"(unsupported)",
+"ch_utf16":"ΑΒΓαβγ_",
+"ch_utf8mb4":"ΑΒΓαβγ_",
+"tx_greek":"ΑΒΓαβγ_",
+"tx_latin1":"(unsupported)",
+"tx_utf16":"ΑΒΓαβγ_",
+"tx_utf8mb4":"ΑΒΓαβγ_",
+"vc_greek":"ΑΒΓαβγ_",
+"vc_latin1":"(unsupported)",
+"vc_utf16":"ΑΒΓαβγ_",
+"vc_utf8mb4":"ΑΒΓαβγ_"
+}}{"code":200,"operationId":"","data":{
+"sintkey":4,
+"ch_greek":"   spaces",
+"ch_latin1":"   spaces",
+"ch_utf16":"   spaces",
+"ch_utf8mb4":"   spaces",
+"tx_greek":"   spaces   ",
+"tx_latin1":"   spaces   ",
+"tx_utf16":"   spaces   ",
+"tx_utf8mb4":"   spaces   ",
+"vc_greek":"   spaces   ",
+"vc_latin1":"   spaces   ",
+"vc_utf16":"   spaces   ",
+"vc_utf8mb4":"   spaces   "
+}}{"code":200,"operationId":"","data":{
+"sintkey":5,
+"ch_greek":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"ch_latin1":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"ch_utf16":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"ch_utf8mb4":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"tx_greek":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"tx_latin1":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"tx_utf16":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"tx_utf8mb4":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"vc_greek":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"vc_latin1":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"vc_utf16":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/",
+"vc_utf8mb4":"NUL\u0000 SQ' DQ\" BS\b NL\n CR\r TA\t SUB\u001a BS\\ S/"
+}}
+USE test;
+DROP DATABASE db1;

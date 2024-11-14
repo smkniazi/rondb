@@ -259,7 +259,8 @@ RS_Status PKRResponse::Append_i64(Int64 num) {
 
 RS_Status PKRResponse::Append_char(const char *fromBuff,
                                    Uint32 fromBuffLen,
-                                   CHARSET_INFO *fromCS) {
+                                   CHARSET_INFO *fromCS,
+                                   bool trimSpaces) {
   Uint32 extraSpace = 3;  // +1 for null terminator 
 
   if (unlikely((fromBuffLen + extraSpace) > GetRemainingCapacity())) {
@@ -271,8 +272,9 @@ RS_Status PKRResponse::Append_char(const char *fromBuff,
   }
   //  from_buffer -> printable string  -> escaped string
   // allocate a buffer large enough to hold the formatted string
+  const CHARSET_INFO* toCS = &my_charset_utf8mb4_bin;
   Uint64 estimated_bytes =
-    (fromBuffLen / fromCS->mbminlen + 1) * fromCS->mbmaxlen + 1;
+    (fromBuffLen / fromCS->mbminlen + 1) * toCS->mbmaxlen + 1;
   estimated_bytes = std::min(estimated_bytes, static_cast<Uint64>(UINT_MAX32));
   std::shared_ptr<char> tempBuff(new char[estimated_bytes],
                                  [](const char *buff) {
@@ -282,7 +284,7 @@ RS_Status PKRResponse::Append_char(const char *fromBuff,
   const char *cannot_convert_error_pos = nullptr;
   const char *from_end_pos = nullptr;
   const char *error_pos = nullptr;
-  int bytesFormed = well_formed_copy_nchars(fromCS,
+  int bytesFormed = well_formed_copy_nchars(toCS,
                                             tempBuff.get(),
                                             estimated_bytes,
                                             fromCS,
@@ -316,10 +318,12 @@ RS_Status PKRResponse::Append_char(const char *fromBuff,
       std::to_string((fromBuff + fromBuffLen) - from_end_pos));
   }
   std::string wellFormedString = std::string(tempBuff.get(), bytesFormed);
-  // remove blank spaces that are padded to the string
-  size_t endpos = wellFormedString.find_last_not_of(" ");
-  if (std::string::npos != endpos) {
-    wellFormedString = wellFormedString.substr(0, endpos + 1);
+  if (trimSpaces) {
+    // remove blank spaces that are padded to the string
+    size_t endpos = wellFormedString.find_last_not_of(" ");
+    if (std::string::npos != endpos) {
+      wellFormedString = wellFormedString.substr(0, endpos + 1);
+    }
   }
   std::string escapedstr = escape_string(wellFormedString);
   // +1 for null terminator 

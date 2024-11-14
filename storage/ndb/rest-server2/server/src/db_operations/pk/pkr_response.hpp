@@ -171,7 +171,8 @@ class PKRResponse {
    */
   RS_Status Append_char(const char *from_buffer,
                         Uint32 from_length,
-                        CHARSET_INFO *from_cs);
+                        CHARSET_INFO *from_cs,
+                        bool trimSpaces);
 
   /**
    * Append to response buffer
