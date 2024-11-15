@@ -145,6 +145,7 @@
 #endif
 
 //#define TRACE_INTERPRETER
+//#define TRACE_INTERPRETER_REGISTERS
 
 /* For debugging */
 static void dump_hex(const Uint32 *p, Uint32 len) {
@@ -4034,6 +4035,10 @@ Dbtup::checkNullAttributes(KeyReqStruct * req_struct,
    *
    * XXX remove or fix
    */
+  g_eventLogger->info("changeMask: %s, tabMask: %s",
+    BaseString::getPrettyText(req_struct->changeMask).c_str(),
+    BaseString::getPrettyText(regTabPtr->notNullAttributeMask).c_str());
+
   attributeMask.clear();
   attributeMask.bitOR(req_struct->changeMask);
   if (unlikely(is_refresh)) {
@@ -4584,6 +4589,34 @@ int Dbtup::interpreterNextLab(Signal* signal,
         " RnoOfInstructions : %u.  TprogramCounter : %u.  Opcode : %u",
         instance(), RnoOfInstructions, TprogramCounter,
         Interpreter::getOpCode(theInstruction));
+#endif
+
+#ifdef TRACE_INTERPRETER_REGISTERS
+    g_eventLogger->info(
+      "REG0: %lld NULL: %u\n"
+      "REG1: %lld NULL: %u\n"
+      "REG2: %lld NULL: %u\n"
+      "REG3: %lld NULL: %u\n"
+      "REG4: %lld NULL: %u\n"
+      "REG5: %lld NULL: %u\n"
+      "REG6: %lld NULL: %u\n"
+      "REG7: %lld NULL: %u\n",
+      *(Int64*)(TregMemBuffer + 2),
+      TregMemBuffer[0],
+      *(Int64*)(TregMemBuffer + 6),
+      TregMemBuffer[4],
+      *(Int64*)(TregMemBuffer + 10),
+      TregMemBuffer[8],
+      *(Int64*)(TregMemBuffer + 14),
+      TregMemBuffer[12],
+      *(Int64*)(TregMemBuffer + 18),
+      TregMemBuffer[16],
+      *(Int64*)(TregMemBuffer + 22),
+      TregMemBuffer[20],
+      *(Int64*)(TregMemBuffer + 26),
+      TregMemBuffer[24],
+      *(Int64*)(TregMemBuffer + 30),
+      TregMemBuffer[28]);
 #endif
     if (TprogramCounter < TcurrentSize) {
       TprogramCounter++;
@@ -5546,10 +5579,19 @@ int Dbtup::interpreterNextLab(Signal* signal,
             return TUPKEY_abort(req_struct, ZMEMORY_OFFSET_ERROR);
           }
           {
+            char local_heap[MAX_LONG_LONG_STRING + 1];
             char *memory_start = &TheapMemoryChar[memoryOffset];
-            char *memory_end = memory_start + size;
+            memcpy(&local_heap[0], memory_start, size);
+            char *memory_end = &local_heap[size];
+            /**
+             * The byte after the array is uninitialised at this point, set it
+             * to 0 to avoid going into undefined territory.
+             * We use a local array to avoid writing into the heap in
+             * area possibly used by someone else.
+             */
+            memory_end[0] = 0;
             char *end_ptr = nullptr;
-            Int64 val = strtoll(memory_start,
+            Int64 val = strtoll(&local_heap[0],
                                 &end_ptr,
                                 10);
             if (unlikely(errno == ERANGE || end_ptr != memory_end)) {
