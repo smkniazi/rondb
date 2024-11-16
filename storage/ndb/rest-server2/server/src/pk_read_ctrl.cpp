@@ -25,6 +25,7 @@
 #include "api_key.hpp"
 #include "config_structs.hpp"
 #include "constants.hpp"
+#include "metrics.hpp"
 #include <NdbSleep.h>
 
 #include <cstring>
@@ -51,7 +52,9 @@ void PKReadCtrl::pkRead(const drogon::HttpRequestPtr &req,
                           const drogon::HttpResponsePtr &)> &&callback,
                         const std::string_view &db,
                         const std::string_view &table) {
-  auto resp = drogon::HttpResponse::newHttpResponse();
+  drogon::HttpResponsePtr resp = drogon::HttpResponse::newHttpResponse();
+  rdrs_metrics::EndPointMetricsUpdater metricsUpdater(PKREAD, POST, resp);
+
   size_t currentThreadIndex = drogon::app().getCurrentThreadIndex();
   if (unlikely(currentThreadIndex >= globalConfigs.rest.numThreads)) {
     resp->setBody("Too many threads");

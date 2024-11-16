@@ -29,8 +29,8 @@
 #include "rdrs_dal.hpp"
 #include "src/constants.hpp"
 #include "metadata.hpp"
-#include "fs_cache.hpp"
 #include "error_strings.h"
+#include "metrics.hpp"
 
 #include <cstddef>
 #include <cstring>
@@ -567,7 +567,9 @@ void FeatureStoreCtrl::featureStore(
    * 14. Callback to Drogon to send response HTTP packet
    */
 
-  auto resp = drogon::HttpResponse::newHttpResponse();
+  drogon::HttpResponsePtr resp = drogon::HttpResponse::newHttpResponse();
+  rdrs_metrics::EndPointMetricsUpdater metricsUpdater(FEATURE_STORE, POST, resp);
+
   size_t currentThreadIndex = drogon::app().getCurrentThreadIndex();
   if (unlikely(currentThreadIndex >= globalConfigs.rest.numThreads)) {
     resp->setBody("Too many threads");

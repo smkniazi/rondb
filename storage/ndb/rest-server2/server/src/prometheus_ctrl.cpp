@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023, 2024 Hopsworks AB
+ * Copyright (C) 2024 Hopsworks AB
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -16,39 +16,18 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
  * USA.
  */
-#ifndef STORAGE_NDB_REST_SERVER2_SERVER_SRC_LOGGER_HPP_
-#define STORAGE_NDB_REST_SERVER2_SERVER_SRC_LOGGER_HPP_
 
-#include "rdrs_dal.h"
+#include "prometheus_ctrl.hpp"
+#include "metrics.hpp"
 
-#include <string>
+void PrometheusCtrl::metrics(const drogon::HttpRequestPtr &req,
+                             std::function<void(const drogon::HttpResponsePtr &)> &&callback) {
 
-namespace rdrs_logger {
+  (void)req;  // to get rid of unsed param warning
 
-#define ErrorLevel 2
-#define WarnLevel  3
-#define InfoLevel  4
-#define DebugLevel 5
-#define TraceLevel 6
+  drogon::HttpResponsePtr resp = drogon::HttpResponse::newHttpResponse();
 
-void log(const int level, const char *msg);
+  rdrs_metrics::writeMetrics(resp);
 
-void error(const char *msg);
-
-void error(const std::string msg);
-
-void warn(const char *msg);
-
-void warn(const std::string msg);
-
-void info(const char *msg);
-
-void info(const std::string msg);
-
-void debug(const char *msg);
-
-void debug(const std::string msg);
-
-}  // namespace rdrs_logger
-
-#endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_LOGGER_HPP_
+  callback(resp);
+}

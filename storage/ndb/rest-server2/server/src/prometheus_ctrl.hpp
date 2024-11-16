@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2023, 2024 Hopsworks AB
+ * Copyright (C) 2024 Hopsworks AB
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -17,24 +17,25 @@
  * USA.
  */
 
-#ifndef STORAGE_NDB_REST_SERVER2_SERVER_SRC_PK_READ_CTRL_HPP_
-#define STORAGE_NDB_REST_SERVER2_SERVER_SRC_PK_READ_CTRL_HPP_
+#ifndef STORAGE_NDB_REST_SERVER2_SERVER_SRC_PROMETHEUS_CTRL_HPP_
+#define STORAGE_NDB_REST_SERVER2_SERVER_SRC_PROMETHEUS_CTRL_HPP_
 
 #include "rdrs_dal.h"
 #include "constants.hpp"
 
 #include <drogon/drogon.h>
 #include <drogon/HttpSimpleController.h>
+#include <ndb_types.h>
 
-class PKReadCtrl : public drogon::HttpController<PKReadCtrl> {
+// Class for Promethus Controller
+class PrometheusCtrl : public drogon::HttpController<PrometheusCtrl> {
  public:
   METHOD_LIST_BEGIN
-  ADD_METHOD_TO(PKReadCtrl::pkRead, PKREAD_PATH, drogon::Post);
+  ADD_METHOD_TO(PrometheusCtrl::metrics, PROMETHEUS_METRICS_PATH, drogon::Get);
   METHOD_LIST_END
 
-  static void pkRead(const drogon::HttpRequestPtr &req,
-                     std::function<void(const drogon::HttpResponsePtr &)> &&callback,
-                     const std::string_view &db, const std::string_view &table);
+  static void metrics(const drogon::HttpRequestPtr &req,
+                      std::function<void(const drogon::HttpResponsePtr &)> &&callback);
 };
 
-#endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_PK_READ_CTRL_HPP_
+#endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_PROMETHEUS_CTRL_HPP_

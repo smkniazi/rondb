@@ -24,8 +24,7 @@
 #include "pk_data_structs.hpp"
 #include "api_key.hpp"
 #include "src/constants.hpp"
-#include "error_strings.h"
-#include "rdrs_dal.hpp"
+#include "metrics.hpp"
 
 #include <cstring>
 #include <drogon/HttpTypes.h>
@@ -51,7 +50,10 @@ extern EventLogger *g_eventLogger;
 void BatchPKReadCtrl::batchPKRead(
   const drogon::HttpRequestPtr &req,
   std::function<void(const drogon::HttpResponsePtr &)> &&callback) {
-  auto resp                 = drogon::HttpResponse::newHttpResponse();
+
+  drogon::HttpResponsePtr resp = drogon::HttpResponse::newHttpResponse();
+  rdrs_metrics::EndPointMetricsUpdater metricsUpdater(BATCH, POST, resp);
+
   size_t currentThreadIndex = drogon::app().getCurrentThreadIndex();
   if (unlikely(currentThreadIndex >= globalConfigs.rest.numThreads)) {
     resp->setBody("Too many threads");

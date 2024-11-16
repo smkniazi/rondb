@@ -17,13 +17,14 @@ file(GLOB_RECURSE SRC
         feature_store_data_structs.cpp
         feature_util.cpp
         feature_store/feature_store.cpp
-	fs_cache.cpp
+        fs_cache.cpp
         health_ctrl.cpp
         json_parser.cpp
         json_printer.cpp
         logger.cpp
         main.cc
         metadata.cpp
+        metrics.cpp
         mystring.cpp
         ndb_api_helper.cpp
         operations_feature_store.cpp
@@ -31,6 +32,7 @@ file(GLOB_RECURSE SRC
         pk_data_structs.cpp
         pk_read_ctrl.cpp
         pk_read_ctrl.cpp
+        prometheus_ctrl.cpp
         rdrs_dal.cpp
         rdrs_hopsworks_dal.cpp
         rdrs_rondb_connection.cpp
@@ -79,6 +81,22 @@ endif()
 find_package(Jsoncpp REQUIRED)
 find_package(Threads REQUIRED)
 
+#prometheus-cpp
+find_package(prometheus-cpp CONFIG QUIET)
+if (NOT prometheus-cpp_FOUND)
+  if(${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+    message(FATAL_ERROR "Error: prometheus-cpp was not found. Please install prometheus-cpp. \n\t\t brew install prometheus-cpp \n\t\t or install from src https://github.com/jupp0r/prometheus-cpp")
+  else()
+    message(FATAL_ERROR "Error: prometheus-cpp was not found. Please install prometheus-cpp. \n\t\t brew install prometheus-cpp https://github.com/jupp0r/prometheus-cpp")
+  endif()
+endif()
+
+if(NOT DEFINED prometheus-cpp_VERSION)
+  message(FATAL_ERROR "prometheus-cpp_VERSION is not defined")
+endif()
+
+
+# openssl and crypto libs
 IF(CRYPTO_CUSTOM_LIBRARY) 
   SET(RDRS_CRYPTO_LIBRARY ${CRYPTO_CUSTOM_LIBRARY})
 ELSE()
@@ -125,6 +143,7 @@ TARGET_LINK_LIBRARIES(${PROJECT_NAME}
                       simdjson::simdjson
                       ${RDRS_OPENSSL_LIBRARY}
                       ${RDRS_CRYPTO_LIBRARY}
+                      prometheus-cpp::push
                       ndbgeneral
                       rdrs_string
                       mysqlclient
@@ -159,6 +178,7 @@ TARGET_LINK_LIBRARIES(rdrs2_lib
                       simdjson::simdjson
                       ${RDRS_OPENSSL_LIBRARY}
                       ${RDRS_CRYPTO_LIBRARY}
+                      prometheus-cpp::push
                       ndbclient_so
                       ndbgeneral
                       rdrs_string

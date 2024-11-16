@@ -37,7 +37,7 @@ class RonDBConnection {
                                              meta_data_cluster,
                                              numThreads);
     if (status.http_code != SUCCESS) {
-      RDRSLogger::LOG_ERROR("Failed to initialize RonDB connection: " +
+      rdrs_logger::error("Failed to initialize RonDB connection: " +
                             std::string(status.message));
       throw std::runtime_error(status.message);
     }
@@ -50,7 +50,7 @@ class RonDBConnection {
                                              meta_data_cluster,
                                              numThreads);
     if (status.http_code != SUCCESS) {
-      RDRSLogger::LOG_ERROR("Failed to initialize RonDB connection: " +
+      rdrs_logger::error("Failed to initialize RonDB connection: " +
                             std::string(status.message));
       throw std::runtime_error(status.message);
     }
@@ -59,7 +59,7 @@ class RonDBConnection {
   ~RonDBConnection() {
     RS_Status status = shutdown_rondb_connection();
     if (status.http_code != SUCCESS) {
-      RDRSLogger::LOG_ERROR(
+      rdrs_logger::error(
         "Failed to shutdown RonDB connection: " + std::string(status.message));
     }
   }

@@ -20,26 +20,29 @@
 #ifndef STORAGE_NDB_REST_SERVER2_SERVER_SRC_CONSTANTS_HPP_
 #define STORAGE_NDB_REST_SERVER2_SERVER_SRC_CONSTANTS_HPP_
 
-#include <string>
 
-#define API_VERSION "0.1.0"
-#define PING        "ping"
-#define HEALTH      "health"
-#define PKREAD      "pk-read"
-#define BATCH       "batch"
-#define RONSQL      "ronsql"
+// Names of Endpoints
+#define API_VERSION         "0.1.0"
+#define PING                "ping"
+#define HEALTH              "health"
+#define PKREAD              "pk-read"
+#define BATCH               "batch"
+#define RONSQL              "ronsql"
+#define METRICS             "metrics"
+#define FEATURE_STORE       "feature_store"
+#define BATCH_FEATURE_STORE "batch_feature_store"
 
 #define MAKE_PATH(version, endpoint) "/" version "/" endpoint
 
 #define HEALTH_PATH MAKE_PATH(API_VERSION, HEALTH)
-#define PING_PATH  MAKE_PATH(API_VERSION, PING)
-#define BATCH_PATH MAKE_PATH(API_VERSION, BATCH)
+#define PING_PATH   MAKE_PATH(API_VERSION, PING)
+#define BATCH_PATH  MAKE_PATH(API_VERSION, BATCH)
 
 #define PKREAD_PATH              "/" API_VERSION "/{db}/{table}/" PKREAD
-#define RONSQL_PATH "/" API_VERSION "/" RONSQL
-#define FEATURE_STORE_PATH       "/" API_VERSION "/feature_store"
-#define BATCH_FEATURE_STORE_PATH "/" API_VERSION "/batch_feature_store"
-
+#define RONSQL_PATH              "/" API_VERSION "/" RONSQL
+#define FEATURE_STORE_PATH       "/" API_VERSION "/" FEATURE_STORE
+#define BATCH_FEATURE_STORE_PATH "/" API_VERSION "/" BATCH_FEATURE_STORE
+#define PROMETHEUS_METRICS_PATH  "/" METRICS
 
 constexpr const char *POST                           = "POST";
 constexpr const char *GET                            = "GET";
