@@ -4035,10 +4035,6 @@ Dbtup::checkNullAttributes(KeyReqStruct * req_struct,
    *
    * XXX remove or fix
    */
-  g_eventLogger->info("changeMask: %s, tabMask: %s",
-    BaseString::getPrettyText(req_struct->changeMask).c_str(),
-    BaseString::getPrettyText(regTabPtr->notNullAttributeMask).c_str());
-
   attributeMask.clear();
   attributeMask.bitOR(req_struct->changeMask);
   if (unlikely(is_refresh)) {

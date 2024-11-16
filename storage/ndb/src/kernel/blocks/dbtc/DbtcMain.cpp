@@ -5479,8 +5479,6 @@ void Dbtc::sendlqhkeyreq(Signal *signal, BlockReference TBRef,
   regTcPtr->numFiredTriggers = 0;
   regTcPtr->triggerExecutionCount = 0;
   regTcPtr->m_start_ticks = getHighResTimer();
-  g_eventLogger->info("LQHKEYREQ: start_ticks = %llu", regTcPtr->m_start_ticks.getUint64());
-
   {
     /* Build long LQHKeyReq using Key + AttrInfo sections */
     SectionHandle handle(this);
