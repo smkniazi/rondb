@@ -27,6 +27,7 @@
 #include <string>
 #include <vector>
 
+#include "NdbBlob.hpp"
 #include "NdbRecAttr.hpp"
 #include "src/db_operations/pk/common.hpp"
 #include "src/error_strings.h"
@@ -823,6 +824,7 @@ RS_Status find_training_dataset_data_int(Ndb *ndb_object,
     (*tdfs + i)->td_join_id  = tdfsv[i].td_join_id;
     (*tdfs + i)->idx = tdfsv[i].idx;
     (*tdfs + i)->label = tdfsv[i].label;
+    (*tdfs + i)->transformation_function_id = tdfsv[i].transformation_function_id;
     (*tdfs + i)->feature_view_id = tdfsv[i].feature_view_id;
     memcpy((*tdfs + i)->name, tdfsv[i].name,
            strlen(tdfsv[i].name) + 1);  // +1 for '\0'
@@ -1250,7 +1252,7 @@ RS_Status find_feature_group_schema_id_int(Ndb *ndb_object,
 RS_Status find_feature_group_schema_int(Ndb *ndb_object,
                                         const char *subject_name,
                                         int project_id,
-                                        char *schema) {
+                                        char **schema) {
   int schema_id;
   RS_Status status = find_feature_group_schema_id_int(ndb_object,
                                                       subject_name,
@@ -1286,15 +1288,15 @@ RS_Status find_feature_group_schema_int(Ndb *ndb_object,
     ndb_object->closeTransaction(tx);
     return RS_RONDB_SERVER_ERROR(ndb_error, ERROR_023);
   }
-  NdbRecAttr *schema_attr = ndb_op->getValue("schema", nullptr);
-  assert(FEATURE_GROUP_SCHEMA_SIZE ==
-    (Uint32)table_dict->getColumn("schema")->getSizeInBytes());
-  if (unlikely(schema_attr == nullptr)) {
+
+  NdbBlob *schema_blob = ndb_op->getBlobHandle("schema");
+  if (schema_blob == nullptr) {
     ndb_error = ndb_op->getNdbError();
     ndb_object->closeTransaction(tx);
     return RS_RONDB_SERVER_ERROR(ndb_error, ERROR_019);
   }
-  if (unlikely(tx->execute(NdbTransaction::Commit) != 0)) {
+
+  if (tx->execute(NdbTransaction::NoCommit) != 0) {
     ndb_error = tx->getNdbError();
     ndb_object->closeTransaction(tx);
     return RS_RONDB_SERVER_ERROR(ndb_error, ERROR_009);
@@ -1303,16 +1305,56 @@ RS_Status find_feature_group_schema_int(Ndb *ndb_object,
     ndb_object->closeTransaction(tx);
     return RS_CLIENT_404_ERROR();
   }
-  Uint32 schema_attr_bytes;
-  const char *schema_attr_start = nullptr;
-  if (unlikely(GetByteArray(
-        schema_attr, &schema_attr_start, &schema_attr_bytes) != 0)) {
-    ndb_object->closeTransaction(tx);
-    return RS_CLIENT_ERROR(ERROR_019);
+
+  Uint64 length = 0;
+  if (schema_blob->getLength(length) == -1) {
+    return RS_SERVER_ERROR(ERROR_037 + std::string(" Reading column length failed.") +
+                           std::string(" Column: ") +
+                           std::string(schema_blob->getColumn()->getName()) +
+                           " Type: " + std::to_string(schema_blob->getColumn()->getType()));
   }
-  memcpy(schema, schema_attr_start, schema_attr_bytes);
-  schema[schema_attr_bytes] = '\0';
+
+  Uint64 chunk      = 0;
+  Uint64 total_read = 0;
+  *schema           = (char *)malloc(length + 1); // +1 for \0 
+  char *tmp_buffer  = static_cast<char *>(*schema);
+
+  for (chunk = 0; chunk < (length / (BLOB_MAX_FETCH_SIZE)) + 1; chunk++) {
+    Uint64 pos   = chunk * BLOB_MAX_FETCH_SIZE;
+    Uint32 bytes = BLOB_MAX_FETCH_SIZE;  // NOTE this is bytes to read and also bytes read.
+    if (pos + bytes > length) {
+      bytes = length - pos;
+    }
+
+    if (bytes != 0) {
+      if (-1 == schema_blob->setPos(pos)) {
+        return RS_RONDB_SERVER_ERROR(
+            schema_blob->getNdbError(),
+            ERROR_037 + std::string(" Failed to set read position.") + std::string(" Column: ") +
+                std::string(schema_blob->getColumn()->getName()) +
+                " Type: " + std::to_string(schema_blob->getColumn()->getType()));
+      }
+
+      if (schema_blob->readData(tmp_buffer, bytes /*to read, also bytes read*/) == -1) {
+        return RS_RONDB_SERVER_ERROR(
+            schema_blob->getNdbError(),
+            ERROR_037 + std::string(" Read data failed .") + std::string(" Column: ") +
+                std::string(schema_blob->getColumn()->getName()) +
+                " Type: " + std::to_string(schema_blob->getColumn()->getType()) +
+                " Position: " + std::to_string(pos));
+      }
+
+      if (bytes > 0) {
+        total_read += bytes;
+        tmp_buffer += bytes;
+      }
+    }
+  }
+  assert(total_read == length);
+  (*schema)[total_read] = '\0';
+
   ndb_object->closeTransaction(tx);
+
   return RS_OK;
 }
 
@@ -1325,7 +1367,7 @@ RS_Status find_feature_group_schema_int(Ndb *ndb_object,
  */
 RS_Status find_feature_group_schema(const char *subject_name,
                                     int project_id,
-                                    char *schema) {
+                                    char **schema) {
   Ndb *ndb_object  = nullptr;
   RS_Status status = rdrsRonDBConnectionPool->GetMetadataNdbObject(&ndb_object);
   if (unlikely(status.http_code != SUCCESS)) {

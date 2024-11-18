@@ -167,16 +167,23 @@ GetFeatureGroupAvroSchema(const std::string &fgName,
                           int fgVersion,
                           int projectId) {
   std::string subjectName = fgName + "_" + std::to_string(fgVersion);
-  char *schemaBuff = static_cast<char *>(malloc(FEATURE_GROUP_SCHEMA_SIZE));
+  char *schemaBuff = nullptr; 
   auto ret = find_feature_group_schema(subjectName.c_str(),
                                        projectId,
-                                       schemaBuff);
+                                       &schemaBuff);
   if (ret.http_code != static_cast<HTTP_CODE>(drogon::HttpStatusCode::k200OK)) {
-    free(schemaBuff);
+    if (schemaBuff != nullptr) {
+      free(schemaBuff);
+    }
     return std::make_tuple(FeatureGroupAvroSchema{}, ret);
   }
-  std::string schemaStr(schemaBuff);
-  free(schemaBuff);
+
+  std::string schemaStr;
+  if (schemaBuff != nullptr) {
+    schemaStr = std::string(schemaBuff);
+    free(schemaBuff);
+  }
+
   simdjson::dom::parser parser;
   auto result = parser.parse(schemaStr);
   if (result.error()) {
