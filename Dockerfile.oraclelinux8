@@ -55,7 +55,8 @@ RUN --mount=type=cache,target=/var/cache/yum,id=oracle8-yum \
     patchelf ncurses-devel java-1.8.0-openjdk-devel automake \
     zlib-devel scl-utils \
     vim pigz hostname \
-    gcc-toolset-12 maven rpcgen
+    gcc-toolset-12 maven rpcgen \
+    libcurl-devel
 
 # Building RonDB 24.10 requires bison at least version 3.8. Oracle linux 8 ships
 # with a version that is too old, so we have to install manually.
@@ -201,7 +202,7 @@ RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
     && mkdir build \
     && cd build \
     && source scl_source enable gcc-toolset-12 \
-    && cmake .. -DBUILD_SHARED_LIBS=ON -DENABLE_PUSH=OFF -DENABLE_COMPRESSION=OFF \
+    && cmake .. -DBUILD_SHARED_LIBS=ON -DENABLE_PUSH=ON -DENABLE_COMPRESSION=OFF \
     && make -j$THREADS_ARG  \
     && make install \
     && cd ../.. \
