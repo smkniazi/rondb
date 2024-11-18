@@ -1374,7 +1374,7 @@ RS_Status find_feature_group_schema_int(Ndb *ndb_object, const char *subject_nam
 
   Uint64 chunk      = 0;
   Uint64 total_read = 0;
-  *schema           = (char *)malloc(length);
+  *schema           = (char *)malloc(length + 1); // +1 for \0
   char *tmp_buffer  = static_cast<char *>(*schema);
 
   for (chunk = 0; chunk < (length / (BLOB_MAX_FETCH_SIZE)) + 1; chunk++) {
