@@ -52,7 +52,8 @@ RUN --mount=type=cache,target=/var/cache/yum,id=oracle9-yum \
     numactl numactl-libs numactl-devel \
     uuid-devel libudev-devel doxygen \
     patchelf ncurses-devel java-1.8.0-openjdk-devel automake \
-    vim pigz hostname libtirpc-devel boost-devel
+    vim pigz hostname libtirpc-devel boost-devel \
+    libcurl-devel
 
 # Building RonDB 24.10 requires bison at least version 3.8. Oracle linux 9 ships
 # with a version that is too old, so we have to install manually.
@@ -180,7 +181,7 @@ RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
     && mkdir build \
     && cd build \
     && source scl_source enable gcc-toolset-12 \
-    && cmake .. -DBUILD_SHARED_LIBS=ON -DENABLE_PUSH=OFF -DENABLE_COMPRESSION=OFF \
+    && cmake .. -DBUILD_SHARED_LIBS=ON -DENABLE_PUSH=ON -DENABLE_COMPRESSION=OFF \
     && make -j$THREADS_ARG  \
     && make install \ 
     && cd ../.. \
