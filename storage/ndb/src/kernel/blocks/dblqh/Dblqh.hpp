@@ -647,8 +647,9 @@ class Dblqh : public SimulatedBlock {
     };
     enum ScanType { ST_IDLE = 0, SCAN = 1, COPY = 2 };
 
-    /* A single scan of each fragment can have MAX_PARALLEL_OP_PER_SCAN
-     * read operations in progress at one time
+    /* A single scan of each fragment can have
+     * MAX_PARALLEL_OP_PER_SCAN_WITH_LOCK read operations in progress
+     * at one time if we are reading with locks.
      * We must store ACC ptrs for each read operation.  They are stored
      * in SegmentedSections linked in the array below.
      * The main oddity is that the first element of scan_acc_op_ptr is
@@ -656,9 +657,9 @@ class Dblqh : public SimulatedBlock {
      * ACC ptrs.
      */
     static constexpr Uint32 MaxScanAccSegments =
-        ((MAX_PARALLEL_OP_PER_SCAN + SectionSegment::DataLength - 1) /
-         SectionSegment::DataLength) +
-        1;
+        ((MAX_PARALLEL_OP_PER_SCAN_RC +
+          SectionSegment::DataLength - 1) /
+           SectionSegment::DataLength) + 1;
 
     UintR scan_acc_op_ptr[MaxScanAccSegments];
     Uint32 scan_acc_index;
@@ -673,6 +674,7 @@ class Dblqh : public SimulatedBlock {
     Uint32 m_curr_batch_size_bytes;
 
     Uint32 m_exec_direct_batch_size_words;
+    Uint32 m_def_max_batch_size;
 
     bool check_scan_batch_completed(bool print = false) const;
     

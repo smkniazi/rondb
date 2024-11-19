@@ -112,7 +112,7 @@ private:
   static constexpr Uint32 MaxTreeNodeSize = MAX_TTREE_NODE_SIZE;
   static constexpr Uint32 MaxPrefSize = MAX_TTREE_PREF_SIZE;
   static constexpr Uint32 ScanBoundSegmentSize = 7;
-  static constexpr Uint32 MaxAccLockOps = MAX_PARALLEL_OP_PER_SCAN;
+  static constexpr Uint32 MaxAccLockOps = MAX_PARALLEL_OP_PER_SCAN_WITH_LOCK;
   static constexpr Uint32 MaxTreeDepth = 32;  // strict
 #ifdef VM_TRACE
   // for TuxCtx::c_debugBuffer

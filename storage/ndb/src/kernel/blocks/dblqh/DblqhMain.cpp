@@ -17335,7 +17335,8 @@ void Dblqh::init_acc_ptr_list(ScanRecord *scanP) { scanP->scan_acc_index = 0; }
 Uint32 Dblqh::get_acc_ptr_from_scan_record(ScanRecord *scanP, Uint32 index,
                                            bool crash_flag) {
   Uint32 *acc_ptr;
-  if (!((index < MAX_PARALLEL_OP_PER_SCAN) && index < scanP->scan_acc_index)) {
+  if (!((index < MAX_PARALLEL_OP_PER_SCAN_WITH_LOCK) &&
+         index < scanP->scan_acc_index)) {
     ndbrequire(crash_flag);
     return RNIL;
   }
@@ -17347,7 +17348,7 @@ void Dblqh::set_acc_ptr_in_scan_record(ScanRecord *scanP, Uint32 index,
                                        Uint32 acc) {
   Uint32 *acc_ptr;
   ndbrequire((index == 0 || scanP->scan_acc_index == index) &&
-             (index < MAX_PARALLEL_OP_PER_SCAN));
+             (index < MAX_PARALLEL_OP_PER_SCAN_WITH_LOCK));
   scanP->scan_acc_index = index + 1;
   i_get_acc_ptr(scanP, acc_ptr, index);
   *acc_ptr = acc;
@@ -17800,7 +17801,10 @@ void Dblqh::execSCAN_FRAGREQ(Signal *signal) {
      */
     ndbrequire(scanLockMode == 0 || keyinfo);
 
-    ndbrequire(max_rows > 0 && max_rows <= MAX_PARALLEL_OP_PER_SCAN);
+    Uint32 def_max_batch_size = (scanLockMode == 0) ?
+      MAX_PARALLEL_OP_PER_SCAN_RC :
+      MAX_PARALLEL_OP_PER_SCAN_WITH_LOCK;
+    ndbrequire(max_rows > 0 && max_rows <= def_max_batch_size);
 
     // Verify scan type vs table type (both sides are boolean)
     if (unlikely(rangeScan !=
@@ -17822,6 +17826,7 @@ void Dblqh::execSCAN_FRAGREQ(Signal *signal) {
       releaseSections(handle);
       goto error_handler;
     }
+    scanptr.p->m_def_max_batch_size = def_max_batch_size;
     initScanTc(scanFragReq, transid1, transid2, fragId, ZNIL, senderBlockRef,
                tcConnectptr);
     regTcPtr->opExec = (1 ^ ScanFragReq::getNotInterpretedFlag(reqinfo));
@@ -18580,7 +18585,8 @@ void Dblqh::nextScanConfScanLab(Signal *signal, ScanRecord *const scanPtr,
                                        scanPtr->m_row_id.m_page_idx, gci);
         readLength = 3;
       }
-      ndbrequire(scanPtr->m_curr_batch_size_rows < MAX_PARALLEL_OP_PER_SCAN);
+      ndbrequire(scanPtr->m_curr_batch_size_rows <
+                 scanPtr->m_def_max_batch_size);
       scanPtr->m_exec_direct_batch_size_words += readLength;
       scanPtr->m_curr_batch_size_bytes += readLength * sizeof(Uint32);
       scanPtr->m_curr_batch_size_rows++;
@@ -18963,9 +18969,9 @@ void Dblqh::scanTupkeyConfLab(Signal* signal,
      * Moz
      * In aggregation mode, since we don't follow batch strategy 100%,
      * in the situation which has small group, m_curr_batch_size_rows
-     * could be bigger than MAX_PARALLEL_OP_PER_SCAN
+     * could be bigger than MAX_PARALLEL_OP_PER_SCAN_RC
      */
-    ndbrequire(scanPtr->m_curr_batch_size_rows < MAX_PARALLEL_OP_PER_SCAN);
+    ndbrequire(scanPtr->m_curr_batch_size_rows < scanPtr->m_def_max_batch_size);
   }
   scanPtr->m_exec_direct_batch_size_words += read_len;
   scanPtr->m_curr_batch_size_bytes += read_len * sizeof(Uint32);
@@ -19924,7 +19930,7 @@ void Dblqh::init_release_scanrec(ScanRecord *scanPtr) {
  * ------------------------------------------------------------------------  */
 Uint32 Dblqh::sendKeyinfo20(Signal *signal, ScanRecord *scanP,
                             TcConnectionrec *tcConP) {
-  ndbrequire(scanP->m_curr_batch_size_rows < MAX_PARALLEL_OP_PER_SCAN);
+  ndbrequire(scanP->m_curr_batch_size_rows < scanP->m_def_max_batch_size);
   KeyInfo20 *keyInfo = (KeyInfo20 *)&signal->theData[0];
 
   /**

@@ -6892,17 +6892,17 @@ Uint32 Dbspj::scanFrag_parallelism(Ptr<Request> requestPtr,
 
   /**
    * Parallelism must be increased if we otherwise would be limited
-   * by the MAX_PARALLEL_OP_PER_SCAN limitation in the SCAN_FRAGREQs
+   * by the MAX_PARALLEL_OP_PER_SCAN_SPJ limitation in the SCAN_FRAGREQs
    */
   const ScanFragReq *req =
       reinterpret_cast<const ScanFragReq *>(data.m_scanFragReq);
   const Uint32 availableBatchRows = req->batch_size_rows - data.m_totalRows;
 
   ndbrequire(availableBatchRows >= batchSizeRows);
-  if ((availableBatchRows / parallelism) > MAX_PARALLEL_OP_PER_SCAN) {
+  if ((availableBatchRows / parallelism) > MAX_PARALLEL_OP_PER_SCAN_SPJ) {
     jam();
-    parallelism = MIN((availableBatchRows + MAX_PARALLEL_OP_PER_SCAN - 1) /
-                          MAX_PARALLEL_OP_PER_SCAN,
+    parallelism = MIN((availableBatchRows + MAX_PARALLEL_OP_PER_SCAN_SPJ - 1) /
+                          MAX_PARALLEL_OP_PER_SCAN_SPJ,
                       data.m_frags_not_started);
   }
 
@@ -7008,9 +7008,10 @@ void Dbspj::scanFrag_send(Signal *signal, Ptr<Request> requestPtr,
       treeNodePtr, availableBatchBytes, availableBatchRows);
   data.m_parallelism = scanFrag_parallelism(requestPtr, treeNodePtr, batchRows);
 
-  // Cap batchSize-rows to avoid exceeding MAX_PARALLEL_OP_PER_SCAN
+  // Cap batchSize-rows to avoid exceeding MAX_PARALLEL_OP_PER_SCAN_SPJ
   const Uint32 bs_rows =
-      MIN(availableBatchRows / data.m_parallelism, MAX_PARALLEL_OP_PER_SCAN);
+      MIN(availableBatchRows / data.m_parallelism,
+          MAX_PARALLEL_OP_PER_SCAN_SPJ);
   const Uint32 bs_bytes = availableBatchBytes / data.m_parallelism;
   ndbassert(bs_rows > 0);
   ndbassert(bs_bytes > 0);
@@ -7081,7 +7082,7 @@ Uint32 Dbspj::scanFrag_send(Signal *signal, Ptr<Request> requestPtr,
   // req->variableData[0] // set below
   req->variableData[1] = requestPtr.p->m_rootResultData;
   req->batch_size_bytes = bs_bytes;
-  req->batch_size_rows = MIN(bs_rows, MAX_PARALLEL_OP_PER_SCAN);
+  req->batch_size_rows = MIN(bs_rows, MAX_PARALLEL_OP_PER_SCAN_SPJ);
 
   /**
    * A SORTED_ORDER scan need to fetch one row at a time from the treeNode
@@ -8032,7 +8033,8 @@ void Dbspj::scanFrag_execSCAN_NEXTREQ(Signal *signal, Ptr<Request> requestPtr,
   }
 
   Uint32 bs_rows =
-      MIN(org->batch_size_rows / data.m_parallelism, MAX_PARALLEL_OP_PER_SCAN);
+      MIN(org->batch_size_rows / data.m_parallelism,
+          MAX_PARALLEL_OP_PER_SCAN_SPJ);
   const Uint32 bs_bytes = org->batch_size_bytes / data.m_parallelism;
   ndbassert(bs_rows > 0);
 

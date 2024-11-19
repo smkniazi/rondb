@@ -128,11 +128,16 @@ class NdbReceiver {
   void getValues(const NdbRecord *, char *);
   void prepareSend();
 
-  static void calculate_batch_size(const NdbImpl &, Uint32 parallelism,
-                                   Uint32 &batch_size, Uint32 &batch_byte_size);
+  static void calculate_batch_size(const NdbImpl &,
+                                   Uint32 parallelism,
+                                   Uint32 &batch_size,
+                                   Uint32 &batch_byte_size,
+                                   Uint32 def_max_batch_size);
 
-  void calculate_batch_size(Uint32 parallelism, Uint32 &batch_size,
-                            Uint32 &batch_byte_size) const;
+  void calculate_batch_size(Uint32 parallelism,
+                            Uint32 &batch_size,
+                            Uint32 &batch_byte_size,
+                            Uint32 def_max_batch_size) const;
 
   /**
    * Calculate size of result buffer which has to be
