@@ -7,6 +7,7 @@ TARBALL_NAME=$2
 OUTPUT_DIR_ABS=$3
 ABS_PATH_RSA_KEY=$4
 CLUSTERJ_ARTIFACT_POSTFIX=$5
+RONDB_VERSION_EXTRA=$6
 
 TAR_FILE="$TARBALL_NAME.tar.gz"
 
@@ -32,13 +33,25 @@ if [ "$CPU_ARCH" != "x86_64" ]; then
   exit 0
 fi
 
-echo "Extracting ClusterJ JAR file from tarball again"
+set +e
+
+# First attempt. clusterj-$RONDB_VERSION.jar. e.g. 22.10.6.jar
+echo "Extracting ClusterJ JAR file from tarball"
 JAR_FILE="$TARBALL_NAME/share/java/clusterj-$RONDB_VERSION.jar"
 tar xf $TAR_FILE_ABS $JAR_FILE
 if [[ ! -f "$JAR_FILE" ]]; then
-  echo "Error: Unable to find cluster file '$JAR_FILE'"
-  exit 1
+  echo "Error: Unable to find cluster file '$JAR_FILE'. Retrying ..."
+
+  # Second attempt. e.g. 22.10.6LTS.jar
+  JAR_FILE="$TARBALL_NAME/share/java/clusterj-$RONDB_VERSION$RONDB_VERSION_EXTRA.jar"
+  tar xf $TAR_FILE_ABS $JAR_FILE
+  if [[ ! -f "$JAR_FILE" ]]; then
+    echo "Error: Unable to find cluster file '$JAR_FILE'"
+    exit 1
+  fi
 fi
+
+set -e
 
 mvn deploy:deploy-file -Dfile=$JAR_FILE -DgroupId=com.mysql.ndb -DartifactId=clusterj-rondb \
   -Dversion=$RONDB_VERSION$CLUSTERJ_ARTIFACT_POSTFIX -Dpackaging=jar -DrepositoryId=Hops \
@@ -54,7 +67,7 @@ mvn deploy:deploy-file -Dfile=$JAR_FILE -DgroupId=com.mysql.ndb -DartifactId=clu
   -DJenkinsHops.User=$EE_USER \
   -DJenkinsHops.Password=$EE_PASS
 
-echo "Extracting libndbclient.so.6.1.0 file from tarball again"
+echo "Extracting libndbclient.so.6.1.0 file from tarball"
 LIBNDB_FILE="$TARBALL_NAME/lib/libndbclient.so.6.1.0"
 tar xf $TAR_FILE_ABS $LIBNDB_FILE
 if [[ ! -f "$LIBNDB_FILE" ]]; then
