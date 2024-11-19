@@ -98,6 +98,7 @@ fi
 
 source $SRC_DIR_ABS/MYSQL_VERSION
 RONDB_VERSION="$MYSQL_VERSION_MAJOR.$MYSQL_VERSION_MINOR.$MYSQL_VERSION_PATCH"
+RONDB_VERSION_EXTRA="$MYSQL_VERSION_EXTRA"
 
 if [[ "$OUTPUT_DIR" == "" ]]; then
   echo "Output directory not specified"
@@ -133,8 +134,9 @@ echo "Build Params:
   Release:                  $RELEASE_BUILD
   Deploy:                   $DEPLOY
   Number of build threads:  $CORES
-  RonDB version:            $RONDB_VERSION"
-
+  RonDB version:            $RONDB_VERSION
+  RonDB version Extra:      $RONDB_VERSION_EXTRA" 
+   
 if [ "$RELEASE_BUILD" = true ]; then
   echo "_____________ BUILDING RONDB. RELEASE: TRUE _____________"
   cd $TEMP_BUILD_DIR_ABS
@@ -186,5 +188,5 @@ if [ "$DEPLOY" = true ]; then
     CLUSTERJ_ARTIFACT_POSTFIX=""
   fi
 
-  $SRC_DIR_ABS/build_scripts/release_scripts/deploy.sh $RONDB_VERSION $TARBALL_NAME $OUTPUT_DIR_ABS $SRC_DIR_ABS/id_rsa "$CLUSTERJ_ARTIFACT_POSTFIX"
+  $SRC_DIR_ABS/build_scripts/release_scripts/deploy.sh $RONDB_VERSION $TARBALL_NAME $OUTPUT_DIR_ABS $SRC_DIR_ABS/id_rsa "$CLUSTERJ_ARTIFACT_POSTFIX" "$RONDB_VERSION_EXTRA"
 fi
