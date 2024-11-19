@@ -65,8 +65,7 @@ static inline int bytes_for_ndb_str_len(int ndb_str_len) {
 #define PK_REQ_PK_COLS_IDX   6
 #define PK_REQ_READ_COLS_IDX 7
 #define PK_REQ_OP_ID_IDX     8
-// NOTE: Update this when you add / remove fields from  header
-#define PK_REQ_HEADER_END    36
+#define PK_REQ_HEADER_END    36  // NOTE: Update this when you add / remove fields from  header
 
 // Primary Key Read Response Header Indexes
 #define PK_RESP_OP_TYPE_IDX    0
@@ -78,8 +77,7 @@ static inline int bytes_for_ndb_str_len(int ndb_str_len) {
 #define PK_RESP_TABLE_IDX      6
 #define PK_RESP_COLS_IDX       7
 #define PK_RESP_OP_ID_IDX      8
-#define PK_RESP_HEADER_END     36
-// NOTE: Update this when you add / remove fields from  header
+#define PK_RESP_HEADER_END     36  // NOTE: Update this when you add / remove fields from  header
 
 // Hopsworks
 #define HOPSWORKS                "hopsworks"
@@ -117,19 +115,14 @@ static inline int bytes_for_ndb_str_len(int ndb_str_len) {
 #define SERVING_KEY_JOIN_ON_SIZE           1000 + 2  /* +2 for ndb len or '\0'*/
 #define SERVING_KEY_JOIN_PREFIX_SIZE       63 + 1    /* +1 for ndb len or '\0'*/
 #define FEATURE_GROUP_SUBJECT_SIZE         255 + 1   /* +1 for ndb len or '\0'*/
-#define FEATURE_GROUP_SCHEMA_SIZE          29000 + 2 /* +2 for ndb len or '\0'*/
 
 // Data types
-/*4 bytes per 9 digits. 65/9 + 1 * 4*/
-#define DECIMAL_MAX_SIZE_IN_BYTES           9 * 4
-/*MAX 255 chars. *4 for char set*/
-#define CHAR_MAX_SIZE_IN_BYTES              255 * 4
+#define DECIMAL_MAX_SIZE_IN_BYTES           9 * 4   /*4 bytes per 9 digits. 65/9 + 1 * 4*/
+#define CHAR_MAX_SIZE_IN_BYTES              255 * 4 /*MAX 255 chars. *4 for char set*/
 #define DECIMAL_MAX_PRECISION_SIZE_IN_BYTES 65
-#define DECIMAL_MAX_STR_LEN_IN_BYTES DECIMAL_MAX_PRECISION_SIZE_IN_BYTES + 3
-/*encoding 255 bytes takes max 340 bytes (255*4/3) */
-/*encoding 4092 bytes takes max 5456 bytes (4092*4/3) */
-#define BINARY_MAX_SIZE_IN_BYTES            255
-#define KEY_MAX_SIZE_IN_BYTES               1023 * 4
+#define DECIMAL_MAX_STR_LEN_IN_BYTES        DECIMAL_MAX_PRECISION_SIZE_IN_BYTES + 3
+#define BINARY_MAX_SIZE_IN_BYTES            255 /*encoding 255 bytes takes max 340 bytes (255*4/3) */
+#define KEY_MAX_SIZE_IN_BYTES               1023 * 4 /*encoding 4092 bytes takes max 5456 bytes (4092*4/3) */
 #define DATE_MAX_SIZE_IN_BYTES              3
 #define TIME2_MAX_SIZE_IN_BYTES             6
 #define DATETIME_MAX_SIZE_IN_BYTES          8
