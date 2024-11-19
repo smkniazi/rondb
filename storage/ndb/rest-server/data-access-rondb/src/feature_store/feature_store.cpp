@@ -26,6 +26,7 @@
 #include <string>
 #include <vector>
 
+#include "NdbBlob.hpp"
 #include "NdbRecAttr.hpp"
 #include "src/db-operations/pk/common.hpp"
 #include "src/error-strings.h"
@@ -1305,7 +1306,7 @@ RS_Status find_feature_group_schema_id_int(Ndb *ndb_object, const char *subject_
 
 //-------------------------------------------------------------------------------------------------
 
-RS_Status find_feature_group_schema_int(Ndb *ndb_object, const char *subject_name, int project_id, char *schema) {
+RS_Status find_feature_group_schema_int(Ndb *ndb_object, const char *subject_name, int project_id, char **schema) {
   int schema_id;
   RS_Status status = find_feature_group_schema_id_int(ndb_object, subject_name, project_id, &schema_id);
   if (status.http_code != SUCCESS) {
@@ -1345,16 +1346,14 @@ RS_Status find_feature_group_schema_int(Ndb *ndb_object, const char *subject_nam
     return RS_RONDB_SERVER_ERROR(ndb_error, ERROR_023);
   }
 
-  NdbRecAttr *schema_attr = ndb_op->getValue("schema", nullptr);
-  assert(FEATURE_GROUP_SCHEMA_SIZE == (Uint32)table_dict->getColumn("schema")->getSizeInBytes());
-
-  if (schema_attr == nullptr) {
+  NdbBlob *schema_blob = ndb_op->getBlobHandle("schema");
+  if (schema_blob == nullptr) {
     ndb_error = ndb_op->getNdbError();
     ndb_object->closeTransaction(tx);
     return RS_RONDB_SERVER_ERROR(ndb_error, ERROR_019);
   }
 
-  if (tx->execute(NdbTransaction::Commit) != 0) {
+  if (tx->execute(NdbTransaction::NoCommit) != 0) {
     ndb_error = tx->getNdbError();
     ndb_object->closeTransaction(tx);
     return RS_RONDB_SERVER_ERROR(ndb_error, ERROR_009);
@@ -1365,15 +1364,52 @@ RS_Status find_feature_group_schema_int(Ndb *ndb_object, const char *subject_nam
     return RS_CLIENT_404_ERROR();
   }
 
-  Uint32 schema_attr_bytes;
-  const char *schema_attr_start = nullptr;
-  if (GetByteArray(schema_attr, &schema_attr_start, &schema_attr_bytes) != 0) {
-    ndb_object->closeTransaction(tx);
-    return RS_CLIENT_ERROR(ERROR_019);
+  Uint64 length = 0;
+  if (schema_blob->getLength(length) == -1) {
+    return RS_SERVER_ERROR(ERROR_037 + std::string(" Reading column length failed.") +
+                           std::string(" Column: ") +
+                           std::string(schema_blob->getColumn()->getName()) +
+                           " Type: " + std::to_string(schema_blob->getColumn()->getType()));
   }
 
-  memcpy(schema, schema_attr_start, schema_attr_bytes);
-  schema[schema_attr_bytes] = '\0';
+  Uint64 chunk      = 0;
+  Uint64 total_read = 0;
+  *schema           = (char *)malloc(length + 1); // +1 for \0
+  char *tmp_buffer  = static_cast<char *>(*schema);
+
+  for (chunk = 0; chunk < (length / (BLOB_MAX_FETCH_SIZE)) + 1; chunk++) {
+    Uint64 pos   = chunk * BLOB_MAX_FETCH_SIZE;
+    Uint32 bytes = BLOB_MAX_FETCH_SIZE;  // NOTE this is bytes to read and also bytes read.
+    if (pos + bytes > length) {
+      bytes = length - pos;
+    }
+
+    if (bytes != 0) {
+      if (-1 == schema_blob->setPos(pos)) {
+        return RS_RONDB_SERVER_ERROR(
+            schema_blob->getNdbError(),
+            ERROR_037 + std::string(" Failed to set read position.") + std::string(" Column: ") +
+                std::string(schema_blob->getColumn()->getName()) +
+                " Type: " + std::to_string(schema_blob->getColumn()->getType()));
+      }
+
+      if (schema_blob->readData(tmp_buffer, bytes /*to read, also bytes read*/) == -1) {
+        return RS_RONDB_SERVER_ERROR(
+            schema_blob->getNdbError(),
+            ERROR_037 + std::string(" Read data failed .") + std::string(" Column: ") +
+                std::string(schema_blob->getColumn()->getName()) +
+                " Type: " + std::to_string(schema_blob->getColumn()->getType()) +
+                " Position: " + std::to_string(pos));
+      }
+
+      if (bytes > 0) {
+        total_read += bytes;
+        tmp_buffer += bytes;
+      }
+    }
+  }
+  assert(total_read == length);
+  (*schema)[total_read] = '\0';
 
   ndb_object->closeTransaction(tx);
 
@@ -1388,13 +1424,13 @@ RS_Status find_feature_group_schema_int(Ndb *ndb_object, const char *subject_nam
  * get the schema id of the max version
  * SELECT schema from schemas  WHERE id = {schema_id}
  */
-RS_Status find_feature_group_schema(const char *subject_name, int project_id, char *schema) {
+RS_Status find_feature_group_schema(const char *subject_name, int project_id, char **schema /*out, freed by golang*/) {
   Ndb *ndb_object  = nullptr;
   RS_Status status = rdrsRonDBConnectionPool->GetMetadataNdbObject(&ndb_object);
   if (status.http_code != SUCCESS) {
     return status;
   }
-    /* clang-format off */
+  /* clang-format off */
   METADATA_OP_RETRY_HANDLER(
     status = find_feature_group_schema_int(ndb_object, subject_name, project_id, schema);
     HandleSchemaErrors(ndb_object, status, {std::make_tuple(HOPSWORKS, SCHEMAS)});

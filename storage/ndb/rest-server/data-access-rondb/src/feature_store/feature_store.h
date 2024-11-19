@@ -124,7 +124,7 @@ RS_Status find_serving_key_data(int feature_view_id, Serving_Key **serving_keys,
  * get the schema id of the max version
  * SELECT schema from schemas  WHERE id = {schema_id}
  */
-RS_Status find_feature_group_schema(const char *subject_name, int project_id, char *schema);
+RS_Status find_feature_group_schema(const char *subject_name, int project_id, char **schema /*out. freed by glang*/);
 
 #endif
 #ifdef __cplusplus
