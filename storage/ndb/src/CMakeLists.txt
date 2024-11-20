@@ -40,7 +40,9 @@ ENDFOREACH()
 ADD_SUBDIRECTORY(common)
 ADD_SUBDIRECTORY(mgmapi)
 ADD_SUBDIRECTORY(ndbapi)
-ADD_SUBDIRECTORY(ronsql)
+IF(WITH_RDRS)
+  ADD_SUBDIRECTORY(ronsql)
+ENDIF()
 
 #
 # Build static ndbclient library
