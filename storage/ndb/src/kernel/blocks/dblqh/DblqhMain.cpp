@@ -14123,6 +14123,8 @@ void Dblqh::releaseTcrec(Signal *signal, TcConnectionrecPtr locTcConnectptr) {
       ndbrequire(pre_usageCountW > 0);
     }
   }
+  locTcConnectptr.p->original_operation = 0xFF;
+  locTcConnectptr.p->ttl_ignore = 0;
   Dblqh *lqh = m_curr_lqh;
   if (likely(locTcConnectptr.i < lqh->ctcConnectReserved))
   {
