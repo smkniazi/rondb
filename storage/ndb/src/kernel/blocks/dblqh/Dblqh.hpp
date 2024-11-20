@@ -2802,11 +2802,13 @@ class Dblqh : public SimulatedBlock {
 
       //copyCountWords must be set before used
       reqRef(Uint32(~0)),
-      reqBlockref(Uint32(~0))
+      reqBlockref(Uint32(~0)),
       //m_corrFactorLo must be set before used
       //m_corrFactorHi must be set before used
       //scanKeyInfoPos only used when m_flags has OP_SCANKEYINFOPOSSAVED set
       //m_nr_delete only used in Copy fragment, set before used
+      original_operation(0xFF),
+      ttl_ignore(0)
     {
       m_dealloc_data.m_unused = RNIL;
 #ifdef DEBUG_USAGE_COUNT
