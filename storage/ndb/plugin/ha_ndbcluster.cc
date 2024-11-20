@@ -9009,7 +9009,7 @@ int ha_ndbcluster::get_old_table_comment_items(THD *thd,
   if (mod_fully_replicated->m_found)
     comment_items_shown[FULLY_REPLICATED] = true;
   if (mod_frags->m_found) comment_items_shown[PARTITION_BALANCE] = true;
-  if (mod_ttl) {
+  if (mod_ttl->m_found) {
     comment_items_shown[TTL] = true;
   }
   return 0;
