@@ -3009,6 +3009,10 @@ void Dbtup::handle_lcp_drop_change_page(Fragrecord *fragPtrP,
     returnCommonArea(pagePtr.i, 1);
     return;
   }
+  m_ldm_instance_used->c_lqh->update_memory_usage(fragPtrP->fragTableId,
+                                                  Int32(-4),
+                                                  __LINE__,
+                                                  pagePtr.i);
   m_ctx.m_mm.lock();
   m_ctx.m_mm.release_page(RT_DBTUP_PAGE, pagePtr.i, true);
   Uint32 words = 6 + ((found_idx_count + 1) / 2);

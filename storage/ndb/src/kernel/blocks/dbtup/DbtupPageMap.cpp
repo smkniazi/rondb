@@ -494,6 +494,11 @@ Uint32 Dbtup::insert_new_page_into_page_map(EmulatedJamBuffer *jamBuf,
       jam();
       *prev_ptr = FREE_PAGE_BIT | LAST_LCP_FREE_BIT;
     } 
+    /* Decrement number of pages used in database */
+    m_ldm_instance_used->c_lqh->update_memory_usage(regFragPtr->fragTableId,
+                                                    Int32(-4 * noOfPagesAllocated),
+                                                    __LINE__,
+                                                    pagePtr.i);
     returnCommonArea(pagePtr.i, noOfPagesAllocated);
     return RNIL;
   }
