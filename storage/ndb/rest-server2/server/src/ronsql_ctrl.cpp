@@ -24,18 +24,23 @@
 #include <drogon/HttpTypes.h>
 #include "storage/ndb/src/ronsql/RonSQLPreparer.hpp"
 #include "api_key.hpp"
-#include <EventLogger.hpp>
-
-extern EventLogger *g_eventLogger;
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
 //#define DEBUG_SQL_CTRL 1
 #endif
 
 #ifdef DEBUG_SQL_CTRL
-#define DEB_SQL_CTRL(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
+#define DEB(...) do { \
+  printf(__VA_ARGS__); \
+  fflush(stdout); \
+} while (0)
+#define DEB_TRACE() do { \
+  printf("ronsql_ctrl.cpp:%d\n", __LINE__); \
+  fflush(stdout); \
+} while (0)
 #else
-#define DEB_SQL_CTRL(...) do { } while (0)
+#define DEB(...) do { } while (0)
+#define DEB_TRACE() do { } while (0)
 #endif
 
 using std::endl;
@@ -50,19 +55,21 @@ void RonSQLCtrl::ronsql(
     resp->setBody("Too many threads");
     resp->setStatusCode(drogon::HttpStatusCode::k500InternalServerError);
     callback(resp);
+    DEB_TRACE();
     return;
   }
   JSONParser& jsonParser = jsonParsers[currentThreadIndex];
 
   // Store it to the first string buffer
   const char *json_str = req->getBody().data();
-  DEB_SQL_CTRL("\n\n JSON REQUEST: \n %s \n", json_str);
+  DEB("JSON REQUEST: %s", json_str);
 
   size_t length        = req->getBody().length();
   if (length > globalConfigs.internal.maxReqSize) {
     resp->setBody("Request too large");
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
     callback(resp);
+    DEB_TRACE();
     return;
   }
   memcpy(jsonParser.get_buffer().get(), json_str, length);
@@ -81,6 +88,7 @@ void RonSQLCtrl::ronsql(
     resp->setBody(std::string(status.message));
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
     callback(resp);
+    DEB_TRACE();
     return;
   }
 
@@ -94,6 +102,7 @@ void RonSQLCtrl::ronsql(
     resp->setBody(std::string(status.message));
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
     callback(resp);
+    DEB_TRACE();
     return;
   }
 
@@ -105,6 +114,7 @@ void RonSQLCtrl::ronsql(
       resp->setBody(std::string(status.message));
       resp->setStatusCode((drogon::HttpStatusCode)status.http_code);
       callback(resp);
+      DEB_TRACE();
       return;
     }
   }
@@ -124,6 +134,7 @@ void RonSQLCtrl::ronsql(
     resp->setBody(std::string(status.message));
     resp->setStatusCode(drogon::HttpStatusCode::k400BadRequest);
     callback(resp);
+    DEB_TRACE();
     return;
   }
 
@@ -141,9 +152,11 @@ void RonSQLCtrl::ronsql(
     }
   }
 
+  DEB_TRACE();
   status = ronsql_dal(database.c_str(),
                       &params,
                       currentThreadIndex);
+  DEB_TRACE();
 
   if (json_output) {
     out_stream << "}\n";
@@ -226,16 +239,21 @@ void RonSQLCtrl::ronsql(
       // Should be unreachable
       abort();
     }
+    DEB_TRACE();
     resp->setBody(out_str);
     resp->setStatusCode(drogon::HttpStatusCode::k200OK);
   }
   else {
+    DEB_TRACE();
     resp->setStatusCode(drogon::HttpStatusCode::k500InternalServerError);
     resp->setContentTypeCodeAndCustomString(
       drogon::CT_TEXT_PLAIN, "content-type: text/plain; charset=utf-8; \r\n");
+    DEB_TRACE();
     resp->setBody(err_str);
   }
+  DEB_TRACE();
   callback(resp);
+  DEB_TRACE();
 }
 
 RS_Status ronsql_validate_database_name(std::string& database) {

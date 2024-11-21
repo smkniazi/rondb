@@ -29,6 +29,19 @@
 #include "RonSQLPreparer.hpp"
 #include "mysql/strings/dtoa.h"
 
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+//#define DEBUG_RONSQLPRINTER 1
+#endif
+
+#ifdef DEBUG_RONSQLPRINTER
+#define DEB_TRACE() do { \
+  printf("RonSQLPrinter.cpp:%d\n", __LINE__); \
+  fflush(stdout); \
+} while (0)
+#else
+#define DEB_TRACE() do { } while (0)
+#endif
+
 using std::endl;
 using std::max;
 using std::runtime_error;
@@ -322,16 +335,19 @@ void
 ResultPrinter::print_result(NdbAggregator* aggregator,
                             std::basic_ostream<char>* out_stream)
 {
+  DEB_TRACE();
   assert(out_stream != NULL);
   std::ostream& out = *out_stream;
   if (m_json_output)
   {
+    DEB_TRACE();
     out << '[';
     bool first_record = true;
     for (NdbAggregator::ResultRecord record = aggregator->FetchResultRecord();
          !record.end();
          record = aggregator->FetchResultRecord())
     {
+      DEB_TRACE();
       if (first_record)
       {
         first_record = false;
@@ -342,17 +358,21 @@ ResultPrinter::print_result(NdbAggregator* aggregator,
       }
       print_record(record, out);
     }
+    DEB_TRACE();
     out << "]\n";
   }
   else if (m_tsv_output)
   {
+    DEB_TRACE();
     bool first_record = true;
     for (NdbAggregator::ResultRecord record = aggregator->FetchResultRecord();
          !record.end();
          record = aggregator->FetchResultRecord())
     {
+      DEB_TRACE();
       if (first_record && m_tsv_headers)
       {
+        DEB_TRACE();
         // Print the column names.
         bool first_column = true;
         for (Uint32 i = 0; i < m_outputs.size(); i++)
@@ -366,9 +386,11 @@ ResultPrinter::print_result(NdbAggregator* aggregator,
       }
       print_record(record, out);
     }
+    DEB_TRACE();
   }
   else
   {
+    DEB_TRACE();
     abort();
   }
   // ================================================================================
