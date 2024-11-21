@@ -236,7 +236,9 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
               ah.getDataSize(), gb_cols_len, agg_res_len,
               agg_res_ptr);
           assert(ah.getDataPtr() != &data_buf[pos]);
-          pos += sizeof(AttributeHeader) + ah.getDataSize() * sizeof(Int32);
+          static_assert(sizeof(AttributeHeader) % sizeof(Int32) == 0,
+              "AttributeHeader size must be divisible by Int32 size");
+          pos += sizeof(AttributeHeader) / sizeof(Int32) + ah.getDataSize();
           DEB_TRACE();
           if (i == gb_cols_len - 1) {
             DEB_TRACE();
