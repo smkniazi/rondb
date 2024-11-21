@@ -164,14 +164,17 @@ void RonSQLCtrl::ronsql(
 
   std::string out_str = out_stream.str();
   std::string err_str = err_stream.str();
-#ifdef VM_TRACE
-  bool hasOut = !out_str.empty();
-  bool hasErr = !err_str.empty();
-#endif
   if (static_cast<drogon::HttpStatusCode>(status.http_code) ==
-        drogon::HttpStatusCode::k200OK) {
-    assert(!hasErr);
-    assert(hasOut);
+      drogon::HttpStatusCode::k200OK) {
+#ifdef VM_TRACE
+    assert(err_str.empty());
+    assert(!out_str.empty() ||
+           params.output_format ==
+             RonSQLExecParams::OutputFormat::TEXT_NOHEADER ||
+           // headers are never printed for empty result sets
+           params.output_format == RonSQLExecParams::OutputFormat::TEXT
+           );
+#endif
     switch (params.output_format) {
     case RonSQLExecParams::OutputFormat::JSON:
       resp->setContentTypeCode(drogon::CT_APPLICATION_JSON);
