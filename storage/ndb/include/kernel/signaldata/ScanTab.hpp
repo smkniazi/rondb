@@ -123,6 +123,7 @@ class ScanTabReq {
   static Uint8 getReadCommittedBaseFlag(const UintR &requestInfo);
   static Uint32 getMultiFragFlag(const Uint32 &requestInfo);
   static Uint32 getTTLIgnoreFlag(const Uint32 &requestInfo);
+  static Uint32 getTTLOnlyExpiredFlag(const Uint32 &requestInfo);
 
   /**
    * Set:ers for requestInfo
@@ -147,6 +148,7 @@ class ScanTabReq {
   static void setReadCommittedBaseFlag(Uint32 &requestInfo, Uint32 val);
   static void setMultiFragFlag(Uint32 &requestInfo, Uint32 val);
   static void setTTLIgnoreFlag(Uint32 &requestInfo, Uint32 val);
+  static void setTTLOnlyExpiredFlag(Uint32 &requestInfo, Uint32 val);
 };
 
 /**
@@ -177,11 +179,12 @@ class ScanTabReq {
  f = 4 word conf           - 1  Bit 29
  R = Read Committed base   - 1  Bit 30
  I = IgnoreTTL             - 1  Bit 3
+ e = TTL only expired      - 1  Bit 4
 
            1111111111222222222233
  01234567890123456789012345678901
  pppppppplnhcktzxbbbbbbbbbbdjafR
-    I   g
+    Ie  g
 */
 
 #define PARALLEL_SHIFT (0)
@@ -230,6 +233,7 @@ class ScanTabReq {
 #define SCAN_MULTI_FRAG_SHIFT (31)
 
 #define SCAN_TTL_IGNORE_SHIFT (3)
+#define SCAN_TTL_ONLY_EXPIRED_SHIFT (4)
 
 inline Uint8 ScanTabReq::getReadCommittedBaseFlag(const UintR &requestInfo) {
   return (Uint8)((requestInfo >> SCAN_READ_COMMITTED_BASE_SHIFT) & 1);
@@ -435,6 +439,19 @@ ScanTabReq::setTTLIgnoreFlag(UintR & requestInfo, Uint32 flag) {
   ASSERT_BOOL(flag, "TcKeyReq::setTTLIgnoreFlag");
   requestInfo= (requestInfo & ~(1 << SCAN_TTL_IGNORE_SHIFT)) |
                (flag << SCAN_TTL_IGNORE_SHIFT);
+}
+inline
+UintR
+ScanTabReq::getTTLOnlyExpiredFlag(const UintR & requestInfo) {
+  return (requestInfo >> SCAN_TTL_ONLY_EXPIRED_SHIFT) & 1;
+}
+
+inline
+void
+ScanTabReq::setTTLOnlyExpiredFlag(UintR & requestInfo, Uint32 flag) {
+  ASSERT_BOOL(flag, "TcKeyReq::setTTLOnlyExpiredFlag");
+  requestInfo= (requestInfo & ~(1 << SCAN_TTL_ONLY_EXPIRED_SHIFT)) |
+               (flag << SCAN_TTL_ONLY_EXPIRED_SHIFT);
 }
 /**
  *

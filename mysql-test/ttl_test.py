@@ -3195,6 +3195,9 @@ if __name__ == '__main__':
                     "col_c INT, "
                     "PRIMARY KEY(col_a)) "
                     "ENGINE = NDB, "
+                    "COMMENT=\"NDB_TABLE=TTL=66@col_b\"")
+        time.sleep(5)
+        cur.execute("ALTER TABLE test.sz "
                     "COMMENT=\"NDB_TABLE=TTL=10@col_b\"")
     except Exception as e:
         print(f"Create DB/TABLE failed: {e}")

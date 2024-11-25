@@ -86,7 +86,8 @@ bool printLQHKEYREQ(FILE *output, const Uint32 *theData, Uint32 len,
   if (LqhKeyReq::getNoTriggersFlag(reqInfo)) fprintf(output, "NoTriggers ");
   if (LqhKeyReq::getUtilFlag(reqInfo)) fprintf(output, "UtilFlag ");
   if (LqhKeyReq::getNoWaitFlag(reqInfo)) fprintf(output, "NoWait ");
-  if(LqhKeyReq::getTTLIgnoreFlag(reqInfo)) fprintf(output, "ttl_ignore ");
+  if (LqhKeyReq::getTTLIgnoreFlag(reqInfo)) fprintf(output, "ttl_ignore ");
+  if (LqhKeyReq::getTTLOnlyExpiredFlag(reqInfo)) fprintf(output, "ttl_only_expire ");
 
   fprintf(output, "ScanInfo/noFiredTriggers: H\'%x\n", sig->scanInfo);
 

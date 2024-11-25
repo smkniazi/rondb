@@ -144,6 +144,9 @@ class ScanFragReq {
 
   static void setTTLIgnoreFragFlag(Uint32 & requestInfo, Uint32 val);
   static Uint32 getTTLIgnoreFragFlag(const Uint32 & requestInfo);
+
+  static void setTTLOnlyExpiredFragFlag(Uint32 & requestInfo, Uint32 val);
+  static Uint32 getTTLOnlyExpiredFragFlag(const Uint32 & requestInfo);
 };
 
 /*
@@ -348,11 +351,12 @@ class ScanFragNextReq {
  * q = Query thread flag     - 1  Bit 22
  * g = Aggregation flag      - 1  Bit 23
  * I = TTL ignore flag       - 1  Bit 24
+ * e = TTL only expired flag - 1  Bit 25
  *
  *           1111111111222222222233
  * 01234567890123456789012345678901
  *  rrcdlxhkrztppppaaaaaaaaaaaaaaaa   Short variant ( < 6.4.0)
- *  rrcdlxhkrztppppCsaim  gI          Long variant (6.4.0 +)
+ *  rrcdlxhkrztppppCsaim  gIe         Long variant (6.4.0 +)
  */
 #define SF_LOCK_MODE_SHIFT (5)
 #define SF_LOCK_MODE_MASK (1)
@@ -385,6 +389,7 @@ class ScanFragNextReq {
 #define SF_QUERY_THREAD_SHIFT (22)
 #define SF_AGGREGATION_SHIFT (23)
 #define SF_TTL_IGNORE_SHIFT (24)
+#define SF_TTL_ONLY_EXPIRED_SHIFT (25)
 
 inline Uint32 ScanFragReq::getLockMode(const Uint32 &requestInfo) {
   return (requestInfo >> SF_LOCK_MODE_SHIFT) & SF_LOCK_MODE_MASK;
@@ -602,6 +607,20 @@ inline
 Uint32
 ScanFragReq::getTTLIgnoreFragFlag(const Uint32 & requestInfo) {
   return (requestInfo >> SF_TTL_IGNORE_SHIFT) & 1;
+}
+
+inline
+void
+ScanFragReq::setTTLOnlyExpiredFragFlag(Uint32 & requestInfo, UintR val) {
+  ASSERT_BOOL(val, "ScanFragReq::setTTLOnlyExpiredFlag");
+  requestInfo= (requestInfo & ~(1 << SF_TTL_ONLY_EXPIRED_SHIFT)) |
+               (val << SF_TTL_ONLY_EXPIRED_SHIFT);
+}
+
+inline
+Uint32
+ScanFragReq::getTTLOnlyExpiredFragFlag(const Uint32 & requestInfo) {
+  return (requestInfo >> SF_TTL_ONLY_EXPIRED_SHIFT) & 1;
 }
 
 /**

@@ -4168,6 +4168,7 @@ void Dbtc::execTCKEYREQ(Signal *signal) {
 
     regCachePtr->m_noWait = TcKeyReq::getNoWaitFlag(Treqinfo);
     regCachePtr->m_ttl_ignore = TcKeyReq::getTTLIgnoreFlag(Treqinfo);
+    regCachePtr->m_ttl_only_expired = TcKeyReq::getTTLOnlyExpiredFlag(Treqinfo);
   } else {
     TkeyLength = TcKeyReq::getKeyLength(Treqinfo);
     TattrLen = TcKeyReq::getAttrinfoLen(tcKeyReq->attrLen);
@@ -4180,6 +4181,7 @@ void Dbtc::execTCKEYREQ(Signal *signal) {
      * unable to ignore TTL in ShortTcKeyReq?
      */
     regCachePtr->m_ttl_ignore = 0;
+    regCachePtr->m_ttl_only_expired = 0;
   }
   bool util_flag = ZFALSE;
   if (unlikely(refToMain(sendersBlockRef) == DBUTIL))
@@ -5443,6 +5445,7 @@ void Dbtc::sendlqhkeyreq(Signal *signal, BlockReference TBRef,
   LqhKeyReq::setReplicaApplierFlag(Tdata10,
     (replica_applier == ApiConnectRecord::TF_REPLICA_APPLIER));
   LqhKeyReq::setTTLIgnoreFlag(Tdata10, regCachePtr->m_ttl_ignore);
+  LqhKeyReq::setTTLOnlyExpiredFlag(Tdata10, regCachePtr->m_ttl_only_expired);
 
   /* -----------------------------------------------------------------------
    * If we are sending a short LQHKEYREQ, then there will be some AttrInfo
@@ -15937,6 +15940,8 @@ Uint32 Dbtc::initScanrec(ScanRecordPtr scanptr, const ScanTabReq *scanTabReq,
   ScanFragReq::setMultiFragFlag(tmp, ScanTabReq::getMultiFragFlag(ri));
   ScanFragReq::setAggregationFlag(tmp, ScanTabReq::getAggregation(ri));
   ScanFragReq::setTTLIgnoreFragFlag(tmp, ScanTabReq::getTTLIgnoreFlag(ri));
+  ScanFragReq::setTTLOnlyExpiredFragFlag(tmp,
+                      ScanTabReq::getTTLOnlyExpiredFlag(ri));
 
   if (unlikely(ScanTabReq::getViaSPJFlag(ri))) {
     jam();

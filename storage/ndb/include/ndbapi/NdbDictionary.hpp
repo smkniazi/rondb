@@ -1326,7 +1326,7 @@ class NdbDictionary {
     /*
      * Is TTL enabled
      */
-    bool isTTLEnabled();
+    bool isTTLEnabled() const;
 
   private:
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL

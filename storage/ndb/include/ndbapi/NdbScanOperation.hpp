@@ -123,7 +123,8 @@ class NdbScanOperation : public NdbOperation {
       It is enabled by default for scans using LM_Exclusive, but must be
       explicitly specified to enable the taking-over of LM_Read locks.
     */
-    SF_KeyInfo = 1
+    SF_KeyInfo = 1,
+    SF_OnlyExpiredScan = (4 << 16)
   };
 
   /*
@@ -163,7 +164,8 @@ class NdbScanOperation : public NdbOperation {
                 SO_INTERPRETED  = 0x20,
                 SO_CUSTOMDATA   = 0x40,
                 SO_PART_INFO    = 0x80,
-                SO_TTL_IGNORE   = 0x100
+                SO_TTL_IGNORE   = 0x100,
+                SO_TTL_ONLY_EXPIRED = 0x200
     };
 
     /* Flags controlling scan behaviour

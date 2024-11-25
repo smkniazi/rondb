@@ -228,6 +228,8 @@ class LqhKeyReq {
    */
   static void setTTLIgnoreFlag(UintR &requestInfo, UintR val);
   static UintR getTTLIgnoreFlag(const UintR &requestInfo);
+  static void setTTLOnlyExpiredFlag(UintR &requestInfo, UintR val);
+  static UintR getTTLOnlyExpiredFlag(const UintR &requestInfo);
 
   enum RequestInfo {
     RI_KEYLEN_SHIFT = 0,
@@ -244,8 +246,8 @@ class LqhKeyReq {
      */
     RI_TTL_IGNORE_SHIFT = 6,
     RI_INTERPRETED_INSERT_SHIFT = 7,
+    RI_TTL_ONLY_EXPIRED_SHIFT = 8,
     /* Currently unused */
-    RI_CLEAR_SHIFT8 = 8,
     RI_CLEAR_SHIFT9 = 9,
 
     RI_LAST_REPL_SHIFT = 10,
@@ -646,7 +648,7 @@ inline UintR LqhKeyReq::getDisableFkConstraints(const UintR &requestInfo) {
 }
 
 inline UintR LqhKeyReq::getLongClearBits(const UintR &requestInfo) {
-  const Uint32 mask = (1 << RI_CLEAR_SHIFT8) | (1 << RI_CLEAR_SHIFT9);
+  const Uint32 mask = (1 << RI_CLEAR_SHIFT9);
 
   return (requestInfo & mask);
 }
@@ -694,6 +696,15 @@ inline void LqhKeyReq::setTTLIgnoreFlag(UintR &requestInfo, UintR val){
 
 inline UintR LqhKeyReq::getTTLIgnoreFlag(const UintR & requestInfo){
   return (requestInfo >> RI_TTL_IGNORE_SHIFT) & 1;
+}
+
+inline void LqhKeyReq::setTTLOnlyExpiredFlag(UintR &requestInfo, UintR val){
+  ASSERT_BOOL(val, "LqhKeyReq::setTTLOnlyExpiredFlag");
+  requestInfo |= (val << RI_TTL_ONLY_EXPIRED_SHIFT);
+}
+
+inline UintR LqhKeyReq::getTTLOnlyExpiredFlag(const UintR & requestInfo){
+  return (requestInfo >> RI_TTL_ONLY_EXPIRED_SHIFT) & 1;
 }
 
 inline Uint32 table_version_major_lqhkeyreq(Uint32 x) {

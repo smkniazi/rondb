@@ -758,6 +758,7 @@ class Dblqh : public SimulatedBlock {
     // TTL
     Uint8 m_ttl_ignore;         // ignore set by API
     Uint8 m_ttl_ignore_for_ral; // ignore set by Read after lock
+    Uint8 m_ttl_only_expired;   // Only be insterested in expired rows
   };
   static constexpr Uint32 DBLQH_SCAN_RECORD_TRANSIENT_POOL_INDEX = 1;
   typedef Ptr<ScanRecord> ScanRecordPtr;
@@ -2810,7 +2811,8 @@ class Dblqh : public SimulatedBlock {
       //scanKeyInfoPos only used when m_flags has OP_SCANKEYINFOPOSSAVED set
       //m_nr_delete only used in Copy fragment, set before used
       original_operation(0xFF),
-      ttl_ignore(0)
+      ttl_ignore(0),
+      ttl_only_expired(0)
     {
       m_dealloc_data.m_unused = RNIL;
 #ifdef DEBUG_USAGE_COUNT
@@ -3000,6 +3002,7 @@ class Dblqh : public SimulatedBlock {
     Uint32 accOpPtr; /* for scan lock take over */
     Uint8 original_operation; /* Zart, original operation */
     Uint8 ttl_ignore; /* Zart, ttl ignore */
+    Uint8 ttl_only_expired;
   };                 /* p2c: size = 308 bytes */
 
   static constexpr Uint32 DBLQH_OPERATION_RECORD_TRANSIENT_POOL_INDEX = 0;

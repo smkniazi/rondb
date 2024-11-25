@@ -6848,6 +6848,7 @@ void Dblqh::seizeTcrec(TcConnectionrecPtr& tcConnectptr,
    */
   locTcConnectptr.p->original_operation = 0xFF;
   locTcConnectptr.p->ttl_ignore = 0;
+  locTcConnectptr.p->ttl_only_expired = 0;
 
   tcConnectptr = locTcConnectptr;
   ndbrequire(Magic::check_ptr(locTcConnectptr.p->tupConnectPtrP));
@@ -9074,10 +9075,12 @@ void Dblqh::execLQHKEYREQ(Signal *signal) {
    * TTL
    */
   regTcPtr->ttl_ignore = LqhKeyReq::getTTLIgnoreFlag(Treqinfo);
+  regTcPtr->ttl_only_expired = LqhKeyReq::getTTLOnlyExpiredFlag(Treqinfo);
 #ifdef TTL_DEBUG
   if (NEED_PRINT(tabptr.i)) {
-    g_eventLogger->info("Zart, Dblqh::execLQHKEYREQ(), ttl_ignore: %u",
-                        regTcPtr->ttl_ignore);
+    g_eventLogger->info("Zart, Dblqh::execLQHKEYREQ(), ttl_ignore: %u, only_expired: %u",
+                        regTcPtr->ttl_ignore,
+                        regTcPtr->ttl_only_expired);
   }
 #endif  // TTL_DEBUG
 
@@ -10167,7 +10170,7 @@ void Dblqh::exec_acckeyreq(Signal *signal, TcConnectionrecPtr regTcPtr) {
     if (NEED_PRINT(regTcPtr.p->tableref)) {
       g_eventLogger->info("Zart, Dblqh::execACCKEYCONF[1], final ignore_ttl: %u, "
                           "table id: %u",
-                           signal->theData[5],
+                           regTcPtr.p->ttl_ignore,
                            regTcPtr.p->tableref);
     }
 #endif  // TTL_DEBUG
@@ -14125,6 +14128,7 @@ void Dblqh::releaseTcrec(Signal *signal, TcConnectionrecPtr locTcConnectptr) {
   }
   locTcConnectptr.p->original_operation = 0xFF;
   locTcConnectptr.p->ttl_ignore = 0;
+  locTcConnectptr.p->ttl_only_expired = 0;
   Dblqh *lqh = m_curr_lqh;
   if (likely(locTcConnectptr.i < lqh->ctcConnectReserved))
   {
@@ -19424,6 +19428,7 @@ Uint32 Dblqh::initScanrec(const ScanFragReq *scanFragReq, Uint32 aiLen,
   const Uint32 firstMatch = ScanFragReq::getFirstMatchFlag(reqinfo);
   const Uint32 aggregation = ScanFragReq::getAggregationFlag(reqinfo);
   const Uint32 ttl_ignore = ScanFragReq::getTTLIgnoreFragFlag(reqinfo);
+  const Uint32 ttl_only_expired = ScanFragReq::getTTLOnlyExpiredFragFlag(reqinfo);
 
   scanPtr->scanLockMode = scanLockMode;
   scanPtr->readCommitted = readCommitted;
@@ -19433,6 +19438,7 @@ Uint32 Dblqh::initScanrec(const ScanFragReq *scanFragReq, Uint32 aiLen,
   scanPtr->m_aggregation = aggregation;
   scanPtr->m_ttl_ignore = ttl_ignore;
   scanPtr->m_ttl_ignore_for_ral = false;
+  scanPtr->m_ttl_only_expired = ttl_only_expired;
 
   const Uint32 descending = ScanFragReq::getDescendingFlag(reqinfo);
   Uint32 tupScan = ScanFragReq::getTupScanFlag(reqinfo);

@@ -484,7 +484,9 @@ inline int NdbScanOperation::scanImpl(
       options->optionsPresent & ScanOptions::SO_TTL_IGNORE) {
     m_flags |= OF_TTL_IGNORE;
   }
-
+  if (options->optionsPresent & ScanOptions::SO_TTL_ONLY_EXPIRED) {
+    m_flags |= OF_TTL_ONLY_EXPIRED;
+  }
 
   /* Add interpreted code words to ATTRINFO signal
    * chain as necessary
@@ -2044,6 +2046,14 @@ int NdbScanOperation::finaliseScanOldApi() {
                             ScanOptions::SO_PARALLEL | ScanOptions::SO_BATCH);
 
   options.scan_flags = m_savedScanFlagsOldApi;
+  /*
+   * Zart
+   * Here is where we set SO_TTL_ONLY_EXPIRED
+   * from OldApi(SF_OnlyExpiredScan)
+   */
+  if (options.scan_flags & SF_OnlyExpiredScan) {
+    options.optionsPresent |= ScanOptions::SO_TTL_ONLY_EXPIRED;
+  }
   options.parallel = m_savedParallelOldApi;
   options.batch = m_savedBatchOldApi;
 
@@ -2205,6 +2215,7 @@ int NdbScanOperation::prepareSendScan(Uint32 /*aTC_ConnectPtr*/,
    * TTL
    */
   ScanTabReq::setTTLIgnoreFlag(reqInfo, (m_flags & OF_TTL_IGNORE) != 0);
+  ScanTabReq::setTTLOnlyExpiredFlag(reqInfo, (m_flags & OF_TTL_ONLY_EXPIRED) != 0);
 
   req->requestInfo = reqInfo;
   req->distributionKey = theDistributionKey;

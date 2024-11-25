@@ -1131,7 +1131,8 @@ class NdbOperation {
        */
       OO_TTL_IGNORE    = 0x8000,
       OO_INTERPRETED_INSERT = 0x10000,
-      OO_DIRTY_FLAG = 0x20000
+      OO_DIRTY_FLAG = 0x20000,
+      OO_TTL_ONLY_EXPIRED = 0x40000
     };
 
     /* An operation-specific abort option.
@@ -1572,7 +1573,8 @@ class NdbOperation {
     OF_NOWAIT = 0x20,
     OF_BLOB_PART_READ = 0x40,
     OF_REPLICA_APPLIER = 0x80,
-    OF_TTL_IGNORE = 0x100
+    OF_TTL_IGNORE = 0x100,
+    OF_TTL_ONLY_EXPIRED = 0x200
   };
   /*
    * Zart
