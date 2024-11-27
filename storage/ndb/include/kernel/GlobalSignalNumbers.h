@@ -33,7 +33,7 @@
  *
  * When adding a new signal, remember to update MAX_GSN and SignalNames.cpp
  */
-const GlobalSignalNumber MAX_GSN = 943;
+const GlobalSignalNumber MAX_GSN = 946;
 
 struct GsnName {
   GlobalSignalNumber gsn;
@@ -1272,4 +1272,8 @@ extern const GlobalSignalNumber NO_OF_SIGNAL_NAMES;
 #define GSN_DATABASE_RATE_ORD           941
 #define GSN_RATE_OVERLOAD_REP           942
 #define GSN_QUOTA_OVERLOAD_REP          943
+
+#define GSN_SET_DOMAIN_ID_REQ           944
+#define GSN_SET_DOMAIN_ID_CONF          945
+#define GSN_SET_DOMAIN_ID_REF           946
 #endif
