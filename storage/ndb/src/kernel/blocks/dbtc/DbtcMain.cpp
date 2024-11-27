@@ -16210,7 +16210,8 @@ void Dbtc::execDIH_SCAN_TAB_CONF(Signal *signal, ScanRecordPtr scanptr,
   {
     jamDebug();
     ndbrequire(DictTabInfo::isOrderedIndex(tabPtr.p->tableType) ||
-               tabPtr.p->get_user_defined_partitioning());
+               tabPtr.p->get_user_defined_partitioning() ||
+               is_ttl_table(tabPtr.p));
 
     /**
      * Prepare for sendDihGetNodeReq to request DBDIH info for

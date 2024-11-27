@@ -303,9 +303,11 @@ int NdbScanOperation::handleScanOptions(const ScanOptions *options) {
      */
     if (unlikely(!(m_attribute_record->flags &
                    NdbRecord::RecHasUserDefinedPartitioning))) {
-      /* Explicit partitioning info not allowed for table and operation*/
-      setErrorCodeAbort(4546);
-      return -1;
+      if (!(options->scan_flags & SF_OnlyExpiredScan)) {
+        /* Explicit partitioning info not allowed for table and operation*/
+        setErrorCodeAbort(4546);
+        return -1;
+      }
     }
 
     m_pruneState = SPS_FIXED;
@@ -314,8 +316,9 @@ int NdbScanOperation::handleScanOptions(const ScanOptions *options) {
     /* And set the vars in the operation now too */
     theDistributionKey = options->partitionId;
     theDistrKeyIndicator_ = 1;
-    assert((m_attribute_record->flags &
-            NdbRecord::RecHasUserDefinedPartitioning) != 0);
+    assert(((m_attribute_record->flags &
+            NdbRecord::RecHasUserDefinedPartitioning) != 0) ||
+            (options->scan_flags & SF_OnlyExpiredScan));
     DBUG_PRINT("info", ("NdbScanOperation::handleScanOptions(dist key): %u",
                         theDistributionKey));
   }

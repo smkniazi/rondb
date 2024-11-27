@@ -156,6 +156,7 @@ typedef struct {
   int32_t table_id;
   uint32_t ttl_sec;
   uint32_t col_no;
+  uint32_t part_id = {0}; // Only valid in local ttl cache
   char last_purged[8] = {0}; // Only valid in local ttl cache
 } TTLInfo;
 
@@ -300,7 +301,7 @@ void LL2datetime(MYSQL_TIME *ltime, int64_t tmp) {
   ltime->time_zone_displacement = 0;
 }
 
-uint32_t g_batch_size = 5;
+uint32_t g_batch_size = 10;
 std::atomic<bool> g_purge_thread_exit = false;
 void SetPurgeThreadExit(bool exit) {
   g_purge_thread_exit = exit;
@@ -689,7 +690,6 @@ void PurgeTTL(Ndb_cluster_connection* cluster_connection) {
   unsigned char now_char[8];
   unsigned char buf[8];
   int trx_failure_times = 0;
-  bool batch_done = false;
   bool update_objects = false;
   std::map<std::string, TTLInfo>::iterator iter;
   bool purge_trx_started = false;
@@ -761,7 +761,7 @@ void PurgeTTL(Ndb_cluster_connection* cluster_connection) {
         break;
       }
 
-      std::cerr << "Processing " << iter->first << ": " << std::endl;
+      std::cerr << "Processing " << iter->first << ":" << std::endl;
 
       pos = iter->first.find('/');
       assert(pos != std::string::npos);
@@ -773,7 +773,6 @@ void PurgeTTL(Ndb_cluster_connection* cluster_connection) {
       deletedRows = 0;
       now = 0;
       trx_failure_times = 0;
-      batch_done = false;
 
       if (myNdb->setDatabaseName(db_str.c_str()) != 0) {
         std::cerr << "Failed to select database: " << db_str
@@ -824,6 +823,10 @@ void PurgeTTL(Ndb_cluster_connection* cluster_connection) {
         std::cerr << "    Skip" << std::endl;
         continue;
       }
+      std::cerr << "    [P" << iter->second.part_id
+                << "/" << ttl_tab->getPartitionCount() << "]" << std::endl;
+      assert(iter->second.part_id < ttl_tab->getPartitionCount());
+
       trx_failure_times = 0;
 retry_trx:
       trans = myNdb->startTransaction();
@@ -855,16 +858,19 @@ retry_trx:
 
         NdbIndexScanOperation *index_scan_op =
           trans->getNdbIndexScanOperation(ttl_index);
+        index_scan_op->setPartitionId(iter->second.part_id);
         /* Index Scan */
-        Uint32 scanFlags= NdbScanOperation::SF_OrderBy |
-          /*NdbScanOperation::SF_MultiRange |*/
+        Uint32 scanFlags=
+         /*NdbScanOperation::SF_OrderBy |
+          *NdbScanOperation::SF_MultiRange |
+          */
           NdbScanOperation::SF_KeyInfo |
           NdbScanOperation::SF_OnlyExpiredScan;
 
         if (index_scan_op->readTuples(NdbOperation::LM_Exclusive,
-              scanFlags
-              /*(Uint32) 0 // batch */
-              /*(Uint32) 0 // parallel */
+              scanFlags,
+              1,           // parallel
+              g_batch_size // batch
               ) != 0) {
           std::cerr << "Failed to readTuples, " << table_str
                     << ", error: " << trans->getNdbError().code << "("
@@ -921,7 +927,6 @@ retry_trx:
           goto err;
         }
         memset(buf, 0, 8);
-        batch_done = false;
         while ((check = index_scan_op->nextResult(true)) == 0) {
           do {
             memset(buf, 0, 8);
@@ -943,15 +948,7 @@ retry_trx:
               goto err;
             }
             deletedRows++;
-            if (deletedRows >= g_batch_size) {
-              batch_done = true;
-              break;
-            }
           } while ((check = index_scan_op->nextResult(false)) == 0);
-
-          if (check != -1) {
-            check = trans->execute(NdbTransaction::NoCommit);
-          }
 
           if (check == -1) {
             std::cerr << "Failed to execute[2], " << table_str
@@ -960,9 +957,7 @@ retry_trx:
                       << std::endl;
             goto err;
           }
-          if (deletedRows >= g_batch_size) {
-            break;
-          }
+          break;
         }
         /**
          * Commit all prepared operations
@@ -988,8 +983,10 @@ retry_trx:
                     << std::endl;
           goto err;
         }
+        scan_op->setPartitionId(iter->second.part_id);
         Uint32 scanFlags= NdbScanOperation::SF_OnlyExpiredScan;
-        if (scan_op->readTuples(NdbOperation::LM_Exclusive, scanFlags) != 0) {
+        if (scan_op->readTuples(NdbOperation::LM_Exclusive, scanFlags,
+                                1, g_batch_size) != 0) {
           std::cerr << "Failed to readTuples, " << table_str
                     << ", error: " << trans->getNdbError().code << "("
                     << trans->getNdbError().message << "), retry..."
@@ -1011,7 +1008,6 @@ retry_trx:
                     << std::endl;
           goto err;
         }
-        batch_done = false;
         while ((check = scan_op->nextResult(true)) == 0) {
           do {
             // std::cerr << "Get a expired row: timestamp = ["
@@ -1030,16 +1026,8 @@ retry_trx:
               goto err;
             }
             deletedRows++;
-            if (deletedRows >= g_batch_size) {
-              batch_done = true;
-              break;
-            }
 
           } while ((check = scan_op->nextResult(false)) == 0);
-
-          if (check != -1) {
-            check = trans->execute(NdbTransaction::NoCommit);
-          }
 
           if (check == -1) {
             std::cerr << "Failed to execute[2], " << table_str
@@ -1049,9 +1037,7 @@ retry_trx:
             goto err;
           }
 
-          if (batch_done) {
-            break;
-          }
+          break;
         }
         /**
          * Commit all prepared operations
@@ -1073,6 +1059,8 @@ retry_trx:
       myNdb->closeTransaction(trans);
       trans = nullptr;
       fprintf(stderr, "    Purged %u rows\n", deletedRows);
+      iter->second.part_id =
+        ((iter->second.part_id + 1) % ttl_tab->getPartitionCount());
       // Finish 1 batch
       // keep the ttl_tab in local table cache ?
       continue;
@@ -1142,6 +1130,7 @@ int main(int argc, char **argv) {
   char event_name_buf[128];
   uint32_t event_nums = 0;
   bool init_succ = false;
+  NdbEventOperation *ev_op = nullptr;
   NdbEventOperation *op = nullptr;
   std::thread purge_thread;
 
@@ -1185,6 +1174,7 @@ retry_from_connecting:
   initialized_cache = false;
   init_succ = false;
   g_ttl_cache.clear();
+  ev_op = nullptr;
   op = nullptr;
 
   do {
@@ -1261,31 +1251,31 @@ retry_from_connecting:
     }
   } while (!init_succ);
 
-  if ((op = myNdb->createEventOperation(eventName)) == nullptr) {
+  if ((ev_op = myNdb->createEventOperation(eventName)) == nullptr) {
     std::cerr << "Failed to create event operation, error: "
               << myNdb->getNdbError().code << "("
               << myNdb->getNdbError().message << "), retry... "
               << std::endl;
     goto err;
   }
-  op->mergeEvents(true);
+  ev_op->mergeEvents(true);
 
   RA_BH recAttr[noEventColumnName];
   RA_BH recAttrPre[noEventColumnName];
 	for (int i = 0; i < noEventColumnName; i++) {
     if (i != 3) {
-      recAttr[i].ra = op->getValue(eventColumnName[i]);
-      recAttrPre[i].ra = op->getPreValue(eventColumnName[i]);
+      recAttr[i].ra = ev_op->getValue(eventColumnName[i]);
+      recAttrPre[i].ra = ev_op->getPreValue(eventColumnName[i]);
     } else {
-      recAttr[i].bh = op->getBlobHandle(eventColumnName[i]);
-      recAttrPre[i].bh = op->getPreBlobHandle(eventColumnName[i]);
+      recAttr[i].bh = ev_op->getBlobHandle(eventColumnName[i]);
+      recAttrPre[i].bh = ev_op->getPreBlobHandle(eventColumnName[i]);
     }
 	}
 
-  if (op->execute()) {
+  if (ev_op->execute()) {
     std::cerr << "Failed to execute event operation, error: "
-              << op->getNdbError().code << "("
-              << op->getNdbError().message << "), retry... "
+              << ev_op->getNdbError().code << "("
+              << ev_op->getNdbError().message << "), retry... "
               << std::endl;
     goto err;
   }
@@ -1673,9 +1663,10 @@ trx_err:
     }
   }
 err:
-  if (op != nullptr) {
-    myNdb->dropEventOperation(op);
+  if (ev_op != nullptr) {
+    myNdb->dropEventOperation(ev_op);
   }
+  ev_op = nullptr;
   op = nullptr;
   myDict->dropEvent(eventName);
   if (purge_thread.joinable()) {
