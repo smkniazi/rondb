@@ -1,0 +1,90 @@
+/*
+ * Copyright (C) 2024 Hopsworks AB
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
+ * USA.
+ */
+
+#ifndef STORAGE_NDB_REST_SERVER2_SERVER_SRC_TTL_PURGE_HPP_
+#define STORAGE_NDB_REST_SERVER2_SERVER_SRC_TTL_PURGE_HPP_
+
+#include <atomic>
+#include <thread>
+#include <string>
+#include <map>
+
+#include <NdbApi.hpp>
+
+class TTLPurger {
+ public:
+  static constexpr const char* kSchemaEventName = "REPL$mysql/ndb_schema";
+  static constexpr const char* kSystemDBName = "mysql";
+  static constexpr const char* kSchemaTableName = "ndb_schema";
+  static constexpr const char* kSchemaResTabName = "ndb_schema_result";
+  static constexpr const char* kTTLPurgeNodesTabName = "ttl_purge_nodes";
+  static constexpr int kNoEventCol = 10;
+  static constexpr const char* kEventColNames[kNoEventCol] = {
+    "db",
+    "name",
+    "slock",
+    "query",
+    "node_id",
+    "epoch",
+    "id",
+    "version",
+    "type",
+    "schema_op_id"
+  };
+  bool Init();
+  static TTLPurger* CreateTTLPurger();
+  bool Run();
+  ~TTLPurger();
+
+ private:
+  TTLPurger();
+  void SchemaWatcherJob();
+  Ndb* ndb_;
+  std::atomic<bool> exit_;
+
+  typedef struct {
+    int32_t table_id;
+    uint32_t ttl_sec;
+    uint32_t col_no;
+    uint32_t part_id = {0};  // Only valid in local ttl cache
+    char last_purged[8] = {0};  // Only valid in local ttl cache
+  } TTLInfo;
+  std::map<std::string, TTLInfo> ttl_cache_;
+  std::mutex mutex_;
+  std::atomic<bool> cache_updated_;
+  bool UpdateLocalCache(const std::string& db,
+                        const std::string& table,
+                        const NdbDictionary::Table* tab);
+  bool UpdateLocalCache(const std::string& db,
+                        const std::string& table,
+                        const std::string& new_table,
+                        const NdbDictionary::Table* tab);
+  static char* GetEventName(
+                        NdbDictionary::Event::TableEvent event_type,
+                        char* name_buf);
+  bool DropDBLocalCache(const std::string& db_str);
+
+  std::atomic<bool> purge_worker_asks_for_retry_;
+  bool schema_watcher_running_;
+  std::thread* schema_watcher_;
+  bool purge_worker_running_;
+  std::thread* purge_worker_;
+};
+
+#endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_TTL_PURGE_HPP_

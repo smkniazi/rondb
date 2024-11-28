@@ -120,7 +120,7 @@ void RDRSRonDBConnectionPool::shutdown() {
 
 RS_Status RDRSRonDBConnectionPool::Init(Uint32 numThreads,
                                         Uint32 numClusterConnections) {
-  m_num_threads = numThreads;
+  m_num_threads = numThreads + kNoTTLPurgeThreads;
   m_num_data_connections = numClusterConnections;
 
   m_thread_context = (ThreadContext**)
@@ -135,7 +135,7 @@ RS_Status RDRSRonDBConnectionPool::Init(Uint32 numThreads,
          0,
          sizeof(RDRSRonDBConnection**) * m_num_data_connections);
 
-  for (Uint32 i = 0; i < numThreads; i++) {
+  for (Uint32 i = 0; i < m_num_threads; i++) {
     m_thread_context[i] = new ThreadContext();
     check_startup(m_thread_context[i] != nullptr);
   }

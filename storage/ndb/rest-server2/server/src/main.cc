@@ -176,6 +176,7 @@ constexpr const char* const configHelp =
 #include "src/api_key.hpp"
 #include "src/fs_cache.hpp"
 #include "tls_util.hpp"
+#include "src/ttl_purge.hpp"
 #include <ndb_opts.h>
 #include <NdbMutex.h>
 
@@ -193,6 +194,7 @@ static const char* g_pidfile = nullptr;
 static RonDBConnection* g_rondbConnection = nullptr;
 static bool g_drogon_running = false;
 static int g_deferred_exit_code = 0;
+static TTLPurger* g_ttl_purger = nullptr;
 NdbMutex *globalConfigsMutex = nullptr;
 
 static void do_exit(int exit_code) {
@@ -225,9 +227,14 @@ static void do_exit(int exit_code) {
 }
 static void before_drogon_run() {
   g_drogon_running = true;
+  g_ttl_purger = TTLPurger::CreateTTLPurger();
+  g_ttl_purger->Run();
 }
 static void after_drogon_run() {
   g_drogon_running = false;
+  if (g_ttl_purger != nullptr) {
+    delete g_ttl_purger;
+  }
   if (g_deferred_exit_code != 0) {
     do_exit(g_deferred_exit_code);
   }
