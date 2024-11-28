@@ -813,9 +813,11 @@ NdbImpl::select_node(NdbTableImpl *table_impl,
    * nodes with the same proximity, but small enough to not prioritize
    * it over other nodes with higher proximity.
    */
+  DBUG_ENTER("NdbImpl::select_node");
+  DBUG_PRINT("enter",("cnt: %u", cnt));
   if (table_impl == nullptr)
   {
-    return m_ndb_cluster_connection.select_any(this);
+    DBUG_RETURN(m_ndb_cluster_connection.select_any(this));
   }
 
   Uint32 nodeId;
@@ -841,11 +843,13 @@ NdbImpl::select_node(NdbTableImpl *table_impl,
                                                               nodes,
                                                               cnt,
                                                               primary_node);
+      DBUG_PRINT("exit",("select_location_based: nodeId: %u", nodeId));
     }
     else
     {
       /* Backwards compatible setting */
       nodeId = primary_node;
+      DBUG_PRINT("exit",("Choose primary: nodeId: %u", nodeId));
     }
   }
   else if (fullyReplicated)
@@ -865,8 +869,9 @@ NdbImpl::select_node(NdbTableImpl *table_impl,
      * Except for fully replicated tables, see above.
      */
     nodeId = m_ndb_cluster_connection.select_any(this);
+    DBUG_PRINT("exit",("select_any: nodeId: %u", nodeId));
   }
-  return nodeId;
+  DBUG_RETURN(nodeId);
 }
 
 NdbTransaction*

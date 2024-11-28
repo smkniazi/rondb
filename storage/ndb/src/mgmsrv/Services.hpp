@@ -108,6 +108,8 @@ public:
   void stop(const class Properties &args, int version);
   void stopAll(Parser_t::Context &ctx, const class Properties &args);
   void get_mgm_nodeid(Parser_t::Context &ctx, const class Properties &args);
+  void set_location_domain_id(Parser_t::Context &ctx,
+                              const class Properties &args);
   void set_hostname(Parser_t::Context &ctx, const class Properties &args);
   void activate(Parser_t::Context &ctx, const class Properties &args);
   void deactivate(Parser_t::Context &ctx, const class Properties &args);

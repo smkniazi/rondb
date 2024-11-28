@@ -1045,6 +1045,19 @@ extern "C" {
   int ndb_mgm_get_nodeid(NdbMgmHandle handle, int &nodeId);
 
   /**
+   * Set location domain id for a node
+   *
+   * @param   handle        Management handle.
+   * @param   node          Node ID of node to get new location domain id
+   * @param   new_location_domain_id  New location domain id to be set for node
+   *
+   * @return                0 for success, -1 on error
+   */
+  int ndb_mgm_set_domain_id(NdbMgmHandle handle,
+                            const int nodeId,
+                            const int new_location_domain_id);
+
+  /**
    * Set hostname for a deactivated node
    *
    * @param   handle        Management handle.

@@ -86,6 +86,7 @@ class Ndb_cluster_connection_impl : public Ndb_cluster_connection
   inline unsigned get_min_api_version() const;
 public:
   inline Uint64 *get_latest_trans_gci() { return &m_latest_trans_gci; }
+  int set_location_domain_id(Uint32 nodeId, Uint32 location_domain_id);
 
 private:
   friend class Ndb;

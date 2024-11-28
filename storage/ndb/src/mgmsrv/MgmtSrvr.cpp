@@ -59,6 +59,7 @@
 #include <signaldata/GetConfig.hpp>
 #include <signaldata/Activate.hpp>
 #include <signaldata/SetHostname.hpp>
+#include <signaldata/SetDomainId.hpp>
 #include <NdbSleep.h>
 #include <portlib/NdbDir.hpp>
 #include "portlib/ndb_sockaddr.h"
@@ -424,7 +425,7 @@ MgmtSrvr::start_transporter(const Config* config)
 {
   DBUG_ENTER("MgmtSrvr::start_transporter");
 
-  theFacade= new TransporterFacade(0);
+  theFacade= new TransporterFacade(0, nullptr);
   if (theFacade == 0)
   {
     g_eventLogger->error("Could not create TransporterFacade.");
@@ -1379,6 +1380,121 @@ int MgmtSrvr::sendStopMgmd(NodeId nodeId,
 }
 
 int
+MgmtSrvr::set_location_domain_id_request(
+  int changeNodeId,
+  const int new_location_domain_id)
+{
+  DBUG_ENTER("MgmtSrvr::set_location_domain_id_request");
+  DBUG_PRINT("enter", ("Set location domain id:  %u for node %d",
+             new_location_domain_id, changeNodeId));
+
+  SignalSender ss(theFacade);
+  SimpleSignal ssig;
+  ss.lock(); // lock will be released on exit
+  SetDomainIdReq* const setDomainIdReq = CAST_PTR(SetDomainIdReq,
+                                                  ssig.getDataPtrSend());
+  ssig.set(ss,
+           TestOrd::TraceAPI,
+           CMVMI,
+           GSN_SET_DOMAIN_ID_REQ,
+           SetDomainIdReq::SignalLength);
+  setDomainIdReq->senderId = 0;
+  setDomainIdReq->senderRef = ss.getOwnRef();
+  setDomainIdReq->changeNodeId = Uint32(changeNodeId);
+  setDomainIdReq->locationDomainId = Uint32(new_location_domain_id);
+
+  if (!check_node_support_set_location_domain_id())
+  {
+    DBUG_RETURN(FAILED_SET_DOMAIN_ID_REQUEST);
+  }
+  // send the signals
+  int failed = 0;
+  NodeBitmask nodes;
+  {
+    NodeId nodeId = 0;
+    while(getNextNodeId(&nodeId, NDB_MGM_NODE_TYPE_NDB))
+    {
+      if (okToSendTo(nodeId, true) == 0)
+      {
+        SendStatus result = ss.sendSignal(nodeId, &ssig);
+        if (result == SEND_OK)
+          nodes.set(nodeId);
+        else
+          failed++;
+      }
+    }
+  }
+  if (nodes.isclear() && failed > 0)
+  {
+    DBUG_RETURN(SEND_OR_RECEIVE_FAILED);
+  }
+  int error_code = 0;
+  while (!nodes.isclear())
+  {
+    SimpleSignal *signal = ss.waitFor();
+    int gsn = signal->readSignalNumber();
+    switch (gsn) {
+    case GSN_SET_DOMAIN_ID_REF:
+    {
+      const SetDomainIdRef* setDomainIdRef =
+        CAST_CONSTPTR(SetDomainIdRef, signal->getDataPtr());
+      assert(setDomainIdRef->changeNodeId == Uint32(changeNodeId));
+      assert(setDomainIdRef->senderId <= nodes.max_size());
+      NodeId senderNodeId = refToNode(setDomainIdRef->senderRef);
+      nodes.clear(senderNodeId);
+      error_code = FAILED_SET_DOMAIN_ID_REQUEST;
+      break;
+    }
+    case GSN_SET_DOMAIN_ID_CONF:
+    {
+      const SetDomainIdConf* setDomainIdConf =
+        CAST_CONSTPTR(SetDomainIdConf, signal->getDataPtr());
+      assert(setDomainIdConf->changeNodeId == Uint32(changeNodeId));
+      assert(setDomainIdConf->senderId <= nodes.max_size());
+      NodeId senderNodeId = refToNode(setDomainIdConf->senderRef);
+      nodes.clear(senderNodeId);
+      break;
+    }
+    case GSN_NF_COMPLETEREP:
+    {
+      const NFCompleteRep * rep = CAST_CONSTPTR(NFCompleteRep,
+                                                signal->getDataPtr());
+      if (rep->failedNodeId <= nodes.max_size())
+        nodes.clear(rep->failedNodeId); // clear the failed node
+      break;
+    }
+    case GSN_NODE_FAILREP:
+    {
+      const NodeFailRep * rep = CAST_CONSTPTR(NodeFailRep,
+                                              signal->getDataPtr());
+      Uint32 len = NodeFailRep::getNodeMaskLength(signal->getLength());
+      assert(len == NodeBitmask::Size || // only full length in ndbapi
+             len == 0);
+      NodeBitmask mask;
+      if (signal->header.m_noOfSections >= 1)
+      {
+        mask.assign(signal->ptr[0].sz, signal->ptr[0].p);
+      }
+      else
+      {
+        mask.assign(len, rep->theAllNodes);
+      }
+      nodes.bitANDC(mask);
+      break;
+    }
+    case GSN_API_REGCONF:
+    case GSN_TAKE_OVERTCCONF:
+    case GSN_CONNECT_REP:
+      continue;
+    default:
+      report_unknown_signal(signal);
+      DBUG_RETURN(SEND_OR_RECEIVE_FAILED);
+    }
+  }
+  DBUG_RETURN(error_code);
+}
+
+int
 MgmtSrvr::set_hostname_request(int nodeId, const char *new_hostname)
 {
   DBUG_ENTER("MgmtSrvr::set_hostname_request");
@@ -1438,6 +1554,7 @@ MgmtSrvr::set_hostname_request(int nodeId, const char *new_hostname)
   {
     DBUG_RETURN(SEND_OR_RECEIVE_FAILED);
   }
+  int error_code = 0;
   while (!nodes.isclear())
   {
     SimpleSignal *signal = ss.waitFor();
@@ -1445,7 +1562,12 @@ MgmtSrvr::set_hostname_request(int nodeId, const char *new_hostname)
     switch (gsn) {
     case GSN_SET_HOSTNAME_REF:
     {
-      DBUG_RETURN(FAILED_SET_HOSTNAME_REQUEST);
+      const SetHostnameRef* setHostnameRef = CAST_CONSTPTR(SetHostnameRef,
+                                                       signal->getDataPtr());
+      assert(setHostnameRef->changeNodeId == Uint32(nodeId));
+      assert(setHostnameRef->senderNodeId <= nodes.max_size());
+      nodes.clear(setHostnameRef->senderNodeId);
+      error_code = FAILED_SET_HOSTNAME_REQUEST;
       break;
     }
     case GSN_SET_HOSTNAME_CONF:
@@ -1493,7 +1615,7 @@ MgmtSrvr::set_hostname_request(int nodeId, const char *new_hostname)
       DBUG_RETURN(SEND_OR_RECEIVE_FAILED);
     }
   }
-  DBUG_RETURN(0);
+  DBUG_RETURN(error_code);
 }
 
 NodeId
@@ -1516,6 +1638,24 @@ MgmtSrvr::check_node_support_activate()
     {
       Uint32 version = getNodeInfo(nodeId).m_info.m_version;
       if (!ndbd_support_activate(version))
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+bool
+MgmtSrvr::check_node_support_set_location_domain_id()
+{
+  NodeId nodeId = 0;
+  while(getNextNodeId(&nodeId, NDB_MGM_NODE_TYPE_NDB))
+  {
+    if (okToSendTo(nodeId, true) == 0)
+    {
+      Uint32 version = getNodeInfo(nodeId).m_info.m_version;
+      if (!ndbd_support_set_location_domain_id(version))
       {
         return false;
       }
@@ -1568,6 +1708,7 @@ MgmtSrvr::activate_request(int activateNodeId)
   {
     DBUG_RETURN(SEND_OR_RECEIVE_FAILED);
   }
+  int error_code = 0;
   while (!nodes.isclear())
   {
     SimpleSignal *signal = ss.waitFor();
@@ -1575,7 +1716,12 @@ MgmtSrvr::activate_request(int activateNodeId)
     switch (gsn) {
     case GSN_ACTIVATE_REF:
     {
-      DBUG_RETURN(FAILED_ACTIVATE_REQUEST);
+      const ActivateRef* activateRef = CAST_CONSTPTR(ActivateRef,
+                                                     signal->getDataPtr());
+      assert(activateRef->activateNodeId == Uint32(activateNodeId));
+      assert(activateRef->senderNodeId <= nodes.max_size());
+      nodes.clear(activateRef->senderNodeId);
+      error_code = FAILED_ACTIVATE_REQUEST;
       break;
     }
     case GSN_ACTIVATE_CONF:
@@ -1623,7 +1769,7 @@ MgmtSrvr::activate_request(int activateNodeId)
       DBUG_RETURN(SEND_OR_RECEIVE_FAILED);
     }
   }
-  DBUG_RETURN(0);
+  DBUG_RETURN(error_code);
 }
 
 int
@@ -1672,6 +1818,7 @@ MgmtSrvr::deactivate_request(int deactivateNodeId)
   {
     DBUG_RETURN(SEND_OR_RECEIVE_FAILED);
   }
+  int error_code = 0;
   while (!nodes.isclear())
   {
     SimpleSignal *signal = ss.waitFor();
@@ -1679,7 +1826,12 @@ MgmtSrvr::deactivate_request(int deactivateNodeId)
     switch (gsn) {
     case GSN_DEACTIVATE_REF:
     {
-      DBUG_RETURN(FAILED_DEACTIVATE_REQUEST);
+      const DeactivateRef* deactivateRef = CAST_CONSTPTR(DeactivateRef,
+                                                         signal->getDataPtr());
+      assert(deactivateRef->deactivateNodeId == Uint32(deactivateNodeId));
+      assert(deactivateRef->senderNodeId <= nodes.max_size());
+      nodes.clear(deactivateRef->senderNodeId);
+      error_code = FAILED_DEACTIVATE_REQUEST;
       break;
     }
     case GSN_DEACTIVATE_CONF:
@@ -1727,7 +1879,7 @@ MgmtSrvr::deactivate_request(int deactivateNodeId)
       DBUG_RETURN(SEND_OR_RECEIVE_FAILED);
     }
   }
-  DBUG_RETURN(0);
+  DBUG_RETURN(error_code);
 }
 
 /**
