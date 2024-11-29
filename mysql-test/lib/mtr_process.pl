@@ -47,9 +47,10 @@ BEGIN {
   eval 'sub USE_NETPING { $use_netping }';
 }
 
-sub mtr_ping_port ($) {
+sub mtr_ping_port ($;$) {
   my $port = shift;
-  mtr_verbose("mtr_ping_port: $port");
+  my $remote = shift // "localhost";
+  mtr_verbose("mtr_ping_port: $remote:$port");
 
   if (IS_WINDOWS && USE_NETPING) {
     # Under Windows, connect to a port that is not open is slow. It
@@ -57,7 +58,7 @@ sub mtr_ping_port ($) {
     my $ping = Net::Ping->new();
     $ping->port_number($port);
 
-    if ($ping->ping("localhost", 0.1)) {
+    if ($ping->ping($remote, 0.1)) {
       mtr_verbose("USED");
       return 1;
     } else {
@@ -66,7 +67,6 @@ sub mtr_ping_port ($) {
     }
   }
 
-  my $remote = "localhost";
   my $iaddr  = inet_aton($remote);
   if (!$iaddr) {
     mtr_error("can't find IP number for $remote");
@@ -137,6 +137,50 @@ sub sleep_until_pid_file_created ($$$) {
 
   mtr_warning("Timeout after mysql-test-run waited $timeout seconds " .
               "for the process $proc to create a pid file.");
+  return 0;
+}
+
+## Wait for a TCP port to be opened.
+sub sleep_until_port_opened ($$$) {
+  my $port    = shift;
+  my $timeout = shift;
+  my $host    = shift;
+
+  my $sleeptime  = 100;                              # Milliseconds
+  my $total_time = 0;                                # Milliseconds
+  my $loops      = ($timeout * 1000) / $sleeptime;
+
+  for (my $loop = 1 ; $loop <= $loops ; $loop++) {
+    if (mtr_ping_port($port, $host)) {
+      mtr_verbose("Waited $total_time milliseconds for TCP server " .
+                  "$host:$port to open.");
+      return 1;
+    }
+
+    my $seconds = ($loop * $sleeptime) / 1000;
+
+    $total_time = $total_time + 100;
+
+    # 60 seconds wait between each message
+    my $message_timeout = 600;
+    if ($ENV{'VALGRIND_TEST'}) {
+      $message_timeout = $message_timeout * 10;
+    }
+
+    # Print extra message every $message_timeout seconds
+    if ($seconds > 1 &&
+        int($seconds * 10) % $message_timeout == 0 &&
+        $seconds < $timeout) {
+      my $left = $timeout - $seconds;
+      mtr_warning("Waited $seconds seconds for TCP server $host:$port to " .
+                  "open, still waiting for $left seconds...");
+    }
+
+    mtr_milli_sleep($sleeptime);
+  }
+
+  mtr_warning("Timeout after mysql-test-run waited $timeout seconds " .
+              "for TCP server $host:$port to open.");
   return 0;
 }
 
