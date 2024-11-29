@@ -34,7 +34,11 @@ class TTLPurger {
   static constexpr const char* kSchemaTableName = "ndb_schema";
   static constexpr const char* kSchemaResTabName = "ndb_schema_result";
   static constexpr const char* kTTLPurgeNodesTabName = "ttl_purge_nodes";
+  static constexpr const char* kTTLPurgeIndexName = "ttl_index";
   static constexpr int kNoEventCol = 10;
+  static constexpr int kLeaseSeconds = 20;
+  static constexpr Uint32 kPurgeBatchSize = 10;
+  static constexpr int kMaxTrxRetryTimes = 10;
   static constexpr const char* kEventColNames[kNoEventCol] = {
     "db",
     "name",
@@ -55,7 +59,9 @@ class TTLPurger {
  private:
   TTLPurger();
   void SchemaWatcherJob();
-  Ndb* ndb_;
+  Ndb* watcher_ndb_;
+  void PurgeWorkerJob();
+  Ndb* worker_ndb_;
   std::atomic<bool> exit_;
 
   typedef struct {
@@ -63,7 +69,7 @@ class TTLPurger {
     uint32_t ttl_sec;
     uint32_t col_no;
     uint32_t part_id = {0};  // Only valid in local ttl cache
-    char last_purged[8] = {0};  // Only valid in local ttl cache
+    unsigned char last_purged[8] = {0};  // Only valid in local ttl cache
   } TTLInfo;
   std::map<std::string, TTLInfo> ttl_cache_;
   std::mutex mutex_;
@@ -83,8 +89,15 @@ class TTLPurger {
   std::atomic<bool> purge_worker_asks_for_retry_;
   bool schema_watcher_running_;
   std::thread* schema_watcher_;
+
+  bool GetShard(int32_t* shard, int32_t* n_purge_nodes, bool update_objects);
+  static Int64 GetNow(unsigned char* encoded_now);
+  bool UpdateLease(const unsigned char* encoded_now);
+  bool IsNodeAlive(const unsigned char* encoded_last_active);
   bool purge_worker_running_;
   std::thread* purge_worker_;
+  std::atomic<bool> purge_worker_exit_;
+  std::map<Int32, std::map<Uint32, Int64>> purged_pos_;
 };
 
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_TTL_PURGE_HPP_

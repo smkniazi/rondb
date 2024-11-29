@@ -16,10 +16,15 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
  * USA.
  */
+#include <algorithm>
+#include <vector>
+
 #include "src/rdrs_rondb_connection_pool.hpp"
 #include "src/ttl_purge.hpp"
 #include "src/status.hpp"
 #include "storage/ndb/plugin/ndb_schema_dist.h"
+#include "include/my_systime.h"
+#include "include/my_time.h"
 
 #include <EventLogger.hpp>
 extern EventLogger *g_eventLogger;
@@ -30,31 +35,44 @@ extern EventLogger *g_eventLogger;
 #endif
 
 TTLPurger::TTLPurger() :
-  ndb_(nullptr), exit_(false), cache_updated_(false),
+  watcher_ndb_(nullptr), worker_ndb_(nullptr),
+  exit_(false), cache_updated_(false),
   purge_worker_asks_for_retry_(false),
-  schema_watcher_running_(false), schema_watcher_(),
-  purge_worker_running_(false), purge_worker_() {
+  schema_watcher_running_(false), schema_watcher_(nullptr),
+  purge_worker_running_(false), purge_worker_(nullptr),
+  purge_worker_exit_(false) {
 }
 
 extern RDRSRonDBConnectionPool *rdrsRonDBConnectionPool;
 TTLPurger::~TTLPurger() {
   exit_ = true;
-  if (schema_watcher_running_ && schema_watcher_->joinable()) {
-    schema_watcher_->join();
+  if (schema_watcher_running_) {
+    assert(schema_watcher_ != nullptr);
+    if (schema_watcher_->joinable()) {
+      schema_watcher_->join();
+    }
     schema_watcher_ = nullptr;
     schema_watcher_running_ = false;
-    if (ndb_) {
-      RS_Status status;
-      rdrsRonDBConnectionPool->ReturnTTLSchemaWatcherNdbObject(ndb_, &status);
-    }
   }
+  assert(purge_worker_exit_ == true && purge_worker_ == nullptr &&
+         purge_worker_running_ == false);
 }
 
 bool TTLPurger::Init() {
   RS_Status status = rdrsRonDBConnectionPool->
-                       GetTTLSchemaWatcherNdbObject(&ndb_);
+                       GetTTLSchemaWatcherNdbObject(&watcher_ndb_);
   if (status.http_code != SUCCESS) {
-    ndb_ = nullptr;
+    watcher_ndb_ = nullptr;
+    return false;
+  }
+
+  status = rdrsRonDBConnectionPool->
+                       GetTTLPurgeWorkerNdbObject(&worker_ndb_);
+  if (status.http_code != SUCCESS) {
+    worker_ndb_ = nullptr;
+    rdrsRonDBConnectionPool->ReturnTTLSchemaWatcherNdbObject(
+                               watcher_ndb_, &status);
+    watcher_ndb_ = nullptr;
     return false;
   }
   return true;
@@ -84,7 +102,9 @@ void TTLPurger::SchemaWatcherJob() {
   char slock_buf_pre[32];
   char slock_buf[32];
 
+  g_eventLogger->info("[TTL SWatcher] Started");
 retry:
+  g_eventLogger->info("[TTL SWatcher] retry from here");
   init_event_succ = false;
   dict = nullptr;
   schema_tab = nullptr;
@@ -93,25 +113,37 @@ retry:
   op = nullptr;
   // Init event
   do {
-    if (ndb_ == nullptr) {
+    if (watcher_ndb_ == nullptr) {
       RS_Status status = rdrsRonDBConnectionPool->
-                           GetTTLSchemaWatcherNdbObject(&ndb_);
+                           GetTTLSchemaWatcherNdbObject(&watcher_ndb_);
       if (status.http_code != SUCCESS) {
-        g_eventLogger->warning("[TTL SWatcher] Failed to get NdbObject. Retry");
+        g_eventLogger->warning("[TTL SWatcher] Failed to get schema "
+                               "watcher's NdbObject. Retry...");
+        watcher_ndb_ = nullptr;
+        goto err;
+      }
+    }
+    if (worker_ndb_ == nullptr) {
+      RS_Status status = rdrsRonDBConnectionPool->
+                           GetTTLPurgeWorkerNdbObject(&worker_ndb_);
+      if (status.http_code != SUCCESS) {
+        g_eventLogger->warning("[TTL SWatcher] Failed to get purge "
+                               "worker's NdbObject. Retry...");
+        worker_ndb_ = nullptr;
         goto err;
       }
     }
 
-    if (ndb_->setDatabaseName(kSystemDBName) != 0) {
+    if (watcher_ndb_->setDatabaseName(kSystemDBName) != 0) {
       g_eventLogger->warning("[TTL SWatcher] Failed to select system database: "
                             "%s, error: %d(%s). Retry...",
                              kSystemDBName,
-                             ndb_->getNdbError().code,
-                             ndb_->getNdbError().message);
+                             watcher_ndb_->getNdbError().code,
+                             watcher_ndb_->getNdbError().message);
       goto err;
     }
 
-    dict = ndb_->getDictionary();
+    dict = watcher_ndb_->getDictionary();
     schema_tab = dict->getTable(kSchemaTableName);
     if (schema_tab == nullptr) {
       g_eventLogger->warning("[TTL SWatcher] Failed to get system table: %s"
@@ -173,11 +205,12 @@ retry:
   } while (!exit_ && !init_event_succ);
 
   // Create event operation
-  if ((ev_op = ndb_->createEventOperation(kSchemaEventName)) == nullptr) {
+  if ((ev_op = watcher_ndb_->createEventOperation(kSchemaEventName))
+       == nullptr) {
     g_eventLogger->warning("[TTL SWatcher] Failed to create event operation"
                            ", error: %d(%s). Retry...",
-                           ndb_->getNdbError().code,
-                           ndb_->getNdbError().message);
+                           watcher_ndb_->getNdbError().code,
+                           watcher_ndb_->getNdbError().message);
     goto err;
   }
   ev_op->mergeEvents(true);
@@ -206,6 +239,7 @@ retry:
 
   // Fetch tables
   ttl_cache_.clear();
+  list.clear();
   if (dict->listObjects(list, NdbDictionary::Object::UserTable) != 0) {
     g_eventLogger->warning("[TTL SWatcher] Failed to list objects"
                            ", error: %d(%s). Retry...",
@@ -222,12 +256,12 @@ retry:
     if (strcmp(db_str, "mysql") == 0) {
       continue;
     }
-    if (ndb_->setDatabaseName(db_str) != 0) {
+    if (watcher_ndb_->setDatabaseName(db_str) != 0) {
       g_eventLogger->warning("[TTL SWatcher] Failed to select database: %s"
                              ", error: %d(%s). Retry...",
                              db_str,
-                             ndb_->getNdbError().code,
-                             ndb_->getNdbError().message);
+                             watcher_ndb_->getNdbError().code,
+                             watcher_ndb_->getNdbError().message);
       goto err;
     }
     const NdbDictionary::Table* tab = dict->getTable(
@@ -243,18 +277,20 @@ retry:
     UpdateLocalCache(db_str, table_str, tab);
   }
 
-  // TODO(Zhao): start purge worker
+  assert(!purge_worker_running_);
+  // Set it to true to make purge worker load cache
+  cache_updated_ = true;
+  purge_worker_exit_ = false;
+  purge_worker_ = new std::thread(
+                    std::bind(&TTLPurger::PurgeWorkerJob, this));
+  purge_worker_running_ = true;
 
   // Main schema_watcher_ task
   while (!exit_) {
-    int res = ndb_->pollEvents(1000);  // wait for event or 1000 ms
+    int res = watcher_ndb_->pollEvents(1000);  // wait for event or 1000 ms
     if (res > 0) {
-      while ((op = ndb_->nextEvent())) {
+      while ((op = watcher_ndb_->nextEvent())) {
         if (op->hasError()) {
-          std::cerr << "Get an event error, " << op->getNdbError().code
-                    << "(" << op->getNdbError().message
-                    << ") on handling ndb_schema event, retry..."
-                    << std::endl;
           g_eventLogger->warning("[TTL SWatcher] Get an event error on "
                                  "handling event"
                                  ", error: %d(%s). Retry...",
@@ -437,13 +473,13 @@ retry:
                     pos += 1;
                     new_table_str = query_str_pre.substr(pos);
                   }
-                  if (ndb_->setDatabaseName(db_str.c_str()) != 0) {
+                  if (watcher_ndb_->setDatabaseName(db_str.c_str()) != 0) {
                     g_eventLogger->warning("[TTL SWatcher] Failed to select "
                                            "database: %s"
                                            ", error: %d(%s). Retry...",
                                            db_str.c_str(),
-                                           ndb_->getNdbError().code,
-                                           ndb_->getNdbError().message);
+                                           watcher_ndb_->getNdbError().code,
+                                           watcher_ndb_->getNdbError().message);
                     goto err;
                   }
                   dict->invalidateTable(table_str.c_str());
@@ -478,13 +514,13 @@ retry:
               case SCHEMA_OP_TYPE::SOT_ALTER_TABLE_COMMIT:
               case SCHEMA_OP_TYPE::SOT_ONLINE_ALTER_TABLE_COMMIT:
                 {
-                  if (ndb_->setDatabaseName(db_str.c_str()) != 0) {
+                  if (watcher_ndb_->setDatabaseName(db_str.c_str()) != 0) {
                     g_eventLogger->warning("[TTL SWatcher] Failed to select "
                                            "database: %s"
                                            ", error: %d(%s). Retry...",
                                            db_str.c_str(),
-                                           ndb_->getNdbError().code,
-                                           ndb_->getNdbError().message);
+                                           watcher_ndb_->getNdbError().code,
+                                           watcher_ndb_->getNdbError().message);
                     goto err;
                   }
                   dict->invalidateTable(table_str.c_str());
@@ -511,6 +547,8 @@ retry:
 
             // Only purge worker can set cache_updated_ to false;
             if (cache_updated) {
+              // TODO(Zhao) Is it better to put it after
+              // notify ndb_schema_result?
               cache_updated_ = true;
             }
 
@@ -521,13 +559,13 @@ retry:
             trx_succ = false;
             trx_failure_times = 0;
             do {
-              trans = ndb_->startTransaction();
+              trans = watcher_ndb_->startTransaction();
               if (trans == nullptr) {
                 g_eventLogger->warning("[TTL SWatcher] Failed to start "
                                        "transaction"
                                        ", error: %d(%s). Retry...",
-                                       ndb_->getNdbError().code,
-                                       ndb_->getNdbError().message);
+                                       watcher_ndb_->getNdbError().code,
+                                       watcher_ndb_->getNdbError().message);
                 goto trx_err;
               }
               top = trans->getNdbOperation(schema_res_tab);
@@ -545,15 +583,12 @@ retry:
                   /*Ndb_schema_result_table::COL_SCHEMA_OP_ID*/
                   top->equal("schema_op_id", schema_op_id) != 0 ||
                   /*Ndb_schema_result_table::COL_PARTICIPANT_NODEID*/
-                  top->equal("participant_nodeid", ndb_->getNodeId()) != 0 ||
+                  top->equal("participant_nodeid",
+                                watcher_ndb_->getNodeId()) != 0 ||
                   /*Ndb_schema_result_table::COL_RESULT*/
                   top->setValue("result", 0) != 0 ||
                   /*Ndb_schema_result_table::COL_MESSAGE*/
                   top->setValue("message", message_buf) != 0) {
-                std::cerr << "Failed to insert tuple, error: "
-                          << top->getNdbError().code << "("
-                          << top->getNdbError().message << "), retry..."
-                          << std::endl;
                 g_eventLogger->warning("[TTL SWatcher] Failed to insert tuple "
                                        ", error: %d(%s). Retry...",
                                        top->getNdbError().code,
@@ -574,7 +609,7 @@ retry:
               }
 trx_err:
               if (trans != nullptr) {
-                ndb_->closeTransaction(trans);
+                watcher_ndb_->closeTransaction(trans);
               }
               if (!trx_succ) {
                 trx_failure_times++;
@@ -595,34 +630,46 @@ trx_err:
       purge_worker_asks_for_retry_ = false;
       goto err;
     } else if (res < 0) {
-      std::cerr << "Failed to poll event, error: "
-                << ndb_->getNdbError().code << "("
-                << ndb_->getNdbError().message << "), retry..."
-                << std::endl;
       g_eventLogger->warning("[TTL SWatcher] Failed to poll event "
                              ", error: %d(%s). Retry...",
-                             ndb_->getNdbError().code,
-                             ndb_->getNdbError().message);
+                             watcher_ndb_->getNdbError().code,
+                             watcher_ndb_->getNdbError().message);
       goto err;
     }
   }
 err:
   if (ev_op != nullptr) {
-    ndb_->dropEventOperation(ev_op);
+    watcher_ndb_->dropEventOperation(ev_op);
   }
   ev_op = nullptr;
   op = nullptr;
   if (dict != nullptr) {
     dict->dropEvent(kSchemaEventName);
   }
-  // TODO(Zhao): stop purge worker
+  // Stop purge worker
+  purge_worker_exit_ = true;
+  if (purge_worker_running_) {
+    assert(purge_worker_ != nullptr);
+    if (purge_worker_->joinable()) {
+      purge_worker_->join();
+    }
+    purge_worker_ = nullptr;
+    purge_worker_running_ = false;
+  }
+  // Return 2 NdbObjects
   RS_Status status;
-  rdrsRonDBConnectionPool->ReturnTTLSchemaWatcherNdbObject(ndb_, &status);
-  ndb_ = nullptr;
+  rdrsRonDBConnectionPool->ReturnTTLSchemaWatcherNdbObject(
+                             watcher_ndb_, &status);
+  rdrsRonDBConnectionPool->ReturnTTLPurgeWorkerNdbObject(
+                             worker_ndb_, &status);
+  watcher_ndb_ = nullptr;
+  worker_ndb_ = nullptr;
+
   if (!exit_) {
     sleep(2);
     goto retry;
   }
+  g_eventLogger->info("[TTL SWatcher] Exit");
   return;
 }
 
@@ -635,14 +682,6 @@ bool TTLPurger::UpdateLocalCache(const std::string& db,
     if (iter != ttl_cache_.end()) {
       if (tab->isTTLEnabled()) {
         assert(iter->second.table_id == tab->getTableId());
-        std::cerr << "Update TTL of table " << db + "/" + table
-                  << " in cache: [" << iter->second.table_id
-                  << ", " << iter->second.ttl_sec
-                  << ", " << iter->second.col_no
-                  << "] -> [" << tab->getTableId()
-                  << ", " << tab->getTTLSec()
-                  << ", " << tab->getTTLColumnNo()
-                  << "]" << std::endl;
         g_eventLogger->info("[TTL SWatcher] Update TTL of table %s.%s "
                             "in cache: [%u, %u@%u] -> [%u, %u@%u]",
                             db.c_str(), table.c_str(),
@@ -679,11 +718,6 @@ bool TTLPurger::UpdateLocalCache(const std::string& db,
     }
   } else {
     if (iter != ttl_cache_.end()) {
-      std::cerr << "Remove[2] TTL of table " << db + "/" + table
-                << " in cache: [" << iter->second.table_id
-                << ", " << iter->second.ttl_sec
-                << ", " << iter->second.col_no
-                << "]" << std::endl;
       g_eventLogger->info("[TTL SWatcher] Remove[2] TTL of table %s.%s "
                            "in cache: [%u, %u@%u]",
                            db.c_str(), table.c_str(), iter->second.table_id,
@@ -794,6 +828,786 @@ bool TTLPurger::DropDBLocalCache(const std::string& db_str) {
     iter++;
   }
   return updated;
+}
+
+enum SpecialShardVal {
+  kShardNotPurger = -2,
+  kShardNosharding = -1,
+  kShardFirst = 0
+};
+
+void TTLPurger::PurgeWorkerJob() {
+  bool purge_trx_started = false;
+  bool update_objects = false;
+  std::map<std::string, TTLInfo> local_ttl_cache;
+  Int32 shard = -1;
+  Int32 n_purge_nodes = 0;
+  unsigned char encoded_now[8];
+  std::string log_buf;
+  size_t pos = 0;
+  std::string db_str;
+  std::string table_str;
+  uint32_t ttl_col_no = 0;
+  int check = 0;
+  uint32_t deletedRows = 0;
+  int trx_failure_times = 0;
+  std::map<std::string, TTLInfo>::iterator iter;
+  std::map<Int32, std::map<Uint32, Int64>>::iterator purge_tab_iter;
+  std::map<Uint32, Int64>::iterator purge_part_iter;
+
+  NdbDictionary::Dictionary* dict = nullptr;
+  const NdbDictionary::Table* ttl_tab = nullptr;
+  const NdbDictionary::Index* ttl_index = nullptr;
+  NdbTransaction* trans = nullptr;
+  NdbScanOperation* scan_op = nullptr;
+  Int64 packed_last = 0;
+  unsigned char encoded_last[8];
+  unsigned char encoded_curr_purge[8];
+  MYSQL_TIME datetime;
+  Int64 packed_now = 0;
+  NdbRecAttr* rec_attr[3];
+
+  g_eventLogger->info("[TTL PWorker] Started");
+  purged_pos_.clear();
+  do {
+    purge_trx_started = false;
+    update_objects = false;
+    if (cache_updated_) {
+      local_ttl_cache.clear();
+      const std::lock_guard<std::mutex> lock(mutex_);
+      local_ttl_cache = ttl_cache_;
+      cache_updated_ = false;
+      update_objects = true;
+      g_eventLogger->info("[TTL PWorker] Detected cache updated, "
+                           "reloaded %lu TTL tables",
+                           local_ttl_cache.size());
+    }
+
+    shard = kShardNosharding;
+    n_purge_nodes = 0;
+    if (GetShard(&shard, &n_purge_nodes, update_objects) == false) {
+      g_eventLogger->info("[TTL PWorker] Failed to get shard, "
+                          "error: %u(%s). Retry...",
+                          watcher_ndb_->getNdbError().code,
+                          watcher_ndb_->getNdbError().message);
+      goto err;
+    }
+    if (shard == kShardNotPurger) {
+      g_eventLogger->info("Not the configured purging node, skip purging...");
+      sleep(2);
+      continue;
+    }
+
+    GetNow(encoded_now);
+    if (shard >= kShardFirst && !UpdateLease(encoded_now)) {
+      g_eventLogger->warning("[TTL PWorker] Failed to update the lease");
+      goto err;
+    }
+
+    if (local_ttl_cache.empty()) {
+      // No TTL table is found
+      sleep(2);
+      continue;
+    }
+    dict = worker_ndb_->getDictionary();
+    for (iter = local_ttl_cache.begin(); iter != local_ttl_cache.end();
+         iter++) {
+      purge_trx_started = false;
+      {
+        GetNow(encoded_now);
+        if (shard >= kShardFirst && !UpdateLease(encoded_now)) {
+          g_eventLogger->warning("[TTL PWorker] Failed to update the lease[2]");
+          goto err;
+        }
+      }
+      if (cache_updated_) {
+        break;
+      }
+
+      log_buf = "[TTL PWorker] Processing " + iter->first + ": ";
+
+      pos = iter->first.find('/');
+      assert(pos != std::string::npos);
+      db_str = iter->first.substr(0, pos);
+      assert(pos + 1 < iter->first.length());
+      table_str = iter->first.substr(pos + 1);
+      ttl_col_no = iter->second.col_no;
+      check = 0;
+      deletedRows = 0;
+      trx_failure_times = 0;
+
+      if (worker_ndb_->setDatabaseName(db_str.c_str()) != 0) {
+        g_eventLogger->warning("[TTL PWorker] Failed to select "
+                               "database: %s"
+                               ", error: %d(%s). Retry...",
+                               db_str.c_str(),
+                               worker_ndb_->getNdbError().code,
+                               worker_ndb_->getNdbError().message);
+      }
+      if (update_objects) {
+        /*
+         * Notice:
+         * Based on the comment below,
+         * here we need to call invalidateIndex() for ttl_index, the reason is
+         * removeCachedTable() just decrease the reference count of the table
+         * object in the global list, it won't remove the object even the counter
+         * becomes to 0. But invalidateIndex() will set the object to DROP and
+         * remove it if the counter is 0. Since we don't call invalidateIndex
+         * in main thread(it's a major different with other normal table objects),
+         * so here we need to call invalidateIndex()
+         */
+        dict->invalidateIndex(kTTLPurgeIndexName, table_str.c_str());
+        /*
+         * Notice:
+         * Purge thread can only call removeCachedXXX to remove its
+         * thread local cached table object and decrease the reference
+         * count of the global cached table object.
+         * If we call invalidateTable() and following by getTable() here,
+         * Purge thread will invalidate the global cached table object
+         * and generate a new version of table object, which will make
+         * the main thread's following invalidateTable() + getTable() gets
+         * this table object, stops the chance to get the latest one from
+         * data nodes.
+         */
+        dict->removeCachedTable(table_str.c_str());
+
+        purged_pos_.clear();
+      }
+      ttl_tab = dict->getTable(table_str.c_str());
+      if (ttl_tab == nullptr) {
+        g_eventLogger->warning("[TTL PWorker] Failed to get table: "
+                              "%s, error: %d(%s). Retry...",
+                               table_str.c_str(),
+                               dict->getNdbError().code,
+                               dict->getNdbError().message);
+        goto err;
+      }
+      if (shard >= kShardFirst && n_purge_nodes > 0 &&
+          std::hash<std::string>{}(
+            (std::to_string(ttl_tab->getTableId()) + table_str)) %
+                           n_purge_nodes != static_cast<uint32_t>(shard)) {
+        continue;
+      }
+      log_buf += ("[P" + std::to_string(iter->second.part_id) +
+                 "/" +
+                 std::to_string(ttl_tab->getPartitionCount()) + "]");
+      assert(iter->second.part_id < ttl_tab->getPartitionCount());
+
+      trx_failure_times = 0;
+retry_trx:
+      trans = worker_ndb_->startTransaction();
+      if (trans == nullptr) {
+        g_eventLogger->warning("[TTL PWorker] Failed to start "
+                               "transaction"
+                               ", error: %d(%s). Retry...",
+                               worker_ndb_->getNdbError().code,
+                               worker_ndb_->getNdbError().message);
+        goto err;
+      }
+      purge_trx_started = true;
+
+      ttl_index = dict->getIndex(kTTLPurgeIndexName, table_str.c_str());
+
+      check = 0;
+      deletedRows = 0;
+      if (ttl_index != nullptr) {
+        // Found index on ttl column, use it
+        log_buf += "[INDEX scan]";
+        const NdbDictionary::Column* ttl_col_index = ttl_index->getColumn(0);
+        assert(ttl_col_index != nullptr && ttl_col_index->getType() ==
+               NdbDictionary::Column::Datetime2);
+        const NdbDictionary::Column* ttl_col_table =
+               ttl_tab->getColumn(ttl_col_index->getName());
+        assert(ttl_col_table != nullptr && ttl_col_table->getType() ==
+               NdbDictionary::Column::Datetime2 &&
+               ttl_col_table->getColumnNo() == static_cast<int>(ttl_col_no));
+
+        NdbIndexScanOperation* index_scan_op =
+          trans->getNdbIndexScanOperation(ttl_index);
+        if (index_scan_op == nullptr) {
+          g_eventLogger->warning("[TTL PWorker] Failed to start get index "
+                                 "scan operations on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        index_scan_op->setPartitionId(iter->second.part_id);
+        /* Index Scan */
+        Uint32 scanFlags =
+         /*NdbScanOperation::SF_OrderBy |
+          *NdbScanOperation::SF_MultiRange |
+          */
+          NdbScanOperation::SF_KeyInfo |
+          NdbScanOperation::SF_OnlyExpiredScan;
+
+        if (index_scan_op->readTuples(NdbOperation::LM_Exclusive,
+              scanFlags,
+              1,                // parallel
+              kPurgeBatchSize)  // batch
+              != 0) {
+          g_eventLogger->warning("[TTL PWorker] Failed to readTuples "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+
+        log_buf += "-[";
+        packed_last = 0;
+        purge_tab_iter = purged_pos_.find(iter->second.table_id);
+        if (purge_tab_iter != purged_pos_.end()) {
+          purge_part_iter = purge_tab_iter->second.find(iter->second.part_id);
+          if (purge_part_iter != purge_tab_iter->second.end()) {
+            packed_last = purge_part_iter->second;
+          }
+        }
+        if (packed_last != 0) {
+          my_datetime_packed_to_binary(packed_last, encoded_last, 0);
+          TIME_from_longlong_datetime_packed(&datetime, packed_last);
+          log_buf += std::to_string(TIME_to_ulonglong_datetime(datetime));
+        } else {
+          memset(encoded_last, 0, 8);
+          log_buf += "INF";
+        }
+        log_buf += " --- ";
+        packed_now = GetNow(encoded_now);
+        TIME_from_longlong_datetime_packed(&datetime, packed_now);
+        log_buf += std::to_string(TIME_to_ulonglong_datetime(datetime));
+        log_buf += ")";
+
+        if (index_scan_op->setBound(ttl_col_index->getName(),
+                            NdbIndexScanOperation::BoundLE,
+                            encoded_last)) {
+          g_eventLogger->warning("[TTL PWorker] Failed to setBound "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        if (index_scan_op->setBound(ttl_col_index->getName(),
+                            NdbIndexScanOperation::BoundGT, encoded_now)) {
+          g_eventLogger->warning("[TTL PWorker] Failed to setBound "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        rec_attr[0] = index_scan_op->getValue(ttl_col_no);
+        if (rec_attr[0] == nullptr) {
+          g_eventLogger->warning("[TTL PWorker] Failed to getValue "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        if (trans->execute(NdbTransaction::NoCommit) != 0) {
+          g_eventLogger->warning("[TTL PWorker] Failed to execute transaction "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        memset(encoded_curr_purge, 0, 8);
+        while ((check = index_scan_op->nextResult(true)) == 0) {
+          do {
+            memset(encoded_curr_purge, 0, 8);
+            memcpy(encoded_curr_purge, rec_attr[0]->aRef(),
+                   rec_attr[0]->get_size_in_bytes());
+            // std::cerr << "Get a expired row: timestamp = ["
+            //   << rec_attr[0]->get_size_in_bytes() << "]";
+            // for (Uint32 i = 0; i < rec_attr[0]->get_size_in_bytes(); i++) {
+            //   std::cerr << std::hex
+            //     << static_cast<unsigned int>(rec_attr[0]->aRef()[i])
+            //     << " ";
+            // }
+            // std::cerr << std::endl;
+            if (index_scan_op->deleteCurrentTuple() != 0) {
+              g_eventLogger->warning("[TTL PWorker] Failed to deleteTuple "
+                                     "on table %s"
+                                     ", error: %d(%s). Retry...",
+                                     ttl_tab->getName(),
+                                     trans->getNdbError().code,
+                                     trans->getNdbError().message);
+              goto err;
+            }
+            deletedRows++;
+          } while ((check = index_scan_op->nextResult(false)) == 0);
+
+          if (check == -1) {
+            g_eventLogger->warning("[TTL PWorker] Failed to execute "
+                                   "transaction[2] on table %s"
+                                   ", error: %d(%s). Retry...",
+                                   ttl_tab->getName(),
+                                   trans->getNdbError().code,
+                                   trans->getNdbError().message);
+            goto err;
+          }
+          break;
+        }
+        /**
+         * Commit all prepared operations
+         */
+        if (trans->execute(NdbTransaction::Commit) == -1) {
+          g_eventLogger->warning("[TTL PWorker] Failed to commit transaction "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        } else if (*reinterpret_cast<Int64*>(encoded_curr_purge) != 0) {
+          packed_last = my_datetime_packed_from_binary(encoded_curr_purge, 0);
+          if (purge_tab_iter != purged_pos_.end()) {
+            purge_tab_iter->second[iter->second.part_id] = packed_last;
+          } else {
+            purged_pos_[iter->second.table_id][iter->second.part_id]
+                                                         = packed_last;
+          }
+        }
+      } else if (dict->getNdbError().code == 4243) {
+        // Can't find the index on ttl column, use table instead
+        log_buf += "[TABLE scan]";
+        scan_op = trans->getNdbScanOperation(ttl_tab);
+        if (scan_op == nullptr) {
+          g_eventLogger->warning("[TTL PWorker] Failed to start get scan "
+                                 "operations on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        scan_op->setPartitionId(iter->second.part_id);
+        Uint32 scanFlags = NdbScanOperation::SF_OnlyExpiredScan;
+        if (scan_op->readTuples(NdbOperation::LM_Exclusive, scanFlags,
+                                1, kPurgeBatchSize) != 0) {
+          g_eventLogger->warning("[TTL PWorker] Failed to readTuples "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        rec_attr[0] = scan_op->getValue(ttl_col_no);
+        if (rec_attr[0] == nullptr) {
+          g_eventLogger->warning("[TTL PWorker] Failed to getValue "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        if (trans->execute(NdbTransaction::NoCommit) != 0) {
+          g_eventLogger->warning("[TTL PWorker] Failed to execute transaction "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+        while ((check = scan_op->nextResult(true)) == 0) {
+          do {
+            // std::cerr << "Get a expired row: timestamp = ["
+            //   << rec_attr[0]->get_size_in_bytes() << "]";
+            // for (Uint32 i = 0; i < rec_attr[0]->get_size_in_bytes(); i++) {
+            //   std::cerr << std::hex
+            //     << static_cast<unsigned int>(rec_attr[0]->aRef()[i])
+            //     << " ";
+            // }
+            // std::cerr << std::endl;
+            if (scan_op->deleteCurrentTuple() != 0) {
+              g_eventLogger->warning("[TTL PWorker] Failed to deleteTuple "
+                                     "on table %s"
+                                     ", error: %d(%s). Retry...",
+                                     ttl_tab->getName(),
+                                     trans->getNdbError().code,
+                                     trans->getNdbError().message);
+              goto err;
+            }
+            deletedRows++;
+          } while ((check = scan_op->nextResult(false)) == 0);
+
+          if (check == -1) {
+            g_eventLogger->warning("[TTL PWorker] Failed to execute "
+                                   "transaction[2] on table %s"
+                                   ", error: %d(%s). Retry...",
+                                   ttl_tab->getName(),
+                                   trans->getNdbError().code,
+                                   trans->getNdbError().message);
+            goto err;
+          }
+
+          break;
+        }
+        /**
+         * Commit all prepared operations
+         */
+        if (trans->execute(NdbTransaction::Commit) == -1) {
+          g_eventLogger->warning("[TTL PWorker] Failed to commit transaction "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          goto err;
+        }
+      } else {
+        g_eventLogger->warning("[TTL PWorker] Failed to get Table/Index "
+                               "object on table %s"
+                               ", error: %d(%s). Retry...",
+                               table_str.c_str(),
+                               dict->getNdbError().code,
+                               dict->getNdbError().message);
+        goto err;
+      }
+      worker_ndb_->closeTransaction(trans);
+      trans = nullptr;
+      log_buf += " Purged " + std::to_string(deletedRows) + " rows";
+      g_eventLogger->info("%s", log_buf.c_str());
+      iter->second.part_id =
+        ((iter->second.part_id + 1) % ttl_tab->getPartitionCount());
+      // Finish 1 batch
+      // keep the ttl_tab in local table cache ?
+      continue;
+err:
+      if (trans != nullptr) {
+        worker_ndb_->closeTransaction(trans);
+      }
+      trx_failure_times++;
+      sleep(1);
+      if (trx_failure_times > kMaxTrxRetryTimes) {
+        g_eventLogger->warning("[TTL PWorker] Has retried for %d times..."
+                               "Quit and notify schema worker",
+                               kMaxTrxRetryTimes);
+        purge_worker_asks_for_retry_ = true;
+        purge_worker_exit_ = true;
+        break;
+      } else if (purge_trx_started) {
+        goto retry_trx;
+      } else {
+        // retry from begining
+        break;  // jump out from for-loop
+      }
+    }
+    // Finish 1 round
+    sleep(2);
+  } while (!purge_worker_exit_);
+
+  // No need to return PurgeWorker NdbObject here, SchemaWatch will do that.
+  g_eventLogger->info("[TTL PWorker] Exit");
+  return;
+}
+
+bool TTLPurger::GetShard(int32_t* shard, int32_t* n_purge_nodes,
+                         bool update_objects) {
+  *shard = kShardNosharding;
+  *n_purge_nodes = 0;
+  if (worker_ndb_->setDatabaseName(kSystemDBName) != 0) {
+    g_eventLogger->warning("[TTL PWorker] Failed to select system database: "
+                          "%s, error: %d(%s). Retry...",
+                           kSystemDBName,
+                           worker_ndb_->getNdbError().code,
+                           worker_ndb_->getNdbError().message);
+    return false;
+  }
+  NdbDictionary::Dictionary* dict = worker_ndb_->getDictionary();
+  if (update_objects) {
+    dict->removeCachedTable(kTTLPurgeNodesTabName);
+  }
+  const NdbDictionary::Table* tab = dict->getTable(kTTLPurgeNodesTabName);
+  if (tab == nullptr) {
+    if (dict->getNdbError().code == 723) {
+      // Purging nodes configuration table is not found, no sharding
+      return true;
+    } else {
+      g_eventLogger->warning("[TTL PWorker] Failed to get table: "
+                            "%s, error: %d(%s). Retry...",
+                             kTTLPurgeNodesTabName,
+                             dict->getNdbError().code,
+                             dict->getNdbError().message);
+      return false;
+    }
+  }
+  NdbRecAttr* rec_attr[3];
+  NdbTransaction* trans = nullptr;
+  NdbScanOperation* scan_op = nullptr;
+  int32_t n_nodes = 0;;
+  std::vector<int32_t> purge_nodes;
+  size_t pos = 0;
+  bool check = 0;
+  std::string log_buf = "[TTL PWorker] ";
+  std::string active_nodes = "[";
+  std::string inactive_nodes = "[";
+
+  trans = worker_ndb_->startTransaction();
+  if (trans == nullptr) {
+    g_eventLogger->warning("[TTL PWorker] Failed to start "
+                           "transaction"
+                           ", error: %d(%s). Retry...",
+                           worker_ndb_->getNdbError().code,
+                           worker_ndb_->getNdbError().message);
+    goto err;
+  }
+  scan_op = trans->getNdbScanOperation(tab);
+  if (scan_op == nullptr) {
+    g_eventLogger->warning("[TTL PWorker] Failed to start get scan "
+                           "operations on table %s"
+                           ", error: %d(%s). Retry...",
+                           tab->getName(),
+                           trans->getNdbError().code,
+                           trans->getNdbError().message);
+    goto err;
+  }
+  if (scan_op->readTuples(NdbOperation::LM_CommittedRead) != 0) {
+    g_eventLogger->warning("[TTL PWorker] Failed to readTuples "
+                           "on table %s"
+                           ", error: %d(%s). Retry...",
+                           tab->getName(),
+                           trans->getNdbError().code,
+                           trans->getNdbError().message);
+    goto err;
+  }
+
+  rec_attr[0] = scan_op->getValue("node_id");
+  if (rec_attr[0] == nullptr) {
+    g_eventLogger->warning("[TTL PWorker] Failed to getValue "
+                           "on table %s"
+                           ", error: %d(%s). Retry...",
+                           tab->getName(),
+                           trans->getNdbError().code,
+                           trans->getNdbError().message);
+    goto err;
+  }
+  rec_attr[1] = scan_op->getValue("last_active");
+  if (rec_attr[1] == nullptr) {
+    g_eventLogger->warning("[TTL PWorker] Failed to getValue "
+                           "on table %s"
+                           ", error: %d(%s). Retry...",
+                           tab->getName(),
+                           trans->getNdbError().code,
+                           trans->getNdbError().message);
+    goto err;
+  }
+  if (trans->execute(NdbTransaction::NoCommit) != 0) {
+    g_eventLogger->warning("[TTL PWorker] Failed to execute transaction "
+                           "on table %s"
+                           ", error: %d(%s). Retry...",
+                           tab->getName(),
+                           trans->getNdbError().code,
+                           trans->getNdbError().message);
+    goto err;
+  }
+  n_nodes = 0;
+  purge_nodes.clear();
+  pos = 0;
+  while ((check = scan_op->nextResult(true)) == 0) {
+    do {
+      if (rec_attr[0]->int32_value() != worker_ndb_->getNodeId() &&
+          (rec_attr[1]->isNULL() ||
+           !IsNodeAlive(reinterpret_cast<unsigned char*>(
+              rec_attr[1]->aRef())))) {
+        inactive_nodes += (std::to_string(rec_attr[0]->int32_value()) + " ");
+        continue;
+      }
+      n_nodes++;
+      purge_nodes.push_back(rec_attr[0]->int32_value());
+    } while ((check = scan_op->nextResult(false)) == 0);
+  }
+
+  std::sort(purge_nodes.begin(), purge_nodes.end());
+  if (!purge_nodes.empty()) {
+    for (auto iter : purge_nodes) {
+      active_nodes += (std::to_string(iter) + " ");
+      if (worker_ndb_->getNodeId() == iter) {
+        *shard = pos;
+      }
+      pos++;
+    }
+  }
+  if (!purge_nodes.empty() && *shard == -1) {
+    // if the current node id is not in the purging nodes list,
+    // set shard to -2 to tell the purge thread sleep
+    *shard = kShardNotPurger;
+  }
+  *n_purge_nodes = n_nodes;
+  worker_ndb_->closeTransaction(trans);
+  if (active_nodes.length() > 1) {
+    active_nodes[active_nodes.length() - 1] = ']';
+  } else {
+    active_nodes += "]";
+  }
+  if (inactive_nodes.length() > 1) {
+    inactive_nodes[inactive_nodes.length() - 1] = ']';
+  } else {
+    inactive_nodes += "]";
+  }
+  log_buf += ("Shard: [" + std::to_string(*shard) +
+              "/" + std::to_string(n_nodes) + "]");
+  log_buf += (", Active purging nodes: " + active_nodes);
+  log_buf += (", Inactive purging nodes: " + inactive_nodes);
+  g_eventLogger->info("%s", log_buf.c_str());
+  return true;
+
+err:
+  if (trans != nullptr) {
+    worker_ndb_->closeTransaction(trans);
+  }
+  return false;
+}
+
+Int64 TTLPurger::GetNow(unsigned char* encoded_now) {
+  assert(encoded_now != nullptr);
+  Int64 packed_now = 0;
+  memset(encoded_now, 0, 8);
+  MYSQL_TIME curr_dt;
+  struct tm tmp_tm;
+  time_t t_now = (time_t)my_micro_time() / 1000000; /* second */
+  gmtime_r(&t_now, &tmp_tm);
+  curr_dt.neg = false;
+  curr_dt.second_part = 0;
+  curr_dt.year = ((tmp_tm.tm_year + 1900) % 10000);
+  curr_dt.month = tmp_tm.tm_mon + 1;
+  curr_dt.day = tmp_tm.tm_mday;
+  curr_dt.hour = tmp_tm.tm_hour;
+  curr_dt.minute = tmp_tm.tm_min;
+  curr_dt.second = tmp_tm.tm_sec;
+  curr_dt.time_zone_displacement = 0;
+  curr_dt.time_type = MYSQL_TIMESTAMP_DATETIME;
+  if (curr_dt.second == 60 || curr_dt.second == 61) {
+    curr_dt.second = 59;
+  }
+  packed_now = TIME_to_longlong_datetime_packed(curr_dt);
+  my_datetime_packed_to_binary(packed_now, encoded_now, 0);
+
+  return packed_now;
+}
+
+bool TTLPurger::UpdateLease(const unsigned char* encoded_now) {
+  NdbDictionary::Dictionary* dict = nullptr;
+  const NdbDictionary::Table* tab = nullptr;
+  NdbTransaction* trans = nullptr;
+  NdbOperation *op = nullptr;
+  if (worker_ndb_->setDatabaseName(kSystemDBName) != 0) {
+    g_eventLogger->warning("[TTL PWorker] Failed to select system database: "
+                          "%s, error: %d(%s). Retry...",
+                           kSystemDBName,
+                           worker_ndb_->getNdbError().code,
+                           worker_ndb_->getNdbError().message);
+    goto err;
+  }
+  dict = worker_ndb_->getDictionary();
+  tab = dict->getTable(kTTLPurgeNodesTabName);
+  if (tab == nullptr) {
+    if (dict->getNdbError().code == 723) {
+      /*
+       * Purging nodes configuration table is not found,
+       * no need to update lease
+       */
+      return true;
+    } else {
+      g_eventLogger->warning("[TTL PWorker] Failed to get table: "
+                            "%s, error: %d(%s). Retry...",
+                             kTTLPurgeNodesTabName,
+                             dict->getNdbError().code,
+                             dict->getNdbError().message);
+      goto err;
+    }
+  }
+
+  trans = worker_ndb_->startTransaction();
+  if (trans == nullptr) {
+    g_eventLogger->warning("[TTL PWorker] Failed to start "
+                           "transaction"
+                           ", error: %d(%s). Retry...",
+                           worker_ndb_->getNdbError().code,
+                           worker_ndb_->getNdbError().message);
+    goto err;
+  }
+  op = trans->getNdbOperation(tab);
+  if (op == nullptr) {
+    g_eventLogger->warning("[TTL PWorker] Failed to get the Ndb "
+                           "operation on table %s"
+                           ", error: %d(%s). Retry...",
+                           tab->getName(),
+                           trans->getNdbError().code,
+                           trans->getNdbError().message);
+    goto err;
+  }
+  op->updateTuple();
+  op->equal("node_id", worker_ndb_->getNodeId());
+  op->setValue("last_active", reinterpret_cast<const char*>(encoded_now));
+
+  if (trans->execute(NdbTransaction::Commit) != 0) {
+    if (trans->getNdbError().code != 626 /*not found*/) {
+      g_eventLogger->warning("[TTL PWorker] Failed to commit transaction "
+                             "on table %s"
+                             ", error: %d(%s). Retry...",
+                             tab->getName(),
+                             trans->getNdbError().code,
+                             trans->getNdbError().message);
+      goto err;
+    }
+  }
+  worker_ndb_->closeTransaction(trans);
+  return true;
+err:
+  if (trans != nullptr) {
+    worker_ndb_->closeTransaction(trans);
+  }
+  return false;
+}
+
+bool TTLPurger::IsNodeAlive(const unsigned char* encoded_last_active) {
+  assert(encoded_last_active != nullptr);
+  Uint64 packed_last_active =
+          my_datetime_packed_from_binary(encoded_last_active, 0);
+  MYSQL_TIME last_active_dt;
+  TIME_from_longlong_datetime_packed(&last_active_dt, packed_last_active);
+  // Add lease seconds
+  Interval interval;
+  memset(&interval, 0, sizeof(interval));
+  interval.second = kLeaseSeconds;
+  date_add_interval(&last_active_dt, INTERVAL_SECOND, interval, nullptr);
+
+  MYSQL_TIME curr_dt;
+  struct tm tmp_tm;
+  time_t t_now = (time_t)my_micro_time() / 1000000; /* second */
+  gmtime_r(&t_now, &tmp_tm);
+  curr_dt.neg = false;
+  curr_dt.second_part = 0;
+  curr_dt.year = ((tmp_tm.tm_year + 1900) % 10000);
+  curr_dt.month = tmp_tm.tm_mon + 1;
+  curr_dt.day = tmp_tm.tm_mday;
+  curr_dt.hour = tmp_tm.tm_hour;
+  curr_dt.minute = tmp_tm.tm_min;
+  curr_dt.second = tmp_tm.tm_sec;
+  curr_dt.time_zone_displacement = 0;
+  curr_dt.time_type = MYSQL_TIMESTAMP_DATETIME;
+  if (curr_dt.second == 60 || curr_dt.second == 61) {
+    curr_dt.second = 59;
+  }
+
+  int res = my_time_compare(last_active_dt, curr_dt);
+  if (res >= 0) {
+    return true;
+  } else {
+    return false;
+  }
 }
 
 bool TTLPurger::Run() {
