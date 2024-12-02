@@ -1,6 +1,7 @@
 # This include-file, or subroutine, executes a query with both mysql client and
 # ronsql_cli, then compares the results.
 --source include/have_util_sed.inc
+--source include/have_util_curl.inc
 --echo == Query ==
 if ($QUERY!='')
 {

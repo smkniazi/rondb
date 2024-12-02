@@ -150,6 +150,7 @@ VALUES
 let $HOPSWORKS_TEST_API_KEY=bkYjEz6OTZyevbqt.ocHajJhnE0ytBh8zbYj3IXupyMqeMZp8PW464eTxzxqP5afBjodEQUgY0lmL33ub;
 let $HOPSWORKS_TEST_WRONG_API_KEY=ckYjEz6OTZyevbqt.ocHajJhnE0ytBh8zbYj3IXupyMqeMZp8PW464eTxzxqP5afBjodEQUgY0lmL33ub;
 
+--source include/have_util_curl.inc
 let $rdrs_ronsql_with_key = curl --fail-with-body -X POST
   -H "Content-Type: application/json"
   http://$RDRS_WITHKEY_HOST:$RDRS_WITHKEY_PORT/0.1.0/ronsql

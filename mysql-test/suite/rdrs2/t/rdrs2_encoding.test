@@ -70,6 +70,7 @@ replace_regex
 SELECT * FROM encoding_test order by sintkey;
 
 --echo ===== Test encoding handling in pk_read =====
+--source include/have_util_curl.inc
 let $rdrs_pkread = curl --fail-with-body -X POST
   -H "Content-Type: application/json"
   http://$RDRS_NOKEY_HOST:$RDRS_NOKEY_PORT/0.1.0/db1/encoding_test/pk-read -d;
