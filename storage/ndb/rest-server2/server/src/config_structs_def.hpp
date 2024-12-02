@@ -120,7 +120,6 @@ CLASS
  " pool size or be 0 (in which case the node ids are selected by RonDB")
  CLASSDEFS
  (
-  bool present_in_config_file = false;
   std::string generate_Mgmd_connect_string();
  )
 )
@@ -146,7 +145,6 @@ CLASS
  " pool size or be 0 (in which case the node ids are selected by RonDB")
  CLASSDEFS
  (
-  bool present_in_config_file = false;
   std::string generate_Mgmd_connect_string();
  )
 )
