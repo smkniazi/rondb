@@ -109,7 +109,6 @@ public:
       if (fkey[0] != '#') \
         throw ConfigParseError("Unexpected key"); \
     } \
-    after_parsing(target); \
     return true; \
   }) \
   DEFINE_VALUE_PARSER(Datatype, { \
@@ -694,15 +693,11 @@ DEFINE_VALUE_PARSER(int, {
  */
 
 #define CLASS(NAME, ...) DEFINE_STRUCT_PARSER(NAME, __VA_ARGS__)
-#define CM(DATATYPE, VARIABLENAME, JSONKEYNAME, INITEXPR) ELEMENT(VARIABLENAME, JSONKEYNAME)
+#define CM(DATATYPE, VARIABLENAME, JSONKEYNAME, INITEXPR, DOCSTRING) \
+  ELEMENT(VARIABLENAME, JSONKEYNAME)
 #define PROBLEM(CONDITION, MESSAGE)
 #define CLASSDEFS(...)
 #define VECTOR(DATATYPE) DEFINE_ARRAY_PARSER(DATATYPE)
-
-// Parsing hook to set MySQL::present_in_config_file
-template<typename T> void after_parsing([[maybe_unused]] T& value) { }
-template<> void after_parsing(MySQL& value)
-{ value.present_in_config_file = true; }
 
 #include "config_structs_def.hpp"
 
@@ -724,12 +719,6 @@ RS_Status JSONParser::config_parse(const std::string &configsBody,
       doc_initialized = true;
       parse(configsStruct, doc.get_object());
       assert_end_of_doc(doc);
-      // If .Testing.MySQLMetadataCluster is not present in config file, then
-      // set it to .Testing.MySQL.
-      if(!configsStruct.testing.mySQLMetadataCluster.present_in_config_file) {
-        configsStruct.testing.mySQLMetadataCluster =
-          configsStruct.testing.mySQL;
-      }
     }
     catch (simdjson::simdjson_error& e) {
       throw ConfigParseError(simdjson::error_message(e.error()));

@@ -21,6 +21,7 @@
 #include "config_structs.hpp"
 
 #include <iostream>
+#include <cassert>
 
 /*
  * Printing utilities
@@ -31,10 +32,64 @@
 #define DEFINE_PRINTER(ValueDatatype, ...) \
   void printJson(ValueDatatype& value, \
                  std::ostream& out, \
-                 [[maybe_unused]] Uint32 indent) __VA_ARGS__
+                 [[maybe_unused]] Uint32 indent, \
+                 [[maybe_unused]] bool printDoc) __VA_ARGS__
 
 #define INDENT() std::string(indent, ' ')
 #define INDENT_INC() std::string(indent + INDENT_INCREASE, ' ')
+
+void printDocString(std::ostream& out,
+                    int indent,
+                    std::string_view docString,
+                    bool& is_first) {
+  Uint32 targetLen = 80 - (indent + 8);
+  const char* data = docString.data();
+  Uint32 len = docString.length();
+  if (len == 0) return;
+  if (len > targetLen) {
+    // Try to find the space closest to the left of limit
+    for (Uint32 iter = 0; iter <= targetLen; iter++) {
+      Uint32 i = targetLen - iter;
+      if (data[i] == ' ') {
+        printDocString(out, indent, std::string_view{data, i}, is_first);
+        printDocString(out,
+                       indent,
+                       std::string_view{data + i + 1, len - i - 1},
+                       is_first);
+        return;
+      }
+    }
+    // Try to find the space closest to the right of limit
+    for (Uint32 i = targetLen + 1; i < len; i++) {
+      if (data[i] == ' ') {
+        printDocString(out, indent, std::string_view{data, i}, is_first);
+        printDocString(out,
+                       indent,
+                       std::string_view{data + i + 1, len - i - 1},
+                       is_first);
+        return;
+      }
+    }
+  }
+  for(Uint32 i = 0; i < len; i++) {
+    char c = data[i];
+    assert((0x20 <= c && c <= 0x21) ||
+           (0x23 <= c && c <= 0x5b) ||
+           (0x5d <= c && c <= 0x7e));
+  }
+  out << (is_first ? "\n" : ",\n")
+      << INDENT()
+      << "\"#\": \""
+      << docString
+      << "\"";
+  is_first = false;
+}
+void printDocString(std::ostream& out,
+                    int indent,
+                    const char* docString,
+                    bool& is_first) {
+  printDocString(out, indent, std::string_view{docString}, is_first);
+}
 
 /*
  * End of printing utilities
@@ -86,10 +141,12 @@ DEFINE_PRINTER(std::string, {
     __VA_ARGS__ \
     out << '\n' << INDENT() << "}"; \
   })
-#define CM(DATATYPE, VARIABLENAME, JSONKEYNAME, INITEXPR) \
+#define CM(DATATYPE, VARIABLENAME, JSONKEYNAME, INITEXPR, DOCSTRING) \
+  if (printDoc) \
+    printDocString(out, indent + INDENT_INCREASE, DOCSTRING, is_first_field); \
   out << (is_first_field ? "\n" : ",\n") \
       << INDENT_INC() << "\"" << #JSONKEYNAME << "\": "; \
-  printJson(value.VARIABLENAME, out, indent + INDENT_INCREASE); \
+  printJson(value.VARIABLENAME, out, indent + INDENT_INCREASE, printDoc); \
   is_first_field = false;
 #define PROBLEM(CONDITION, MESSAGE)
 #define CLASSDEFS(...)
@@ -99,7 +156,7 @@ DEFINE_PRINTER(std::string, {
     out << "[\n"; \
     for (Uint32 i = 0; i < len; i++) { \
       out << INDENT_INC(); \
-      printJson(value[i], out, indent + INDENT_INCREASE); \
+      printJson(value[i], out, indent + INDENT_INCREASE, printDoc); \
       if (i < len - 1) { \
         out << ","; \
       } \
