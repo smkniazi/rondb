@@ -132,6 +132,7 @@ struct GlobalData {
 
   bool       theGracefulShutdownFlag;
   bool       theUseOnlyIPv4Flag;
+  bool       theIsRunningInContainerFlag;
 
 
   NdbMutex   *theIO_lag_mutex;
