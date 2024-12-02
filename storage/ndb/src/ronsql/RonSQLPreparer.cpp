@@ -33,6 +33,19 @@
 #include "mysql_time.h"
 #include "my_inttypes.h"
 
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+//#define DEBUG_RONSQLPREPARER 1
+#endif
+
+#ifdef DEBUG_RONSQLPREPARER
+#define DEB_TRACE() do { \
+  printf("RonSQLPreparer.cpp:%d\n", __LINE__); \
+  fflush(stdout); \
+} while (0)
+#else
+#define DEB_TRACE() do { } while (0)
+#endif
+
 using std::endl;
 using std::runtime_error;
 
@@ -701,11 +714,15 @@ RonSQLPreparer::determine_explain()
 void
 RonSQLPreparer::execute()
 {
+  DEB_TRACE();
   soft_assert(m_status != Status::FAILED,
               "Attempting RonSQLPreparer::execute while in failed state.");
+  DEB_TRACE();
   assert(m_status == Status::PREPARED);
+  DEB_TRACE();
   Ndb* ndb = m_conf.ndb;
   NdbTransaction* myTrans = NULL;
+  DEB_TRACE();
   try
   {
     if (m_do_explain)
@@ -724,10 +741,14 @@ RonSQLPreparer::execute()
         feature_not_implemented("JSON_ASCII format for EXPLAIN output");
         break;
       default:
+        DEB_TRACE();
         abort();
       }
+
+      DEB_TRACE();
       return;
     }
+    DEB_TRACE();
     soft_assert(ndb != NULL, "Cannot query without ndb object.");
     myTrans = ndb->startTransaction();
     soft_assert(myTrans != NULL, "Failed to start transaction.");
@@ -742,26 +763,36 @@ RonSQLPreparer::execute()
 
     if(m_do_table_scan)
     {
+      DEB_TRACE();
       // Prepare and execute full table scan
       assert(!m_do_index_scan &&
              m_index_scan_config == NULL &&
              m_index_scan_index == NULL);
+      DEB_TRACE();
       NdbScanOperation* myScanOp = myTrans->getNdbScanOperation(m_table);
       soft_assert(myScanOp != NULL, "Failed to get scan operation.");
       soft_assert(myScanOp->readTuples(NdbOperation::LockMode::LM_CommittedRead) == 0,
                   "Failed to initialize scan operation.");
+      DEB_TRACE();
       if (m_table_scan_filter != NULL)
       {
+        DEB_TRACE();
         NdbScanFilter filter(myScanOp);
+        DEB_TRACE();
         apply_filter_top_level(&filter, m_table_scan_filter);
+        DEB_TRACE();
       }
+      DEB_TRACE();
       soft_assert(myScanOp->setAggregationCode(&aggregator) >= 0,
                   "Failed to set aggregation code.");
+      DEB_TRACE();
       soft_assert(myScanOp->DoAggregation() >= 0,
                   "Failed to execute aggregation.");
+      DEB_TRACE();
     }
     if(m_do_index_scan)
     {
+      DEB_TRACE();
       // Prepare and execute index scan
       assert(m_index_scan_config != NULL &&
              m_index_scan_index != NULL &&
@@ -861,14 +892,18 @@ RonSQLPreparer::execute()
       soft_assert(myIndexScanOp->DoAggregation() >= 0,
                   "Failed to execute aggregation.");
     }
+    DEB_TRACE();
 
     // Print results
     m_resultprinter->print_result(&aggregator, m_conf.out_stream);
+    DEB_TRACE();
 
     ndb->closeTransaction(myTrans);
+    DEB_TRACE();
   }
   catch (const std::exception& e)
   {
+    DEB_TRACE();
     NdbError ndb_err;
     if (myTrans != NULL)
     {
@@ -881,6 +916,7 @@ RonSQLPreparer::execute()
     }
     else
     {
+      DEB_TRACE();
       throw;
     }
     std::basic_ostream<char>& err = *m_conf.err_stream;
@@ -889,32 +925,38 @@ RonSQLPreparer::execute()
     case NdbError::Status::Success:
       assert(ndb_err.code == 0);
       // Rethrow since error not from ndb
+      DEB_TRACE();
       throw;
     case NdbError::Status::TemporaryError:
       err << "NDB Temporary error: " << ndb_err.code << " " << ndb_err.message
           << endl
           << "Caught exception, probably caused by the temporary error above: "
           << e.what() << endl;
+      DEB_TRACE();
       throw TemporaryError();
     case NdbError::Status::PermanentError:
       err << "NDB Permanent error " << ndb_err.code << ": " << ndb_err.message
           << endl;
       // Now that the ndb error is described on err stream, we'll rethrow the
       // original exception.
+      DEB_TRACE();
       throw;
     case NdbError::Status::UnknownResult:
       err << "NDB Unknown result: " << ndb_err.code << ": " << ndb_err.message
           << endl;
       // Now that the ndb error is described on err stream, we'll rethrow the
       // original exception.
+      DEB_TRACE();
       throw;
     }
     // Unreachable
+    DEB_TRACE();
     abort();
   }
   catch (...)
   {
     // All exceptions thrown should be instances of runtime_error.
+    DEB_TRACE();
     abort();
   }
 }

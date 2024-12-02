@@ -29,6 +29,19 @@
 #include "RonSQLPreparer.hpp"
 #include "mysql/strings/dtoa.h"
 
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+//#define DEBUG_RONSQLPRINTER 1
+#endif
+
+#ifdef DEBUG_RONSQLPRINTER
+#define DEB_TRACE() do { \
+  printf("RonSQLPrinter.cpp:%d\n", __LINE__); \
+  fflush(stdout); \
+} while (0)
+#else
+#define DEB_TRACE() do { } while (0)
+#endif
+
 using std::endl;
 using std::max;
 using std::runtime_error;
@@ -50,7 +63,6 @@ DEFINE_FORMATTER(quoted_identifier, LexCString, {
 })
 
 static void print_json_string_from_utf8(std::ostream& output_stream, LexString ls, bool utf8_output);
-static void print_float_or_double(std::ostream& out, double value, bool is_double, bool json_output, bool tsv_output);
 static double convert_result_to_double(NdbAggregator::Result result);
 
 ResultPrinter::ResultPrinter(ArenaMalloc* amalloc,
@@ -196,24 +208,28 @@ ResultPrinter::compile()
     m_utf8_output = true;
     m_tsv_output = true;
     m_tsv_headers = true;
+    m_null_representation = LexString{"NULL", 4};
     break;
   case RonSQLExecParams::OutputFormat::TEXT_NOHEADER:
     m_json_output = false;
     m_utf8_output = true;
     m_tsv_output = true;
     m_tsv_headers = false;
+    m_null_representation = LexString{"NULL", 4};
     break;
   case RonSQLExecParams::OutputFormat::JSON:
     m_json_output = true;
     m_utf8_output = true;
     m_tsv_output = false;
     m_tsv_headers = false;
+    m_null_representation = LexString{"null", 4};
     break;
   case RonSQLExecParams::OutputFormat::JSON_ASCII:
     m_json_output = true;
     m_utf8_output = false;
     m_tsv_output = false;
     m_tsv_headers = false;
+    m_null_representation = LexString{"null", 4};
     break;
   default:
     abort();
@@ -319,16 +335,19 @@ void
 ResultPrinter::print_result(NdbAggregator* aggregator,
                             std::basic_ostream<char>* out_stream)
 {
+  DEB_TRACE();
   assert(out_stream != NULL);
   std::ostream& out = *out_stream;
   if (m_json_output)
   {
+    DEB_TRACE();
     out << '[';
     bool first_record = true;
     for (NdbAggregator::ResultRecord record = aggregator->FetchResultRecord();
          !record.end();
          record = aggregator->FetchResultRecord())
     {
+      DEB_TRACE();
       if (first_record)
       {
         first_record = false;
@@ -339,17 +358,21 @@ ResultPrinter::print_result(NdbAggregator* aggregator,
       }
       print_record(record, out);
     }
+    DEB_TRACE();
     out << "]\n";
   }
   else if (m_tsv_output)
   {
+    DEB_TRACE();
     bool first_record = true;
     for (NdbAggregator::ResultRecord record = aggregator->FetchResultRecord();
          !record.end();
          record = aggregator->FetchResultRecord())
     {
+      DEB_TRACE();
       if (first_record && m_tsv_headers)
       {
+        DEB_TRACE();
         // Print the column names.
         bool first_column = true;
         for (Uint32 i = 0; i < m_outputs.size(); i++)
@@ -363,9 +386,11 @@ ResultPrinter::print_result(NdbAggregator* aggregator,
       }
       print_record(record, out);
     }
+    DEB_TRACE();
   }
   else
   {
+    DEB_TRACE();
     abort();
   }
   // ================================================================================
@@ -427,7 +452,7 @@ ResultPrinter::print_record(NdbAggregator::ResultRecord& record, std::ostream& o
         NdbAggregator::Column column = m_regs_g[cmd.print_group_by_column.reg_g];
         if(column.is_null())
         {
-          out << "NULL"; // todo Fix for JSON output format
+          out << m_null_representation;
           break;
         }
         switch (column.type())
@@ -568,7 +593,7 @@ ResultPrinter::print_record(NdbAggregator::ResultRecord& record, std::ostream& o
         NdbAggregator::Result result = m_regs_a[cmd.print_aggregate.reg_a];
         if(result.is_null())
         {
-          out << "NULL";
+          out << m_null_representation;
           break;
         }
         // todo conform format for sum(int) to mysql CLI
@@ -581,11 +606,7 @@ ResultPrinter::print_record(NdbAggregator::ResultRecord& record, std::ostream& o
           out << result.data_uint64();
           break;
         case NdbDictionary::Column::Double:
-          print_float_or_double(out,
-                                result.data_double(),
-                                true,
-                                m_json_output,
-                                m_tsv_output);
+          print_float_or_double(out, result.data_double(), true);
           break;
         case NdbDictionary::Column::Undefined:
           abort();
@@ -603,11 +624,7 @@ ResultPrinter::print_record(NdbAggregator::ResultRecord& record, std::ostream& o
         double numerator = convert_result_to_double(result_sum);
         double denominator = convert_result_to_double(result_count);
         double result = numerator / denominator;
-        print_float_or_double(out,
-                              result,
-                              true,
-                              m_json_output,
-                              m_tsv_output);
+        print_float_or_double(out, result, true);
       }
       break;
     case Cmd::Type::PRINT_STR:
@@ -729,24 +746,25 @@ print_json_string_from_utf8(std::ostream& out,
   out << '"';
 }
 
-inline static void
-print_float_or_double(std::ostream& out,
-                      double value,
-                      bool is_double,
-                      bool json_output,
-                      bool tsv_output)
+inline void
+ResultPrinter::print_float_or_double(std::ostream& out,
+                                     double value,
+                                     bool is_double)
 {
   // todo perhaps do not evaluate this branch every time
-  if (json_output && is_double)
-  {
-    out << std::fixed << std::setprecision(6) << value;
+  if (m_json_output && is_double) {
+   if(is_double)
+   {
+     out << std::fixed << std::setprecision(6) << value;
+   }
+   else
+   {
+     abort(); // todo test the following
+     out << std::fixed << std::setprecision(6) << static_cast<float>(value);
+   }
+   return;
   }
-  else if (json_output && !is_double)
-  {
-    abort(); // todo test the following
-    out << std::fixed << std::setprecision(6) << static_cast<float>(value);
-  }
-  else if (tsv_output)
+  if (m_tsv_output)
   {
     char buffer[129];
     bool error;
@@ -756,16 +774,14 @@ print_float_or_double(std::ostream& out,
     if (error)
     {
       // value is Inf, -Inf or NaN.
-      out << "NULL";
+      out << m_null_representation;
       return;
     }
     assert(len > 0 && buffer[len] ==0);
     out << buffer;
+    return;
   }
-  else
-  {
-    abort();
-  }
+  abort();
 }
 
 inline static double

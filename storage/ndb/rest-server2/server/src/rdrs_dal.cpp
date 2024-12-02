@@ -40,6 +40,19 @@ extern EventLogger *g_eventLogger;
 
 #include "storage/ndb/src/ronsql/RonSQLCommon.hpp"
 
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+//#define DEBUG_DAL 1
+#endif
+
+#ifdef DEBUG_DAL
+#define DEB_TRACE() do { \
+  printf("rdrs_dal.cpp:%d\n", __LINE__); \
+  fflush(stdout); \
+} while (0)
+#else
+#define DEB_TRACE() do { } while (0)
+#endif
+
 
 RDRSRonDBConnectionPool *rdrsRonDBConnectionPool = nullptr;
 
@@ -165,6 +178,7 @@ RS_Status ronsql_dal(const char* database,
   RS_Status status = rdrsRonDBConnectionPool->GetNdbObject(&ndb_object,
                                                            threadIndex);
   if (unlikely(status.http_code != SUCCESS)) {
+    DEB_TRACE();
     return status;
   }
 
@@ -173,12 +187,15 @@ RS_Status ronsql_dal(const char* database,
   ep->ndb = ndb_object;
   const char* saved_database_name = ndb_object->getDatabaseName();
   ndb_object->setDatabaseName(database);
+  DEB_TRACE();
   status = ronsql_op(*ep);
+  DEB_TRACE();
   ndb_object->setDatabaseName(saved_database_name);
   ep->ndb = NULL;
   rdrsRonDBConnectionPool->ReturnNdbObject(ndb_object,
                                            &status,
                                            threadIndex);
+  DEB_TRACE();
   return status;
 }
 

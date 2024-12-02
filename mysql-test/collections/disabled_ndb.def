@@ -56,4 +56,4 @@ ndb.ndb_database_lctn @darwin: Bug#30455400 INCORRECT SCHEMA NAME PASSED TO HA_B
 
 ndb.ndb_transaction_max_size @solaris: Bug#35392266 ndb_transaction_max_size fails in PB2 Solaris due to content mismatch
 
-@import ../suite/rdrs2/disabled.def
+@import ../suite/rdrs2-golang/disabled.def

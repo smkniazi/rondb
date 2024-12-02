@@ -699,11 +699,8 @@ DEFINE_VALUE_PARSER(int, {
 #define CLASSDEFS(...)
 #define VECTOR(DATATYPE) DEFINE_ARRAY_PARSER(DATATYPE)
 
-// Parsing hook to set RonDB::present_in_config_file and
-// MySQL::present_in_config_file
+// Parsing hook to set MySQL::present_in_config_file
 template<typename T> void after_parsing([[maybe_unused]] T& value) { }
-template<> void after_parsing(RonDB& value)
-{ value.present_in_config_file = true; }
 template<> void after_parsing(MySQL& value)
 { value.present_in_config_file = true; }
 

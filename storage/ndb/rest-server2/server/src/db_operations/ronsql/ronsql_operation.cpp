@@ -21,24 +21,42 @@
 #include "src/error_strings.h"
 #include "storage/ndb/src/ronsql/RonSQLPreparer.hpp"
 
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+//#define DEBUG_RONSQL_OP 1
+#endif
+
+#ifdef DEBUG_RONSQL_OP
+#define DEB_TRACE() do { \
+  printf("ronsql_operation.cpp:%d\n", __LINE__); \
+  fflush(stdout); \
+} while (0)
+#else
+#define DEB_TRACE() do { } while (0)
+#endif
+
 RS_Status ronsql_op(RonSQLExecParams& params) {
   std::basic_ostream<char>& err = *params.err_stream;
   try
   {
     RonSQLPreparer executor(params);
+    DEB_TRACE();
     executor.execute();
+    DEB_TRACE();
     return RS_OK;
   }
   catch (RonSQLPreparer::TemporaryError& e)
   {
     err << "Caught temporary error: " << e.what() << std::endl;
+    DEB_TRACE();
     return RS_SERVER_ERROR(ERROR_065);
   }
   catch (std::runtime_error& e)
   {
     err << "Caught exception: " << e.what() << std::endl;
+    DEB_TRACE();
     return RS_SERVER_ERROR(ERROR_066);
   }
   // Should be unreachable
+  DEB_TRACE();
   abort();
 }

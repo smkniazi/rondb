@@ -40,6 +40,19 @@
 
 static const int Err_scanAlreadyComplete = 4120;
 
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+//#define DEBUG_NDBSCANOP 1
+#endif
+
+#ifdef DEBUG_NDBSCANOP
+#define DEB_TRACE() do { \
+  printf("NdbScanOperation.cpp:%d\n", __LINE__); \
+  fflush(stdout); \
+} while (0)
+#else
+#define DEB_TRACE() do { } while (0)
+#endif
+
 NdbScanOperation::NdbScanOperation(Ndb *aNdb, NdbOperation::Type aType)
     : NdbOperation(aNdb, aType), m_transConnection(nullptr) {
   theParallelism = 0;
@@ -1397,36 +1410,48 @@ int NdbScanOperation::setAggregationCode(const NdbAggregator *code)
 }
 
 int NdbScanOperation::DoAggregation() {
+  DEB_TRACE();
 
   if (m_aggregation_code == nullptr ||
       !m_aggregation_code->finalized())
   {
+    DEB_TRACE();
     setErrorCodeAbort(4560); //  NdbAggregatior::Finalise() not called.
     return -1;
   }
 
   NdbRecAttr* myRecAttr;
   Uint32 col = 0xFF00;
+  DEB_TRACE();
   myRecAttr = getValue(col);
+  DEB_TRACE();
   if (myRecAttr == nullptr) {
     return -1;
   }
 
+  DEB_TRACE();
   if (m_transConnection->execute(NdbTransaction::NoCommit) != 0) {
     return -1;
   }
 
+  DEB_TRACE();
   int check = -1;
   while ((check = nextResult(true)) == 0) {
     // TODO (Zhao) handle return value;
+    DEB_TRACE();
     if (!m_aggregation_code->ProcessRes(myRecAttr->aRef())) {
+      DEB_TRACE();
       return -1;
     }
+    DEB_TRACE();
   }
+  DEB_TRACE();
   if (check < 0) {
     return check;
   }
+  DEB_TRACE();
   m_aggregation_code->PrepareResults();
+  DEB_TRACE();
   return 0;
 }
 

@@ -6714,7 +6714,6 @@ sub rdrs_start ($$) {
     my_find_bin($bindir,
                 [ "runtime_output_directory", "libexec", "sbin", "bin" ],
                 "rdrs2");
-  my $wait_for_pid_file = 1;
 
   my $name = $rdrs->name();
   my $args;
@@ -6766,12 +6765,6 @@ sub rdrs_start ($$) {
 
     # Indicate the exe should not be started
     $exe = undef;
-  } elsif ($tinfo->{'secondary-engine'}) {
-    # Wait for the PID file to be created if secondary engine
-    # is enabled.
-  } else {
-    # Default to not wait until pid file has been created
-    $wait_for_pid_file = 0;
   }
 
   # Remove the old pidfile if any
@@ -6803,11 +6796,16 @@ sub rdrs_start ($$) {
     mtr_verbose("Started $rdrs->{proc}");
   }
 
-  if ($wait_for_pid_file &&
-      !sleep_until_pid_file_created($pid_file, $opt_start_timeout,
+  if (!sleep_until_pid_file_created($pid_file, $opt_start_timeout,
                                     $rdrs->{'proc'})
     ) {
     mtr_error("Failed to start $name with command $exe");
+  }
+
+  my $host = $rdrs->value('#host');
+  my $port = $rdrs->value('port');
+  if (!sleep_until_port_opened($port, $opt_start_timeout, $host)) {
+    mtr_error("Failed while waiting for TCP server $host:$port to open.");
   }
 
   return;

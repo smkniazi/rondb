@@ -25,6 +25,24 @@
 #include "AttributeHeader.hpp"
 #include "../../src/ndbapi/NdbDictionaryImpl.hpp"
 
+#if (defined(VM_TRACE) || defined(ERROR_INSERT))
+//#define DEBUG_NDBAGGREGATOR 1
+#endif
+
+#ifdef DEBUG_NDBAGGREGATOR
+#define DEB_TRACE() do { \
+  printf("NdbAggregator.cpp:%d\n", __LINE__); \
+  fflush(stdout); \
+} while (0)
+#define DEB(...) do { \
+  printf(__VA_ARGS__); \
+  fflush(stdout); \
+} while (0)
+#else
+#define DEB_TRACE() do { } while (0)
+#define DEB(...) do { } while (0)
+#endif
+
 #define PROGRAM_HEADER_SIZE 2
 #define RESULT_HEADER_SIZE 3
 #define RESULT_ITEM_HEADER_SIZE 1
@@ -56,8 +74,11 @@ NdbAggregator::~NdbAggregator() {
 }
 
 Int32 NdbAggregator::ProcessRes(char* buf) {
+  DEB_TRACE();
   if (buf != nullptr) {
+    DEB_TRACE();
   }
+  DEB_TRACE();
   // Moz
   // Aggregation result
   assert(buf != nullptr);
@@ -73,10 +94,13 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
   //    n_gb_cols, n_agg_results, n_res_items);
 
   AggResItem* agg_res_ptr = nullptr;
+  DEB_TRACE();
   if (n_gb_cols) {
+    DEB_TRACE();
     char* agg_rec = nullptr;
     // const AttributeHeader* header = nullptr;
     for (Uint32 i = 0; i < n_res_items; i++) {
+      DEB_TRACE();
       bool need_merge = false;
       Uint32 gb_cols_len = data_buf[parse_pos] >> 16;
       Uint32 agg_res_len = data_buf[parse_pos++] & 0xFFFF;
@@ -106,25 +130,32 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
                 agg_res_len}));
         agg_res_ptr = reinterpret_cast<AggResItem*>(agg_rec + agg_res_len);
       }
+      DEB_TRACE();
 
       assert(agg_res_len == n_agg_results * sizeof(AggResItem));
       const AggResItem* res = reinterpret_cast<const AggResItem*>(
                            &data_buf[parse_pos + (gb_cols_len >> 2)]);
       if (need_merge) {
+        DEB_TRACE();
         for (Uint32 i = 0; i < n_agg_results; i++) {
+          DEB_TRACE();
           assert(((res[i].type == NDB_TYPE_BIGINT &&
                   (res[i].is_unsigned == agg_res_ptr[i].is_unsigned ||
                    agg_res_ptr[i].is_null)) ||
                   res[i].type == NDB_TYPE_DOUBLE) &&
                   res[i].type == agg_res_ptr[i].type);
           if (res[i].is_null) {
+            DEB_TRACE();
           } else if (agg_res_ptr[i].is_null) {
+            DEB_TRACE();
             agg_res_ptr[i] = res[i];
           } else {
+            DEB_TRACE();
             agg_res_ptr[i].type = res[i].type;
             agg_res_ptr[i].is_unsigned = res[i].is_unsigned;
             switch (agg_ops_[i]) {
               case kOpSum:
+                DEB_TRACE();
                 if (res[i].type == NDB_TYPE_BIGINT) {
                   if (res[i].is_unsigned) {
                     agg_res_ptr[i].value.val_uint64 += res[i].value.val_uint64;
@@ -137,11 +168,13 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
                 }
                 break;
               case kOpCount:
+                DEB_TRACE();
                 assert(res[i].type == NDB_TYPE_BIGINT);
                 assert(res[i].is_unsigned == 1);
                 agg_res_ptr[i].value.val_int64 += res[i].value.val_int64;
                 break;
               case kOpMax:
+                DEB_TRACE();
                 if (res[i].type == NDB_TYPE_BIGINT) {
                   if (res[i].is_unsigned) {
                     agg_res_ptr[i].value.val_uint64 =
@@ -160,6 +193,7 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
                 }
                 break;
               case kOpMin:
+                DEB_TRACE();
                 if (res[i].type == NDB_TYPE_BIGINT) {
                   if (res[i].is_unsigned) {
                     agg_res_ptr[i].value.val_uint64 =
@@ -178,6 +212,7 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
                 }
                 break;
               default:
+                DEB_TRACE();
                 assert(0);
                 break;
             }
@@ -186,32 +221,37 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
       }
 #if defined(MOZ_AGG_CHECK) && !defined(NDEBUG)
       {
+        DEB_TRACE();
         /*
          * Moz
          * Validation
          */
         Uint32 pos = parse_pos;
         for (Uint32 i = 0; i < n_gb_cols_; i++) {
+          DEB("[i: %d, n_gb_cols_: %u, pos: %u\n", i, n_gb_cols_, pos);
           AttributeHeader ah(data_buf[pos]);
-          /*
-             fprintf(stderr,
-             "[id: %u, sizeB: %u, sizeW: %u, gb_len: %u, "
-             "res_len: %u, value: %p]\n",
-             ah.getAttributeId(), ah.getByteSize(),
-             ah.getDataSize(), gb_cols_len, agg_res_len,
-             agg_res_ptr);
-             */
+          DEB("[id: %u, sizeB: %u, sizeW: %u, gb_len: %u, "
+              "res_len: %u, value: %p]\n",
+              ah.getAttributeId(), ah.getByteSize(),
+              ah.getDataSize(), gb_cols_len, agg_res_len,
+              agg_res_ptr);
           assert(ah.getDataPtr() != &data_buf[pos]);
-          pos += sizeof(AttributeHeader) + ah.getDataSize() * sizeof(Int32);
+          static_assert(sizeof(AttributeHeader) % sizeof(Int32) == 0,
+              "AttributeHeader size must be divisible by Int32 size");
+          pos += sizeof(AttributeHeader) / sizeof(Int32) + ah.getDataSize();
+          DEB_TRACE();
           if (i == gb_cols_len - 1) {
+            DEB_TRACE();
             assert(pos == gb_cols_len);
           }
+          DEB_TRACE();
         }
       }
 #endif // MOZ_AGG_CHECK && !NDEBUG
       parse_pos += ((gb_cols_len + agg_res_len) >> 2);
     }
   } else {
+    DEB_TRACE();
     Uint32 gb_cols_len = data_buf[parse_pos] >> 16;
     Uint32 agg_res_len = data_buf[parse_pos++] & 0xFFFF;
     assert(gb_cols_len == 0);
@@ -223,6 +263,7 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
     const AggResItem* res = reinterpret_cast<const AggResItem*>(
                          &data_buf[parse_pos/* + (gb_cols_len >> 2)*/]);
     for (Uint32 i = 0; i < n_agg_results; i++) {
+      DEB_TRACE();
       assert((((res[i].type == NDB_TYPE_BIGINT &&
               (res[i].is_unsigned == agg_res_ptr[i].is_unsigned ||
                agg_res_ptr[i].is_null)) ||
@@ -232,13 +273,17 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
               (res[i].type == NDB_TYPE_UNDEFINED &&
                n_gb_cols == 0));
       if (res[i].is_null) {
+        DEB_TRACE();
       } else if (agg_res_ptr[i].is_null) {
+        DEB_TRACE();
         agg_res_ptr[i] = res[i];
       } else {
+        DEB_TRACE();
         agg_res_ptr[i].type = res[i].type;
         agg_res_ptr[i].is_unsigned = res[i].is_unsigned;
         switch (agg_ops_[i]) {
           case kOpSum:
+            DEB_TRACE();
             if (res[i].type == NDB_TYPE_BIGINT) {
               if (res[i].is_unsigned) {
                 agg_res_ptr[i].value.val_uint64 += res[i].value.val_uint64;
@@ -251,11 +296,13 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
             }
             break;
           case kOpCount:
+            DEB_TRACE();
             assert(res[i].type == NDB_TYPE_BIGINT);
             assert(res[i].is_unsigned == 1);
             agg_res_ptr[i].value.val_int64 += res[i].value.val_int64;
             break;
           case kOpMax:
+            DEB_TRACE();
             if (res[i].type == NDB_TYPE_BIGINT) {
               if (res[i].is_unsigned) {
                 agg_res_ptr[i].value.val_uint64 =
@@ -274,6 +321,7 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
             }
             break;
           case kOpMin:
+            DEB_TRACE();
             if (res[i].type == NDB_TYPE_BIGINT) {
               if (res[i].is_unsigned) {
                 agg_res_ptr[i].value.val_uint64 =
@@ -292,13 +340,16 @@ Int32 NdbAggregator::ProcessRes(char* buf) {
             }
             break;
           default:
+            DEB_TRACE();
             assert(0);
             break;
         }
       }
     }
+    DEB_TRACE();
     parse_pos += ((/*gb_cols_len + */agg_res_len) >> 2);
   }
+  DEB_TRACE();
   return parse_pos;
 }
 

@@ -100,6 +100,7 @@ private:
   bool m_utf8_output;
   bool m_tsv_output;
   bool m_tsv_headers;
+  LexString m_null_representation;
   // Program state
   NdbAggregator::Column* m_regs_g;
   NdbAggregator::Result* m_regs_a;
@@ -108,6 +109,9 @@ private:
   void optimize();
   void print_record(NdbAggregator::ResultRecord& record,
                     std::ostream& out);
+  void print_float_or_double(std::ostream& out,
+                             double value,
+                             bool is_double);
 public:
   ResultPrinter(ArenaMalloc* amalloc,
                 struct SelectStatement* query,

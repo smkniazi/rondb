@@ -12,6 +12,6 @@
 #
 ##############################################################################
 
-rdrs2.rdrs2_health : RONDB-717 Not implemented yet
-rdrs2.rdrs2_ping   : RONDB-718 Not implemented yet
-rdrs2.rdrs2_stat   : RONDB-718 Not implemented yet
+rdrs2-golang.rdrs2-golang_health : RONDB-717 Not implemented yet
+rdrs2-golang.rdrs2-golang_ping   : RONDB-718 Not implemented yet
+rdrs2-golang.rdrs2-golang_stat   : RONDB-718 Not implemented yet

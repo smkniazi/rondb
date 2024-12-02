@@ -8,7 +8,7 @@ cmd-help() {
   cat <<"EOF"
 # Before using this script, start a cluster and export a variable pointing to
 # the rdrs2 config location:
-...rondb/build$ ./mysql-test/mtr --suite rdrs2 --start-and-exit
+...rondb/build$ ./mysql-test/mtr --suite rdrs2-golang --start-and-exit
 ...rondb/build$ export \
   RDRS_CONFIG_FILE=`realpath mysql-test/var/rdrs.1.1_config.json`
 

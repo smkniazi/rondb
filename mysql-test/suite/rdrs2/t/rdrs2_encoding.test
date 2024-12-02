@@ -1,0 +1,85 @@
+
+--echo ===== Prepare table for encoding tests =====
+CREATE DATABASE db1;
+USE db1;
+CREATE TABLE encoding_test (
+  sintkey SMALLINT NOT NULL,
+  ch_greek   CHAR(80)    CHARACTER SET greek   NOT NULL,
+  ch_latin1  CHAR(80)    CHARACTER SET latin1  NOT NULL,
+  ch_utf16   CHAR(80)    CHARACTER SET utf16   NOT NULL,
+  ch_utf8mb4 CHAR(80)    CHARACTER SET utf8mb4 NOT NULL,
+  tx_greek   TEXT        CHARACTER SET greek   NOT NULL,
+  tx_latin1  TEXT        CHARACTER SET latin1  NOT NULL,
+  tx_utf16   TEXT        CHARACTER SET utf16   NOT NULL,
+  tx_utf8mb4 TEXT        CHARACTER SET utf8mb4 NOT NULL,
+  vc_greek   VARCHAR(80) CHARACTER SET greek   NOT NULL,
+  vc_latin1  VARCHAR(80) CHARACTER SET latin1  NOT NULL,
+  vc_utf16   VARCHAR(80) CHARACTER SET utf16   NOT NULL,
+  vc_utf8mb4 VARCHAR(80) CHARACTER SET utf8mb4 NOT NULL,
+  PRIMARY KEY USING HASH (sintkey)) ENGINE=NDB CHARSET=latin1;
+INSERT INTO encoding_test VALUES
+  (1,
+   'ABCabc', 'ABCabc', 'ABCabc', 'ABCabc',
+   'ABCabc', 'ABCabc', 'ABCabc', 'ABCabc',
+   'ABCabc', 'ABCabc', 'ABCabc', 'ABCabc'),
+  (2,
+    '(unsupported)', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_',
+    '(unsupported)', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_',
+    '(unsupported)', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_'),
+  (3,
+    'ΑΒΓαβγ_', '(unsupported)', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_',
+    'ΑΒΓαβγ_', '(unsupported)', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_',
+    'ΑΒΓαβγ_', '(unsupported)', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_'),
+  (4,
+    '   spaces   ', '   spaces   ', '   spaces   ', '   spaces   ',
+    '   spaces   ', '   spaces   ', '   spaces   ', '   spaces   ',
+    '   spaces   ', '   spaces   ', '   spaces   ', '   spaces   '),
+  (5,
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/',
+    'NUL\0 SQ\' DQ\" BS\b NL\n CR\r TA\t SUB\Z BS\\ S/');
+replace_regex
+  /\x00/<00>/
+  /\x08/<08>/
+  /\x0D/<0D>/
+  /\x1A/<1A>/
+  /\x84/<84>/
+  /\x85/<85>/
+  /\x91/<91>/
+  /\x92/<92>/
+  /\x93/<93>/
+  /\x96/<96>/
+  /\xA4/<A4>/
+  /\xA5/<A5>/
+  /\xB1/<B1>/
+  /\xB2/<B2>/
+  /\xB3/<B3>/
+  /\xB6/<B6>/
+  /\xC3/<C3>/
+  /\xCE/<CE>/
+  ;
+SELECT * FROM encoding_test order by sintkey;
+
+--echo ===== Test encoding handling in pk_read =====
+--source include/have_util_curl.inc
+let $rdrs_pkread = curl --fail-with-body -X POST
+  -H "Content-Type: application/json"
+  http://$RDRS_NOKEY_HOST:$RDRS_NOKEY_PORT/0.1.0/db1/encoding_test/pk-read -d;
+--exec $rdrs_pkread '{"filters":[{"column":"sintkey","value":1}]}'
+--exec $rdrs_pkread '{"filters":[{"column":"sintkey","value":2}]}'
+--exec $rdrs_pkread '{"filters":[{"column":"sintkey","value":3}]}'
+--exec $rdrs_pkread '{"filters":[{"column":"sintkey","value":4}]}'
+--exec $rdrs_pkread '{"filters":[{"column":"sintkey","value":5}]}'
+--echo
+
+USE test;
+DROP DATABASE db1;
