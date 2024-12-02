@@ -483,11 +483,12 @@ inline int NdbScanOperation::scanImpl(
    * Zart
    * TTL
    */
-  if (options &&
-      options->optionsPresent & ScanOptions::SO_TTL_IGNORE) {
+  if (options != nullptr &&
+      (options->optionsPresent & ScanOptions::SO_TTL_IGNORE)) {
     m_flags |= OF_TTL_IGNORE;
   }
-  if (options->optionsPresent & ScanOptions::SO_TTL_ONLY_EXPIRED) {
+  if (options != nullptr &&
+      (options->optionsPresent & ScanOptions::SO_TTL_ONLY_EXPIRED)) {
     m_flags |= OF_TTL_ONLY_EXPIRED;
   }
 

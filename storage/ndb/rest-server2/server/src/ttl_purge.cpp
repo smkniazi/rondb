@@ -23,6 +23,7 @@
 #include "src/ttl_purge.hpp"
 #include "src/status.hpp"
 #include "storage/ndb/plugin/ndb_schema_dist.h"
+#include "include/my_murmur3.h"
 #include "include/my_systime.h"
 #include "include/my_time.h"
 
@@ -104,7 +105,6 @@ void TTLPurger::SchemaWatcherJob() {
 
   g_eventLogger->info("[TTL SWatcher] Started");
 retry:
-  g_eventLogger->info("[TTL SWatcher] retry from here");
   init_event_succ = false;
   dict = nullptr;
   schema_tab = nullptr;
@@ -669,7 +669,7 @@ err:
     sleep(2);
     goto retry;
   }
-  g_eventLogger->info("[TTL SWatcher] Exit");
+  g_eventLogger->info("[TTL SWatcher] Exited");
   return;
 }
 
@@ -849,6 +849,8 @@ void TTLPurger::PurgeWorkerJob() {
   std::string table_str;
   uint32_t ttl_col_no = 0;
   int check = 0;
+  int table_id = 0;
+  Uint32 hash_val = 0;
   uint32_t deletedRows = 0;
   int trx_failure_times = 0;
   std::map<std::string, TTLInfo>::iterator iter;
@@ -982,10 +984,11 @@ void TTLPurger::PurgeWorkerJob() {
                                dict->getNdbError().message);
         goto err;
       }
-      if (shard >= kShardFirst && n_purge_nodes > 0 &&
-          std::hash<std::string>{}(
-            (std::to_string(ttl_tab->getTableId()) + table_str)) %
-                           n_purge_nodes != static_cast<uint32_t>(shard)) {
+      table_id = ttl_tab->getTableId();
+      hash_val = murmur3_32(reinterpret_cast<unsigned char*>(&table_id),
+                                             sizeof(int), 0);
+        if (shard >= kShardFirst && n_purge_nodes > 0 &&
+          hash_val % n_purge_nodes != static_cast<Uint32>(shard)) {
         continue;
       }
       log_buf += ("[P" + std::to_string(iter->second.part_id) +
@@ -1309,7 +1312,7 @@ err:
   } while (!purge_worker_exit_);
 
   // No need to return PurgeWorker NdbObject here, SchemaWatch will do that.
-  g_eventLogger->info("[TTL PWorker] Exit");
+  g_eventLogger->info("[TTL PWorker] Exited");
   return;
 }
 
