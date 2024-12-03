@@ -1058,7 +1058,7 @@ int ndb_mgm_restart4(NdbMgmHandle handle, int no_of_nodes, const int *node_list,
    * Set location domain id for a node
    *
    * @param   handle        Management handle.
-   * @param   node          Node ID of node to get new location domain id
+   * @param   nodeId        Node ID of node to get new location domain id
    * @param   new_location_domain_id  New location domain id to be set for node
    *
    * @return                0 for success, -1 on error
