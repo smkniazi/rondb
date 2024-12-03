@@ -828,6 +828,7 @@ void Dbspj::execSET_DOMAIN_ID_REQ(Signal *signal) {
   Uint32 locationDomainId = req->locationDomainId;
 
   /* Change the location domain id of the changeNodeId */
+  ndbrequire(1 <= changeNodeId && changeNodeId <= MAX_NODES_ID);
   m_location_domain_id[changeNodeId] = locationDomainId;
 
   /* Send response back, this should never fail, so always CONF */

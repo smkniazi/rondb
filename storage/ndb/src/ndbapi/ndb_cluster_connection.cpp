@@ -769,12 +769,13 @@ Ndb_cluster_connection_impl::set_next_transid(Uint32 reference, Uint32 value)
 int
 Ndb_cluster_connection_impl::set_location_domain_id(Uint32 nodeId,
                                                     Uint32 locationDomainId) {
+  require(1 <= nodeId && nodeId <= MAX_NODES_ID);
   Uint32 old_locationDomainId = m_location_domain_id[nodeId];
   Uint32 my_old_locationDomainId = m_my_location_domain_id;
   DBUG_ENTER("Ndb_cluster_connection_impl::set_location_domain_id");
   DBUG_PRINT("enter",("nodeId: %u, locDomId: %u, old_dom: %u, my_node: %u",
     nodeId, locationDomainId, old_locationDomainId, m_my_node_id));
-  if (m_location_domain_id[nodeId] == locationDomainId) {
+  if (old_locationDomainId == locationDomainId) {
     DBUG_RETURN(0);
   }
 
@@ -793,11 +794,10 @@ Ndb_cluster_connection_impl::set_location_domain_id(Uint32 nodeId,
   }
   NdbMutex_Lock(m_nodes_proximity_mutex);
   m_location_domain_id[nodeId] = locationDomainId;
-  Int32 adjustment = 0;
   if (m_my_location_domain_id == my_old_locationDomainId) {
+    Int32 adjustment = 0;
     /* We stay in the same LocationDomainId, thus changing a DB node */
-    if (m_my_location_domain_id == old_locationDomainId &&
-        old_locationDomainId != 0) {
+    if (m_my_location_domain_id == old_locationDomainId) {
       /* Moved out of the same location domain id */
       adjustment += 5;
     } else if (m_my_location_domain_id == locationDomainId) {
@@ -812,7 +812,7 @@ Ndb_cluster_connection_impl::set_location_domain_id(Uint32 nodeId,
     /* We move to a new LocationDomainId for our node */
     for (Uint32 i = 1; i < MAX_NDB_NODES; i++) {
       if (m_db_nodes.get(i) == 0) continue;
-      adjustment = 0;
+      Int32 adjustment = 0;
       if (old_locationDomainId == m_location_domain_id[i] &&
           old_locationDomainId != 0) {
         /* Moved out of location domain of DB node */

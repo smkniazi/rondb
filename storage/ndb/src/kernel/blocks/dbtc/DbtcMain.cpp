@@ -1836,6 +1836,7 @@ void Dbtc::execSET_DOMAIN_ID_REQ(Signal *signal) {
   Uint32 locationDomainId = req->locationDomainId;
 
   /* Change the location domain id of the changeNodeId */
+  ndbrequire(1 <= changeNodeId && changeNodeId <= MAX_NODES_ID);
   hostptr.i = changeNodeId;
   ptrCheckGuard(hostptr, chostFilesize, hostRecord);
   hostptr.p->m_location_domain_id = locationDomainId;

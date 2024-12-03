@@ -487,7 +487,7 @@ static const char* helpTextSetDomainId =
 "---------------------------------------------------------------------------\n"
 " RonDB -- Management Client -- Help for LOCATION_DOMAIN_ID command\n"
 "---------------------------------------------------------------------------\n"
-"HOSTNAME Change location domain id of a node\n\n"
+"LOCATION_DOMAIN_ID Change location domain id of a node\n\n"
 "<id> LOCATION_DOMAIN_ID [<domain_id>]  Set the new location domain id of   \n"
 "                                       the node identified by <id>       \n\n"
 ;

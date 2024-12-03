@@ -1748,7 +1748,7 @@ private:
 
   Dbtc *c_tc;
 
-  Uint32 m_location_domain_id[MAX_NDB_NODES];
+  Uint32 m_location_domain_id[MAX_NODES];
   Uint32 m_load_balancer_location;
   /**
    * Scratch buffers...

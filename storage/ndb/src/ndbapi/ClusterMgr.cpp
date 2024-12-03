@@ -837,7 +837,7 @@ ClusterMgr::execSET_DOMAIN_ID_REQ(const Uint32 *theData)
   NodeId changeNodeId = setDomainIdReq->changeNodeId;
   Uint32 locationDomainId = setDomainIdReq->locationDomainId;
   Uint32 ref = numberToRef(API_CLUSTERMGR, theFacade.ownId());
-  if (changeNodeId > MAX_NODES)
+  if (changeNodeId < 1 || MAX_NODES_ID < changeNodeId)
   {
     /* Should never happen, thus error code 0 */
     sendSET_DOMAIN_ID_REF(ref,

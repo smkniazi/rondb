@@ -31,6 +31,13 @@
 
 class SetDomainIdReq 
 {
+  friend class Qmgr;
+  friend class Dbtc;
+  friend class DbtcProxy;
+  friend class Dbspj;
+  friend class DbspjProxy;
+  friend class ClusterMgr;
+
   /**
    * Reciver(s)
    */
@@ -44,7 +51,7 @@ class SetDomainIdReq
 public:
   static constexpr Uint32 SignalLength = 4;
   
-public:
+private:
   Uint32 senderId;
   Uint32 senderRef;
   Uint32 changeNodeId;
@@ -53,6 +60,13 @@ public:
 
 class SetDomainIdConf
 {
+  friend class Qmgr;
+  friend class Dbtc;
+  friend class DbtcProxy;
+  friend class Dbspj;
+  friend class DbspjProxy;
+  friend class ClusterMgr;
+
   /**
    * Sender(s)
    */
@@ -66,7 +80,7 @@ class SetDomainIdConf
 public:
   static constexpr Uint32 SignalLength = 4;
   
-public:
+private:
   Uint32 senderId;
   Uint32 senderRef;
   Uint32 changeNodeId;
@@ -75,6 +89,13 @@ public:
 
 class SetDomainIdRef
 {
+  friend class Qmgr;
+  friend class Dbtc;
+  friend class DbtcProxy;
+  friend class Dbspj;
+  friend class DbspjProxy;
+  friend class ClusterMgr;
+
   /**
    * Sender(s)
    */
@@ -88,7 +109,7 @@ class SetDomainIdRef
 public:
   static constexpr Uint32 SignalLength = 5;
 
-public:
+private:
   Uint32 senderId;
   Uint32 senderRef;
   Uint32 changeNodeId;
