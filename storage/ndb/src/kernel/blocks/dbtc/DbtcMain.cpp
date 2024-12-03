@@ -74,6 +74,7 @@
 #include <signaldata/DisconnectRep.hpp>
 #include <signaldata/TcHbRep.hpp>
 #include <signaldata/Abort.hpp>
+#include <signaldata/SetDomainId.hpp>
 
 #include <signaldata/PrepDropTab.hpp>
 #include <signaldata/DropTab.hpp>
@@ -1818,12 +1819,43 @@ void Dbtc::execREAD_NODESCONF(Signal* signal)
   ndb_mgm_destroy_iterator(p_iter);
   {
     HostRecordPtr Town_hostptr;
-    Town_hostptr.i = cownNodeid;
+    Town_hostptr.i = getOwnNodeId();
     ptrCheckGuard(Town_hostptr, chostFilesize, hostRecord);
     m_my_location_domain_id = Town_hostptr.p->m_location_domain_id;
   }
   ndbsttorry010Lab(signal);
 }//Dbtc::execREAD_NODESCONF()
+
+void Dbtc::execSET_DOMAIN_ID_REQ(Signal *signal) {
+  jamEntry();
+  const SetDomainIdReq* const req =
+    (const SetDomainIdReq *)signal->getDataPtr();
+  Uint32 senderId = req->senderId;
+  BlockReference senderRef = req->senderRef;
+  NodeId changeNodeId = req->changeNodeId;
+  Uint32 locationDomainId = req->locationDomainId;
+
+  /* Change the location domain id of the changeNodeId */
+  ndbrequire(1 <= changeNodeId && changeNodeId <= MAX_NODES_ID);
+  hostptr.i = changeNodeId;
+  ptrCheckGuard(hostptr, chostFilesize, hostRecord);
+  hostptr.p->m_location_domain_id = locationDomainId;
+  if (changeNodeId == getOwnNodeId()) {
+    m_my_location_domain_id = locationDomainId;
+  }
+
+  /* Send response back, this should never fail, so always CONF */
+  SetDomainIdConf* const conf = (SetDomainIdConf*)signal->getDataPtrSend();
+  conf->senderId = senderId;
+  conf->senderRef = reference();
+  conf->changeNodeId = changeNodeId;
+  conf->locationDomainId = locationDomainId;
+  sendSignal(senderRef,
+             GSN_SET_DOMAIN_ID_CONF,
+             signal,
+             SetDomainIdConf::SignalLength,
+             JBB);
+}
 
 /*****************************************************************************/
 /*                     A P I _ F A I L R E Q                                 */

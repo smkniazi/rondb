@@ -209,8 +209,17 @@ public:
   NodeId get_mgm_nodeid_request();
 
   /**
+   * Set a new location domain id on a deactivated node.
+   *   @param         processId  Id of the DB process to change
+   *   @new_location_domain_id  new location domain id for the node
+   *   @return 0 if succeeded, otherwise: error code
+   */
+  int set_location_domain_id_request(int processId,
+                                     const int new_location_domain_id);
+
+  /**
    * Set a new hostname on a deactivated node.
-   *   @param         processId  Id of the DB process to activate
+   *   @param         processId  Id of the DB process to change hostname
    *   @new_hostname  new hostname for the node
    *   @return 0 if succeeded, otherwise: error code
    */
@@ -617,6 +626,7 @@ private:
                           int& error_code, BaseString& error_string,
                           Uint32 timeout_s = 20);
   bool check_node_support_activate();
+  bool check_node_support_set_location_domain_id();
 public:
   /*
     Nodeid allocation

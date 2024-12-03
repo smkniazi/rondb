@@ -42,6 +42,7 @@
 #include "transporter/TransporterCallback.hpp"
 #include "portlib/ndb_sockaddr.h"
 
+class Ndb_cluster_connection_impl;
 class ClusterMgr;
 class ArbitMgr;
 struct ndb_mgm_configuration;
@@ -68,7 +69,7 @@ public:
    */
   static constexpr Uint32 MAX_NO_THREADS = 4711;
   static constexpr Uint32 MAX_LOCKED_CLIENTS = 256;
-  TransporterFacade(GlobalDictCache *cache);
+  TransporterFacade(GlobalDictCache *cache, Ndb_cluster_connection_impl*);
   ~TransporterFacade() override;
 
   int start_instance(NodeId, const ndb_mgm_configuration*);
@@ -608,6 +609,13 @@ private:
    * of sending to these nodes.
    */
   NodeBitmask m_has_data_nodes;
+
+  Ndb_cluster_connection_impl *m_ndb_cluster_connection;
+
+public:
+  Ndb_cluster_connection_impl* get_ndb_cluster_connection() {
+    return m_ndb_cluster_connection;
+  }
 };
 
 inline

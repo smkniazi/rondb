@@ -94,6 +94,7 @@ private:
   /**
    * General signals
    */
+  void execSET_DOMAIN_ID_REQ(Signal* signal);
   void execDUMP_STATE_ORD(Signal* signal){}
   void execREAD_NODESCONF(Signal*);
   void execREAD_CONFIG_REQ(Signal* signal);
@@ -1747,7 +1748,7 @@ private:
 
   Dbtc *c_tc;
 
-  Uint32 m_location_domain_id[MAX_NDB_NODES];
+  Uint32 m_location_domain_id[MAX_NODES];
   Uint32 m_load_balancer_location;
   /**
    * Scratch buffers...
