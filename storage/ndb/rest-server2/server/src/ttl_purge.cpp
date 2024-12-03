@@ -17,7 +17,9 @@
  * USA.
  */
 #include <algorithm>
+#include <utility>
 #include <vector>
+#include <random>
 
 #include "src/rdrs_rondb_connection_pool.hpp"
 #include "src/ttl_purge.hpp"
@@ -86,6 +88,18 @@ TTLPurger* TTLPurger::CreateTTLPurger() {
     ttl_purger = nullptr;
   }
   return ttl_purger;
+}
+
+static void RandomSleep(int lower_bound, int upper_bound) {
+  if (lower_bound > upper_bound) {
+    std::swap(lower_bound, upper_bound);
+  }
+  std::random_device rd;
+  std::mt19937 gen(rd());
+  std::uniform_int_distribution<int> dist(lower_bound, upper_bound);
+
+  int sleep_duration = dist(gen);
+  std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
 }
 
 static constexpr int NDB_INVALID_SCHEMA_OBJECT = 241;
@@ -500,14 +514,33 @@ retry:
                 }
               case SCHEMA_OP_TYPE::SOT_DROP_TABLE:
                 {
+                  if (watcher_ndb_->setDatabaseName(db_str.c_str()) != 0) {
+                    g_eventLogger->warning("[TTL SWatcher] Failed to select "
+                                           "database: %s"
+                                           ", error: %d(%s). Retry...",
+                                           db_str.c_str(),
+                                           watcher_ndb_->getNdbError().code,
+                                           watcher_ndb_->getNdbError().message);
+                    goto err;
+                  }
+                  dict->invalidateTable(table_str.c_str());
                   const std::lock_guard<std::mutex> lock(mutex_);
                   cache_updated = UpdateLocalCache(db_str, table_str, nullptr);
                   break;
                 }
               case SCHEMA_OP_TYPE::SOT_DROP_DB:
                 {
+                  if (watcher_ndb_->setDatabaseName(db_str.c_str()) != 0) {
+                    g_eventLogger->warning("[TTL SWatcher] Failed to select "
+                                           "database: %s"
+                                           ", error: %d(%s). Retry...",
+                                           db_str.c_str(),
+                                           watcher_ndb_->getNdbError().code,
+                                           watcher_ndb_->getNdbError().message);
+                    goto err;
+                  }
                   const std::lock_guard<std::mutex> lock(mutex_);
-                  cache_updated = DropDBLocalCache(db_str);
+                  cache_updated = DropDBLocalCache(db_str, dict);
                   break;
                 }
               case SCHEMA_OP_TYPE::SOT_CREATE_TABLE:
@@ -809,7 +842,9 @@ char* TTLPurger::GetEventName(NdbDictionary::Event::TableEvent event_type,
   return name_buf;
 }
 
-bool TTLPurger::DropDBLocalCache(const std::string& db_str) {
+bool TTLPurger::DropDBLocalCache(const std::string& db_str,
+                                 NdbDictionary::Dictionary* dict) {
+  assert(dict != nullptr);
   bool updated = false;
   for (auto iter = ttl_cache_.begin(); iter != ttl_cache_.end();) {
     auto pos = iter->first.find('/');
@@ -820,6 +855,10 @@ bool TTLPurger::DropDBLocalCache(const std::string& db_str) {
                              "in cache: [%u, %u@%u]",
                              iter->first.c_str(), iter->second.table_id,
                              iter->second.ttl_sec, iter->second.col_no);
+        if (pos + 1 < iter->first.length()) {
+          std::string table = iter->first.substr(pos + 1);
+          dict->invalidateTable(table.c_str());
+        }
         iter = ttl_cache_.erase(iter);
         updated = true;
         continue;
@@ -860,6 +899,9 @@ void TTLPurger::PurgeWorkerJob() {
   NdbDictionary::Dictionary* dict = nullptr;
   const NdbDictionary::Table* ttl_tab = nullptr;
   const NdbDictionary::Index* ttl_index = nullptr;
+  Uint64 start_time = 0;
+  Uint64 end_time = 0;
+  bool sleep_between_each_round = true;
   NdbTransaction* trans = nullptr;
   NdbScanOperation* scan_op = nullptr;
   Int64 packed_last = 0;
@@ -875,7 +917,50 @@ void TTLPurger::PurgeWorkerJob() {
     purge_trx_started = false;
     update_objects = false;
     if (cache_updated_) {
+      for (iter = local_ttl_cache.begin(); iter != local_ttl_cache.end();
+           iter++) {
+        pos = iter->first.find('/');
+        assert(pos != std::string::npos);
+        db_str = iter->first.substr(0, pos);
+        assert(pos + 1 < iter->first.length());
+        table_str = iter->first.substr(pos + 1);
+        if (worker_ndb_->setDatabaseName(db_str.c_str()) != 0) {
+          g_eventLogger->warning("[TTL PWorker] Failed to select "
+              "database: %s"
+              ", error: %d(%s). Retry...",
+              db_str.c_str(),
+              worker_ndb_->getNdbError().code,
+              worker_ndb_->getNdbError().message);
+          goto err;
+        }
+        /*
+         * Notice:
+         * Based on the comment below,
+         * here we need to call invalidateIndex() for ttl_index, the reason is
+         * removeCachedTable() just decrease the reference count of the table
+         * object in the global list, it won't remove the object even the counter
+         * becomes to 0. But invalidateIndex() will set the object to DROP and
+         * remove it if the counter is 0. Since we don't call invalidateIndex
+         * in main thread(it's a major different with other normal table objects),
+         * so here we need to call invalidateIndex()
+         */
+        dict->invalidateIndex(kTTLPurgeIndexName, table_str.c_str());
+        /*
+         * Notice:
+         * Purge thread can only call removeCachedXXX to remove its
+         * thread local cached table object and decrease the reference
+         * count of the global cached table object.
+         * If we call invalidateTable() and following by getTable() here,
+         * Purge thread will invalidate the global cached table object
+         * and generate a new version of table object, which will make
+         * the main thread's following invalidateTable() + getTable() gets
+         * this table object, stops the chance to get the latest one from
+         * data nodes.
+         */
+        dict->removeCachedTable(table_str.c_str());
+      }
       local_ttl_cache.clear();
+      purged_pos_.clear();
       const std::lock_guard<std::mutex> lock(mutex_);
       local_ttl_cache = ttl_cache_;
       cache_updated_ = false;
@@ -911,9 +996,14 @@ void TTLPurger::PurgeWorkerJob() {
       sleep(2);
       continue;
     }
+
+    sleep_between_each_round = true;
     dict = worker_ndb_->getDictionary();
     for (iter = local_ttl_cache.begin(); iter != local_ttl_cache.end();
          iter++) {
+      if (purge_worker_exit_) {
+        break;
+      }
       purge_trx_started = false;
       {
         GetNow(encoded_now);
@@ -925,6 +1015,8 @@ void TTLPurger::PurgeWorkerJob() {
       if (cache_updated_) {
         break;
       }
+
+      start_time = my_micro_time();
 
       log_buf = "[TTL PWorker] Processing " + iter->first + ": ";
 
@@ -940,40 +1032,12 @@ void TTLPurger::PurgeWorkerJob() {
 
       if (worker_ndb_->setDatabaseName(db_str.c_str()) != 0) {
         g_eventLogger->warning("[TTL PWorker] Failed to select "
-                               "database: %s"
-                               ", error: %d(%s). Retry...",
-                               db_str.c_str(),
-                               worker_ndb_->getNdbError().code,
-                               worker_ndb_->getNdbError().message);
-      }
-      if (update_objects) {
-        /*
-         * Notice:
-         * Based on the comment below,
-         * here we need to call invalidateIndex() for ttl_index, the reason is
-         * removeCachedTable() just decrease the reference count of the table
-         * object in the global list, it won't remove the object even the counter
-         * becomes to 0. But invalidateIndex() will set the object to DROP and
-         * remove it if the counter is 0. Since we don't call invalidateIndex
-         * in main thread(it's a major different with other normal table objects),
-         * so here we need to call invalidateIndex()
-         */
-        dict->invalidateIndex(kTTLPurgeIndexName, table_str.c_str());
-        /*
-         * Notice:
-         * Purge thread can only call removeCachedXXX to remove its
-         * thread local cached table object and decrease the reference
-         * count of the global cached table object.
-         * If we call invalidateTable() and following by getTable() here,
-         * Purge thread will invalidate the global cached table object
-         * and generate a new version of table object, which will make
-         * the main thread's following invalidateTable() + getTable() gets
-         * this table object, stops the chance to get the latest one from
-         * data nodes.
-         */
-        dict->removeCachedTable(table_str.c_str());
-
-        purged_pos_.clear();
+            "database: %s"
+            ", error: %d(%s). Retry...",
+            db_str.c_str(),
+            worker_ndb_->getNdbError().code,
+            worker_ndb_->getNdbError().message);
+        goto err;
       }
       ttl_tab = dict->getTable(table_str.c_str());
       if (ttl_tab == nullptr) {
@@ -996,8 +1060,13 @@ void TTLPurger::PurgeWorkerJob() {
                  std::to_string(ttl_tab->getPartitionCount()) + "]");
       assert(iter->second.part_id < ttl_tab->getPartitionCount());
 
+      log_buf += ("[BS: " + std::to_string(iter->second.batch_size) + "]");
+
       trx_failure_times = 0;
 retry_trx:
+      if (purge_worker_exit_) {
+        break;
+      }
       trans = worker_ndb_->startTransaction();
       if (trans == nullptr) {
         g_eventLogger->warning("[TTL PWorker] Failed to start "
@@ -1047,8 +1116,8 @@ retry_trx:
 
         if (index_scan_op->readTuples(NdbOperation::LM_Exclusive,
               scanFlags,
-              1,                // parallel
-              kPurgeBatchSize)  // batch
+              1,                        // parallel
+              iter->second.batch_size)  // batch
               != 0) {
           g_eventLogger->warning("[TTL PWorker] Failed to readTuples "
                                  "on table %s"
@@ -1123,6 +1192,13 @@ retry_trx:
           goto err;
         }
         memset(encoded_curr_purge, 0, 8);
+        /*
+         * Sleeping here can produce error
+         * 296(Time-out in NDB, probably caused by deadlock),
+         * which is handled below.
+         *
+         * sleep(XXX);
+         */
         while ((check = index_scan_op->nextResult(true)) == 0) {
           do {
             memset(encoded_curr_purge, 0, 8);
@@ -1159,8 +1235,37 @@ retry_trx:
           }
           break;
         }
+        if (check == -1) {
+          g_eventLogger->warning("[TTL PWorker] Failed to nextResult(true) "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          if (trans->getNdbError().code == 296) {
+            /*
+             * if the TransactionInactiveTimeout is set too small,
+             * error 296(Time-out in NDB, probably caused by deadlock)
+             * may happen, change the batch size to the minimum and retry
+             */
+            iter->second.batch_size = kPurgeBatchSize;
+            g_eventLogger->warning("[TTL PWorker] Changed the purgine batch "
+                                   "size of table %s to the minimum size %u, "
+                                   "Retry...",
+                                   ttl_tab->getName(),
+                                   iter->second.batch_size);
+          }
+          goto err;
+        }
         /**
          * Commit all prepared operations
+         */
+        /*
+         * Sleeping here can produce error
+         * 499(Scan take over error)
+         * which is handled below.
+         *
+         * sleep(XXX);
          */
         if (trans->execute(NdbTransaction::Commit) == -1) {
           g_eventLogger->warning("[TTL PWorker] Failed to commit transaction "
@@ -1169,6 +1274,19 @@ retry_trx:
                                  ttl_tab->getName(),
                                  trans->getNdbError().code,
                                  trans->getNdbError().message);
+          if (trans->getNdbError().code == 499) {
+            /*
+             * if the TransactionInactiveTimeout is set too small,
+             * error 499(Scan take over error) may happen,
+             * change the batch size to the minimum and retry
+             */
+            iter->second.batch_size = kPurgeBatchSize;
+            g_eventLogger->warning("[TTL PWorker] Changed the purgine batch "
+                                   "size of table %s to the minimum size %u, "
+                                   "Retry...",
+                                   ttl_tab->getName(),
+                                   iter->second.batch_size);
+          }
           goto err;
         } else if (*reinterpret_cast<Int64*>(encoded_curr_purge) != 0) {
           packed_last = my_datetime_packed_from_binary(encoded_curr_purge, 0);
@@ -1195,7 +1313,7 @@ retry_trx:
         scan_op->setPartitionId(iter->second.part_id);
         Uint32 scanFlags = NdbScanOperation::SF_OnlyExpiredScan;
         if (scan_op->readTuples(NdbOperation::LM_Exclusive, scanFlags,
-                                1, kPurgeBatchSize) != 0) {
+                                1, iter->second.batch_size) != 0) {
           g_eventLogger->warning("[TTL PWorker] Failed to readTuples "
                                  "on table %s"
                                  ", error: %d(%s). Retry...",
@@ -1223,6 +1341,13 @@ retry_trx:
                                  trans->getNdbError().message);
           goto err;
         }
+        /*
+         * Sleeping here can produce error
+         * 296(Time-out in NDB, probably caused by deadlock),
+         * which is handled below.
+         *
+         * sleep(XXX);
+         */
         while ((check = scan_op->nextResult(true)) == 0) {
           do {
             // std::cerr << "Get a expired row: timestamp = ["
@@ -1257,8 +1382,38 @@ retry_trx:
 
           break;
         }
+
+        if (check == -1) {
+          g_eventLogger->warning("[TTL PWorker] Failed to nextResult(true) "
+                                 "on table %s"
+                                 ", error: %d(%s). Retry...",
+                                 ttl_tab->getName(),
+                                 trans->getNdbError().code,
+                                 trans->getNdbError().message);
+          if (trans->getNdbError().code == 296) {
+            /*
+             * if the TransactionInactiveTimeout is set too small,
+             * error 296(Time-out in NDB, probably caused by deadlock)
+             * may happen, change the batch size to the minimum and retry
+             */
+            iter->second.batch_size = kPurgeBatchSize;
+            g_eventLogger->warning("[TTL PWorker] Changed the purgine batch "
+                                   "size of table %s to the minimum size %u, "
+                                   "Retry...",
+                                   ttl_tab->getName(),
+                                   iter->second.batch_size);
+          }
+          goto err;
+        }
         /**
          * Commit all prepared operations
+         */
+        /*
+         * Sleeping here can produce error
+         * 499(Scan take over error)
+         * which is handled below.
+         *
+         * sleep(XXX);
          */
         if (trans->execute(NdbTransaction::Commit) == -1) {
           g_eventLogger->warning("[TTL PWorker] Failed to commit transaction "
@@ -1267,6 +1422,19 @@ retry_trx:
                                  ttl_tab->getName(),
                                  trans->getNdbError().code,
                                  trans->getNdbError().message);
+          if (trans->getNdbError().code == 499) {
+            /*
+             * if the TransactionInactiveTimeout is set too small,
+             * error 499(Scan take over error) may happen,
+             * change the batch size to the minimum and retry
+             */
+            iter->second.batch_size = kPurgeBatchSize;
+            g_eventLogger->warning("[TTL PWorker] Changed the purgine batch "
+                                   "size of table %s to the minimum size %u, "
+                                   "Retry...",
+                                   ttl_tab->getName(),
+                                   iter->second.batch_size);
+          }
           goto err;
         }
       } else {
@@ -1282,6 +1450,18 @@ retry_trx:
       trans = nullptr;
       log_buf += " Purged " + std::to_string(deletedRows) + " rows";
       g_eventLogger->info("%s", log_buf.c_str());
+      end_time = my_micro_time();
+
+      iter->second.batch_size = AdjustBatchSize(iter->second.batch_size,
+                                                deletedRows,
+                                                end_time - start_time);
+      if (sleep_between_each_round &&
+          iter->second.batch_size == kMaxPurgeBatchSize) {
+        // At least 1 table finished its batch purging in the max size,
+        // so don't sleep and start the next round as soon as possible
+        sleep_between_each_round = false;
+      }
+
       iter->second.part_id =
         ((iter->second.part_id + 1) % ttl_tab->getPartitionCount());
       // Finish 1 batch
@@ -1290,6 +1470,7 @@ retry_trx:
 err:
       if (trans != nullptr) {
         worker_ndb_->closeTransaction(trans);
+        trans = nullptr;
       }
       trx_failure_times++;
       sleep(1);
@@ -1308,7 +1489,10 @@ err:
       }
     }
     // Finish 1 round
-    sleep(2);
+    if (sleep_between_each_round) {
+      // Sleep for 1000 - 2000 ms after finishing each round
+      RandomSleep(1000, 2000);
+    }
   } while (!purge_worker_exit_);
 
   // No need to return PurgeWorker NdbObject here, SchemaWatch will do that.
@@ -1622,4 +1806,26 @@ bool TTLPurger::Run() {
     schema_watcher_running_ = true;
   }
   return true;
+}
+
+Uint32 TTLPurger::AdjustBatchSize(Uint32 curr_batch_size,
+                                 Uint32 deleted_rows,
+                                 Uint64 used_time) {
+  if (deleted_rows == curr_batch_size && used_time < kPurgeThresholdTime) {
+      if (curr_batch_size + kPurgeBatchSizePerIncr <= kMaxPurgeBatchSize) {
+        // Increase
+        return curr_batch_size + kPurgeBatchSizePerIncr;
+      } else {
+        // Keep as max
+        assert(curr_batch_size == kMaxPurgeBatchSize);
+        return curr_batch_size;
+      }
+  } else if (curr_batch_size - kPurgeBatchSizePerIncr >= kPurgeBatchSize) {
+    // Decrease
+    return curr_batch_size - kPurgeBatchSizePerIncr;
+  } else {
+    // Keep as min
+    assert(curr_batch_size == kPurgeBatchSize);
+    return curr_batch_size;
+  }
 }

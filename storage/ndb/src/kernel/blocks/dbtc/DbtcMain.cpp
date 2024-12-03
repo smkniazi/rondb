@@ -16209,9 +16209,15 @@ void Dbtc::execDIH_SCAN_TAB_CONF(Signal *signal, ScanRecordPtr scanptr,
   if (scanptr.p->m_scan_dist_key_flag)  // Pruned scan
   {
     jamDebug();
+    /*
+     * NOTICE:
+     * Have to comment this assert since
+     * is_ttl_table() can be false when a new TTL purging scan request
+     * just comes after an altering table(TTL=OFF)
     ndbrequire(DictTabInfo::isOrderedIndex(tabPtr.p->tableType) ||
                tabPtr.p->get_user_defined_partitioning() ||
                is_ttl_table(tabPtr.p));
+    */
 
     /**
      * Prepare for sendDihGetNodeReq to request DBDIH info for

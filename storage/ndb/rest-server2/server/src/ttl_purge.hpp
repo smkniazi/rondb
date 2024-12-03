@@ -37,7 +37,10 @@ class TTLPurger {
   static constexpr const char* kTTLPurgeIndexName = "ttl_index";
   static constexpr int kNoEventCol = 10;
   static constexpr int kLeaseSeconds = 20;
-  static constexpr Uint32 kPurgeBatchSize = 10;
+  static constexpr Uint32 kPurgeBatchSize = 5;
+  static constexpr Uint32 kPurgeBatchSizePerIncr = 5;
+  static constexpr Uint32 kMaxPurgeBatchSize = 50;
+  static constexpr Uint32 kPurgeThresholdTime = 1000000;  // 1 second
   static constexpr int kMaxTrxRetryTimes = 10;
   static constexpr const char* kEventColNames[kNoEventCol] = {
     "db",
@@ -68,8 +71,8 @@ class TTLPurger {
     int32_t table_id;
     uint32_t ttl_sec;
     uint32_t col_no;
-    uint32_t part_id = {0};  // Only valid in local ttl cache
-    unsigned char last_purged[8] = {0};  // Only valid in local ttl cache
+    uint32_t part_id = {0};                   // Only valid in local ttl cache
+    uint32_t batch_size = {kPurgeBatchSize};  // Only valid in local ttl cache
   } TTLInfo;
   std::map<std::string, TTLInfo> ttl_cache_;
   std::mutex mutex_;
@@ -84,7 +87,8 @@ class TTLPurger {
   static char* GetEventName(
                         NdbDictionary::Event::TableEvent event_type,
                         char* name_buf);
-  bool DropDBLocalCache(const std::string& db_str);
+  bool DropDBLocalCache(const std::string& db_str,
+                        NdbDictionary::Dictionary* dict);
 
   std::atomic<bool> purge_worker_asks_for_retry_;
   bool schema_watcher_running_;
@@ -94,6 +98,9 @@ class TTLPurger {
   static Int64 GetNow(unsigned char* encoded_now);
   bool UpdateLease(const unsigned char* encoded_now);
   bool IsNodeAlive(const unsigned char* encoded_last_active);
+  Uint32 AdjustBatchSize(Uint32 curr_batch_size,
+                         Uint32 deleted_rows,
+                         Uint64 used_time);
   bool purge_worker_running_;
   std::thread* purge_worker_;
   std::atomic<bool> purge_worker_exit_;
