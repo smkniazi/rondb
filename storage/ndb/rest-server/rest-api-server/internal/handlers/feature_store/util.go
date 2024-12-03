@@ -3,15 +3,15 @@ package feature_store
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"strings"
 
-	"hopsworks.ai/rdrs/internal/feature_store"
+	"github.com/hamba/avro/v2"
 	"hopsworks.ai/rdrs/internal/log"
 )
 
-func DeserialiseComplexFeature(value *json.RawMessage, decoder *feature_store.AvroDecoder) (*interface{}, error) {
-	var valueString string
-	err := json.Unmarshal(*value, &valueString)
+func DeserialiseComplexFeature(value *json.RawMessage, schema *avro.Schema) (*interface{}, error) {
+	valueString, err := decodeJSONString(value)
 	if err != nil {
 		if log.IsDebug() {
 			log.Debugf("Failed to unmarshal. Value: %s", valueString)
@@ -25,9 +25,30 @@ func DeserialiseComplexFeature(value *json.RawMessage, decoder *feature_store.Av
 		}
 		return nil, err
 	}
-	native, err := decoder.Decode(jsonDecode)
-	nativeJson := ConvertAvroToJson(native)
+	var avroDeserialized interface{}
+	err = avro.Unmarshal(*schema, jsonDecode, &avroDeserialized)
+	if err != nil {
+		if log.IsDebug() {
+			log.Debugf("Failed to deserialize avro")
+		}
+		return nil, err
+	}
+	nativeJson := ConvertAvroToJson(avroDeserialized)
 	return &nativeJson, err
+}
+
+func decodeJSONString(raw *json.RawMessage) (string, error) {
+	// Convert the raw message to a string
+	rawStr := string(*raw)
+	// Check that the first and last characters are quotes
+	if len(rawStr) < 2 || rawStr[0] != '"' || rawStr[len(rawStr)-1] != '"' {
+		return "", fmt.Errorf("invalid JSON string format")
+	}
+	// Remove the surrounding quotes
+	unquotedStr := rawStr[1 : len(rawStr)-1]
+	// Replace escape sequences with their actual characters
+	decodedStr := strings.ReplaceAll(unquotedStr, `\"`, `"`)
+	return decodedStr, nil
 }
 
 func ConvertAvroToJson(o interface{}) interface{} {

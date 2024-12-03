@@ -31,6 +31,8 @@ type Internal struct {
 	GOMAXPROCS          int
 	BatchMaxSize        uint32
 	OperationIDMaxSize  uint32
+	EnablePPROF         bool
+	PPROFPort           uint16
 }
 
 func (i *Internal) Validate() error {
@@ -40,6 +42,10 @@ func (i *Internal) Validate() error {
 
 	if i.BufferSize < 256 {
 		return errors.New("BufferSize is too low")
+	}
+
+	if i.EnablePPROF && !(i.PPROFPort >= 1 && i.PPROFPort <= 65535) {
+		return errors.New("Invalid PPROFPort")
 	}
 
 	return nil

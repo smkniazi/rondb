@@ -94,15 +94,16 @@ class Dbspj : public SimulatedBlock {
   /**
    * General signals
    */
-  void execDUMP_STATE_ORD(Signal *signal) {}
-  void execREAD_NODESCONF(Signal *);
+  void execSET_DOMAIN_ID_REQ(Signal *signal);
+  void execDUMP_STATE_ORD(Signal *signal){}
+  void execREAD_NODESCONF(Signal*);
   void execREAD_CONFIG_REQ(Signal *signal);
   void execSTTOR(Signal *signal);
   void execDBINFO_SCANREQ(Signal *signal);
-  void execCONTINUEB(Signal *);
-  void execNODE_FAILREP(Signal *);
-  void execINCL_NODEREQ(Signal *);
-  void execAPI_FAILREQ(Signal *);
+  void execCONTINUEB(Signal*);
+  void execNODE_FAILREP(Signal*);
+  void execINCL_NODEREQ(Signal*);
+  void execAPI_FAILREQ(Signal*);
 
   void sendSTTORRY(Signal *signal);
 
@@ -1669,7 +1670,7 @@ class Dbspj : public SimulatedBlock {
 
   Dbtc *c_tc;
 
-  Uint32 m_location_domain_id[MAX_NDB_NODES];
+  Uint32 m_location_domain_id[MAX_NODES];
   Uint32 m_load_balancer_location;
   /**
    * Scratch buffers...

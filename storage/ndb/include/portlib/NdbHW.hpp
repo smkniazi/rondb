@@ -71,6 +71,7 @@ struct ndb_hwinfo {
    * Number of Processors, Cores and Sockets
    * MHz of CPU and Model name of CPU.
    */
+  Uint32 is_running_in_container;
   Uint32 cpu_cnt_max;
   Uint32 cpu_cnt;
   Uint32 total_cpu_capacity;

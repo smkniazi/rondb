@@ -25,9 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/hamba/avro/v2"
 	"github.com/patrickmn/go-cache"
 
-	"github.com/linkedin/goavro/v2"
 	"hopsworks.ai/rdrs/internal/dal"
 	"hopsworks.ai/rdrs/internal/log"
 )
@@ -56,7 +56,7 @@ type FeatureViewMetadata struct {
 	PrefixJoinKeyMap   map[string][]string        // key: serving-key-prefix + fName, value: list of feature which join on the key. Used for filling in pk value.
 	JoinKeyMap         map[string][]string        // key: fName, value: list of feature which join on the key. Used for filling in pk value.
 	RequiredJoinKeyMap map[string][]string        // key: serving-key-prefix + fName, value: list of feature which join on the key. Used for filling in pk value.
-	ComplexFeatures    map[string]*AvroDecoder    // key: joinIndex + fgId + fName, label are excluded. joinIndex is needed because of self-join
+	ComplexFeatures    map[string]*avro.Schema    // key: joinIndex + fgId + fName, label are excluded. joinIndex is needed because of self-join
 }
 
 type FeatureGroupFeatures struct {
@@ -91,18 +91,6 @@ type FeatureMetadata struct {
 	Label               bool
 	Prefix              string
 	JoinIndex           int
-}
-
-type AvroDecoder struct {
-	Codec *goavro.Codec
-}
-
-func (ad *AvroDecoder) Decode(in []byte) (interface{}, error) {
-	native, _, err := ad.Codec.NativeFromBinary(in)
-	if err != nil {
-		return nil, err
-	}
-	return native, nil
 }
 
 var COMPLEX_FEATURE = map[string]bool{
@@ -205,7 +193,7 @@ func newFeatureViewMetadata(
 		featureCount++
 	}
 
-	var complexFeatures = make(map[string]*AvroDecoder)
+	var complexFeatures = make(map[string]*avro.Schema)
 	var fgSchemaCache = make(map[int]*dal.FeatureGroupAvroSchema)
 	for _, fgFeature := range fgFeaturesArray {
 		for _, feature := range fgFeature.Features {
@@ -226,16 +214,16 @@ func newFeatureViewMetadata(
 					}
 					fgSchemaCache[feature.FeatureGroupId] = newFgSchema
 				}
-				schema, err := fgSchemaCache[feature.FeatureGroupId].GetSchemaByFeatureName(feature.Name)
+				schemaStr, err := fgSchemaCache[feature.FeatureGroupId].GetSchemaByFeatureName(feature.Name)
 				if err != nil {
 					return nil, errors.New("Failed to get feature schema for feature: " + feature.Name)
 				}
-				codec, err := goavro.NewCodec(string(schema))
+				schema, err := avro.Parse(string(schemaStr))
 				if err != nil {
 					return nil, errors.New("Failed to parse feature schema.")
 				}
 				featureIndexKey := GetFeatureIndexKeyByFeature(feature)
-				complexFeatures[featureIndexKey] = &AvroDecoder{codec}
+				complexFeatures[featureIndexKey] = &schema
 			}
 		}
 

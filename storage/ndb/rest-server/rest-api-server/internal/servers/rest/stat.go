@@ -20,6 +20,7 @@ package rest
 import (
 	"net/http"
 
+	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 	"hopsworks.ai/rdrs/internal/config"
 	"hopsworks.ai/rdrs/internal/handlers"
@@ -34,5 +35,11 @@ func (h *RouteHandler) Stat(c *gin.Context) {
 		c.AbortWithError(http.StatusInternalServerError, err)
 		return
 	}
-	c.JSON(status, statResp)
+
+	output, err := sonic.Marshal(statResp)
+	if err != nil {
+		c.AbortWithError(status, err)
+		return
+	}
+	c.Data(status, "application/json", output)
 }

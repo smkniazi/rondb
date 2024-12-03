@@ -7,20 +7,22 @@ import (
 	"hopsworks.ai/rdrs/internal/handlers/feature_store"
 	"hopsworks.ai/rdrs/internal/log"
 
-	"github.com/linkedin/goavro/v2"
+	"github.com/hamba/avro/v2"
 )
 
 func testConvertAvroToJson(t *testing.T, schema string, data []byte, expectedJson interface{}) {
-	codec, err := goavro.NewCodec(schema)
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	native, _, err := codec.NativeFromBinary(data)
+	avroSchema, err := avro.Parse(schema)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	actual := feature_store.ConvertAvroToJson(native)
+	var avroDeserialized interface{}
+	err = avro.Unmarshal(avroSchema, data, &avroDeserialized)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	actual := feature_store.ConvertAvroToJson(avroDeserialized)
 
 	if !reflect.DeepEqual(actual, expectedJson) {
 		t.Errorf("Got %s (%s) but expect %s (%s)\n", actual, reflect.TypeOf(actual), expectedJson, reflect.TypeOf(expectedJson))
@@ -56,8 +58,8 @@ func TestConvertAvroToJson(t *testing.T) {
 		`["null",{"type":"record","name":"r854762204","namespace":"struct","fields":[{"name":"int1","type":["null",{"type":"array","items":["null","long"]}]},{"name":"int2","type":["null",{"type":"array","items":["null","long"]}]}]}]`,
 		[]byte{0x02, 0x02, 0x06, 0x02, 0x02, 0x02, 0x04, 0x02, 0x06, 0x00, 0x02, 0x06, 0x02, 0x06, 0x00, 0x02, 0x0a, 0x00},
 		map[string]interface{}{
-			"int1": []interface{}{int64(1), int64(2), int64(3)}, 
-			"int2": []interface{}{int64(3), nil, int64(5)}, 
+			"int1": []interface{}{int64(1), int64(2), int64(3)},
+			"int2": []interface{}{int64(3), nil, int64(5)},
 		},
 	)
 

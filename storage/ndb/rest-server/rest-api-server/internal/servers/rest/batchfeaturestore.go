@@ -18,6 +18,7 @@ package rest
 import (
 	"net/http"
 
+	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 	"hopsworks.ai/rdrs/internal/config"
 	"hopsworks.ai/rdrs/internal/handlers"
@@ -40,8 +41,12 @@ func (h *RouteHandler) BatchFeatureStore(c *gin.Context) {
 		c.AbortWithError(status, err)
 		return
 	}
-	c.JSON(status, fsResp)
-
+	output, err := sonic.Marshal(fsResp)
+	if err != nil {
+		c.AbortWithError(status, err)
+		return
+	}
+	c.Data(status, "application/json", output)
 }
 
 func parseBatchFeatureStoreRequest(c *gin.Context) (*api.BatchFeatureStoreRequest, error) {

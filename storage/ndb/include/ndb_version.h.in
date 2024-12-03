@@ -1018,5 +1018,26 @@ ndbd_interpreted_insert_supported(Uint32 v)
   return v >= NDBD_INTERPRETED_INSERT;
 }
 
-
+static
+inline
+bool
+ndbd_support_set_location_domain_id(Uint32 x)
+{
+  const Uint32 major = (x >> 16) & 0xFF;
+  const Uint32 minor = (x >>  8) & 0xFF;
+  const Uint32 rel = x & 0xFF;
+  if (major > 24)
+  {
+    return true;
+  }
+  if ((major == 22) && (minor == 10) && (rel >= 6))
+  {
+    return true;
+  }
+  if ((major == 24) && (minor == 10) && (rel >= 0))
+  {
+    return true;
+  }
+  return false;
+}
 #endif

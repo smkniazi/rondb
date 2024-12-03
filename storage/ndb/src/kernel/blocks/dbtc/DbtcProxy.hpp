@@ -28,7 +28,7 @@
 #define NDB_DBTC_PROXY_HPP
 
 #include "../dbgdm/DbgdmProxy.hpp"
-
+#include <signaldata/SetDomainId.hpp>
 #include <signaldata/GCP.hpp>
 
 #include <signaldata/AlterDb.hpp>
@@ -63,6 +63,26 @@ class DbtcProxy : public DbgdmProxy {
    */
   Uint32 m_tc_seize_req_instance;  // round robin
   void execTCSEIZEREQ(Signal *signal);
+
+  /**
+   * SET_DOMAIN_ID_REQ 
+   */
+  struct Ss_SET_DOMAIN_ID_REQ : SsParallel {
+    SetDomainIdReq m_req;
+    Ss_SET_DOMAIN_ID_REQ() {
+      m_sendREQ = (SsFUNCREQ)&DbtcProxy::sendSET_DOMAIN_ID_REQ;
+      m_sendCONF = (SsFUNCREP)&DbtcProxy::sendSET_DOMAIN_ID_CONF;
+    }
+    enum { poolSize = 1 };
+    static SsPool<Ss_SET_DOMAIN_ID_REQ>& pool(LocalProxy* proxy) {
+      return ((DbtcProxy*)proxy)->c_ss_SET_DOMAIN_ID_REQ;
+    }
+  };
+  SsPool<Ss_SET_DOMAIN_ID_REQ> c_ss_SET_DOMAIN_ID_REQ;
+  void execSET_DOMAIN_ID_REQ(Signal*);
+  void sendSET_DOMAIN_ID_REQ(Signal*, Uint32 ssId, SectionHandle*);
+  void execSET_DOMAIN_ID_CONF(Signal*);
+  void sendSET_DOMAIN_ID_CONF(Signal*, Uint32 ssId);
 
   /**
    * TCGETOPSIZEREQ
