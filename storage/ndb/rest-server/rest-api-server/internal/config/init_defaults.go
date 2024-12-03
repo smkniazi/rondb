@@ -52,6 +52,8 @@ func newWithDefaults() AllConfigs {
 			PreAllocatedBuffers: 32,
 			BatchMaxSize:        256,
 			OperationIDMaxSize:  256,
+			EnablePPROF:         false,
+			PPROFPort:           8080,
 		},
 		GRPC: GRPC{
 			Enable:     true,

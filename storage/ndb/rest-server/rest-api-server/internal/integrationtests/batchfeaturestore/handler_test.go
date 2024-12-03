@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/linkedin/goavro/v2"
+	"github.com/hamba/avro/v2"
 	fsmetadata "hopsworks.ai/rdrs/internal/feature_store"
 	"hopsworks.ai/rdrs/internal/handlers/feature_store"
 	fshelper "hopsworks.ai/rdrs/internal/integrationtests/feature_store"
@@ -1460,20 +1460,15 @@ func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	mapCodec, err := goavro.NewCodec(`["null",{"type":"record","name":"r854762204","namespace":"struct","fields":[{"name":"int1","type":["null","long"]},{"name":"int2","type":["null","long"]}]}]`)
+	mapSchema, err := avro.Parse(`["null",{"type":"record","name":"r854762204","namespace":"struct","fields":[{"name":"int1","type":["null","long"]},{"name":"int2","type":["null","long"]}]}]`)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	arrayCodec, err := goavro.NewCodec(`["null",{"type":"array","items":["null","long"]}]`)
+	arraySchema, err := avro.Parse(`["null",{"type":"array","items":["null","long"]}]`)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
-	mapDecoder := fsmetadata.AvroDecoder{Codec: mapCodec}
-	arrayDecoder := fsmetadata.AvroDecoder{Codec: arrayCodec}
 
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 	var fsReq = CreateFeatureStoreRequest(
 		fsName,
 		fvName,
@@ -1491,7 +1486,7 @@ func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Cannot convert to json with error %s ", err)
 		}
-		arrayPt, err := feature_store.DeserialiseComplexFeature(arrayJson, &arrayDecoder) // array
+		arrayPt, err := feature_store.DeserialiseComplexFeature(arrayJson, &arraySchema) // array
 		row[2] = *arrayPt
 		if err != nil {
 			t.Fatalf("Cannot deserailize feature with error %s ", err)
@@ -1501,7 +1496,7 @@ func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Cannot convert to json with error %s ", err)
 		}
-		mapPt, err := feature_store.DeserialiseComplexFeature(mapJson, &mapDecoder) // map
+		mapPt, err := feature_store.DeserialiseComplexFeature(mapJson, &mapSchema) // map
 		row[3] = *mapPt
 		if err != nil {
 			t.Fatalf("Cannot deserailize feature with error %s ", err)
@@ -2349,7 +2344,7 @@ func Test_IncludeDetailedStatus_JoinedTablePartialKey(t *testing.T) {
 			t.Fatalf("Detailed status should have two entries")
 		}
 		for _, ds := range list_ds {
-			if (ds.FeatureGroupId ==2076 && ds.HttpStatus != http.StatusOK) || (ds.FeatureGroupId ==2069 && ds.HttpStatus != http.StatusBadRequest) {
+			if (ds.FeatureGroupId == 2076 && ds.HttpStatus != http.StatusOK) || (ds.FeatureGroupId == 2069 && ds.HttpStatus != http.StatusBadRequest) {
 				t.Fatalf("HttpStatus should be 200 or 400")
 			}
 			if ds.FeatureGroupId == -1 {
@@ -2381,7 +2376,7 @@ func Test_IncludeDetailedStatus_JoinedTablePartialKeyAndMissingRow(t *testing.T)
 			t.Fatalf("Detailed status should have two entries")
 		}
 		for _, ds := range list_ds {
-			if (ds.FeatureGroupId ==2069 && ds.HttpStatus != http.StatusNotFound) || (ds.FeatureGroupId ==2076 && ds.HttpStatus != http.StatusBadRequest) {
+			if (ds.FeatureGroupId == 2069 && ds.HttpStatus != http.StatusNotFound) || (ds.FeatureGroupId == 2076 && ds.HttpStatus != http.StatusBadRequest) {
 				t.Fatalf("HttpStatus should be 404 or 400")
 			}
 			if ds.FeatureGroupId == -1 {

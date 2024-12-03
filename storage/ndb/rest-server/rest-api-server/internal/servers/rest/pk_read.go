@@ -20,6 +20,7 @@ package rest
 import (
 	"net/http"
 
+	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 	"hopsworks.ai/rdrs/internal/config"
 	"hopsworks.ai/rdrs/internal/handlers"
@@ -43,7 +44,13 @@ func (h *RouteHandler) PkRead(c *gin.Context) {
 		c.AbortWithError(status, err)
 		return
 	}
-	c.JSON(status, responseIntf.(*api.PKReadResponseJSON))
+
+	output, err := sonic.Marshal(responseIntf.(*api.PKReadResponseJSON))
+	if err != nil {
+		c.AbortWithError(status, err)
+		return
+	}
+	c.Data(status, "application/json", output)
 }
 
 /*

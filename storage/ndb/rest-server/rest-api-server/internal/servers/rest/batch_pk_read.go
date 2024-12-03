@@ -24,6 +24,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/bytedance/sonic"
 	"github.com/gin-gonic/gin"
 	"hopsworks.ai/rdrs/internal/config"
 	"hopsworks.ai/rdrs/internal/handlers"
@@ -67,7 +68,13 @@ func (h *RouteHandler) BatchPkRead(c *gin.Context) {
 		c.AbortWithError(status, err)
 		return
 	}
-	c.JSON(status, responseIntf.(*api.BatchResponseJSON))
+
+	output, err := sonic.Marshal(responseIntf.(*api.BatchResponseJSON))
+	if err != nil {
+		c.AbortWithError(status, err)
+		return
+	}
+	c.Data(status, "application/json", output)
 }
 
 func parseOperation(operation *api.BatchSubOp, pkReadarams *api.PKReadParams) error {

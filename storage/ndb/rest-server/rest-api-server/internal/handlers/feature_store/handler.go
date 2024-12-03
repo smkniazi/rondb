@@ -335,8 +335,8 @@ func GetFeatureValues(ronDbResult *[]*api.PKReadResponseWithCodeJSON, entries *m
 			featureIndexKey := feature_store.GetFeatureIndexKeyByFgIndexKey(*response.Body.OperationID, featureName)
 			// When only primary key is selected, Rondb will return all columns, so not all value from response are needed.
 			if index, ok := (featureView.FeatureIndexLookup)[featureIndexKey]; ok {
-				if decoder, ok := (featureView.ComplexFeatures)[featureIndexKey]; ok {
-					var deser, err1 = DeserialiseComplexFeature(value, decoder)
+				if schema, ok := (featureView.ComplexFeatures)[featureIndexKey]; ok {
+					var deser, err1 = DeserialiseComplexFeature(value, schema)
 					if err1 != nil {
 						status = api.FEATURE_STATUS_ERROR
 						err = feature_store.DESERIALISE_FEATURE_FAIL.NewMessage(fmt.Sprintf("Feature name: %s; %s", featureName, err1.Error()))

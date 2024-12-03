@@ -23,6 +23,9 @@ import (
 	"fmt"
 	"os"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	"hopsworks.ai/rdrs/internal/config"
 	"hopsworks.ai/rdrs/internal/dal"
 	"hopsworks.ai/rdrs/internal/dal/heap"
@@ -57,6 +60,15 @@ func CreateAndStartDefaultServers(
 	conf := config.GetAll()
 	if !conf.GRPC.Enable && !conf.REST.Enable {
 		return nil, errors.New("both REST and gRPC interfaces are disabled")
+	}
+
+	if conf.Internal.EnablePPROF {
+		go func() {
+			err := http.ListenAndServe(":8080", nil)
+			if err != nil {
+				log.Warn(fmt.Sprintf("PPROF Error: %v", err))
+			}
+		}()
 	}
 
 	// Connect to RonDB
