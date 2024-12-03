@@ -1523,6 +1523,7 @@ static int Ndb_ReloadHWInfo(struct ndb_hwinfo *hwinfo)
   hwinfo->num_shared_l3_caches = l3_cache_id;
   hwinfo->cpu_model_name[0] = 0;
   hwinfo->hw_memory_size = mem_status.ullTotalPhys;
+  hwinfo->is_running_in_container = 0;
   if (hwinfo->cpu_cnt_max < hwinfo->cpu_cnt)
   {
     hwinfo->cpu_cnt = hwinfo->cpu_cnt_max;
