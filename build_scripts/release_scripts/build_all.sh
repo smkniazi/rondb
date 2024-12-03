@@ -197,7 +197,7 @@ if [ "$DEPLOY" = true ]; then
 
   else
     echo "Not a public release. Skip deploying clusterj."
-    CLUSTERJ_VERSION=""
+    CLUSTERJ_VERSION="DO_NOT_DEPLOY"
   fi
   
 

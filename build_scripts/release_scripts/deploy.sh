@@ -7,8 +7,8 @@ TARBALL_NAME=$2
 OUTPUT_DIR_ABS=$3
 ABS_PATH_RSA_KEY=$4
 TARBALL_COPY_LOCATION=$5
-CLUSTERJ_VERSION=$6
-RONDB_VERSION_EXTRA=$6
+CLUSTERJ_VERSION==$6
+RONDB_VERSION_EXTRA=$7
 
 TAR_FILE="$TARBALL_NAME.tar.gz"
 
@@ -34,7 +34,7 @@ if [ "$CPU_ARCH" != "x86_64" ]; then
   exit 0
 fi
 
-if [ -z "$CLUSTERJ_VERSION" ]; then
+if [ "$CLUSTERJ_VERSION" = "DO_NOT_DEPLOY" ]; then
   echo "Skip deploying clusterj"
   exit 0
 fi
