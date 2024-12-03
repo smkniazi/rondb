@@ -1523,6 +1523,7 @@ static int Ndb_ReloadHWInfo(struct ndb_hwinfo *hwinfo)
   hwinfo->num_shared_l3_caches = l3_cache_id;
   hwinfo->cpu_model_name[0] = 0;
   hwinfo->hw_memory_size = mem_status.ullTotalPhys;
+  hwinfo->is_running_in_container = 0;
   if (hwinfo->cpu_cnt_max < hwinfo->cpu_cnt)
   {
     hwinfo->cpu_cnt = hwinfo->cpu_cnt_max;
@@ -1661,6 +1662,7 @@ static int Ndb_ReloadHWInfo(struct ndb_hwinfo * hwinfo)
   hwinfo->cpu_model_name[size_var] = 0; // Null terminate
   hwinfo->is_cpuinfo_available = 0;
   hwinfo->is_cpudata_available = 0;
+  hwinfo->is_running_in_container = 0;
   return 0;
 
 error_exit:
@@ -1755,6 +1757,7 @@ static int Ndb_ReloadHWInfo(struct ndb_hwinfo * hwinfo)
   hwinfo->cpu_model_name[0] = 0; // Null terminate
   hwinfo->is_cpuinfo_available = 0;
   hwinfo->is_cpudata_available = 0;
+  hwinfo->is_running_in_container = 0;
   return 0;
 
 error_exit:
@@ -2147,6 +2150,20 @@ static int
 get_meminfo(struct ndb_hwinfo *hwinfo)
 {
   char buf[1024];
+  FILE * cgroup_meminfo = fopen("/sys/fs/cgroup/memory.max", "r");
+  if (cgroup_meminfo != nullptr) {
+    hwinfo->is_running_in_container = 1;
+    FileGuard g(cgroup_meminfo); // close at end...
+    int ret_code = fgets(buf, sizeof(buf), cgroup_meminfo))
+    Uint64 memory_size = 0;
+    if (sscanf(buf, "%llu", &memory_size) == 1) {
+      hwinfo->hw_memory_size = memory_size;
+      return 0;
+    }
+    perror("failed to read /sys/fs/cgroup/memory.max");
+    return -1;
+  }
+  hwinfo->is_running_in_container = 0;
   FILE * meminfo = fopen("/proc/meminfo", "r");
   if (meminfo == nullptr)
   {
@@ -2719,6 +2736,7 @@ static int Ndb_ReloadHWInfo(struct ndb_hwinfo * hwinfo)
   hwinfo->cpu_cnt_max = ncpu;
   hwinfo->cpu_cnt = ncpu;
   check_cpu_online(hwinfo);
+  hwinfo->is_running_in_container = 0;
   return 0;
 }
 

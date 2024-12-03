@@ -358,9 +358,11 @@ Configuration::get_total_memory(const ndb_mgm_configuration_iterator *p,
     struct ndb_hwinfo *hwinfo = Ndb_GetHWInfo(false);
     return hwinfo->hw_memory_size;
     total_memory_set = false;
+    globalData.theUseContainerMemoryFlag = hwinfo->is_running_in_container;
   }
   else
   {
+    globalData.theUseContainerMemoryFlag = false;
     total_memory_set = true;
     return total_memory_size;
   }
@@ -1053,7 +1055,11 @@ Configuration::compute_os_overhead(
   ndb_mgm_get_int64_parameter(p, CFG_DB_OS_CPU_OVERHEAD, &os_cpu_overhead);
   if (os_static_overhead == 0)
   {
-    os_static_overhead = Uint64(1400) * MBYTE64;
+    if (globalData.theUseContainerMemoryFlag) {
+      os_static_overhead = Uint64(200) * MBYTE64;
+    } else {
+      os_static_overhead = Uint64(1400) * MBYTE64;
+    }
   }
   if (os_cpu_overhead == 0)
   {
