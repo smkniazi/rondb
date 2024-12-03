@@ -36,15 +36,15 @@ import (
 )
 
 type TrainingDatasetFeature struct {
-	FeatureID                int
-	TrainingDataset          int
-	FeatureGroupID           int // When FG Id is null in DB, the value here is 0. Fg Id starts with 1.
-	Name                     string
-	Type                     string
-	TDJoinID                 int
-	IDX                      int
-	Label                    int
-	FeatureViewID            int
+	FeatureID       int
+	TrainingDataset int
+	FeatureGroupID  int // When FG Id is null in DB, the value here is 0. Fg Id starts with 1.
+	Name            string
+	Type            string
+	TDJoinID        int
+	IDX             int
+	Label           int
+	FeatureViewID   int
 }
 
 type TrainingDatasetJoin struct {
@@ -180,15 +180,15 @@ func GetTrainingDatasetFeature(featureViewID int) ([]TrainingDatasetFeature, *Da
 	retTdfs := make([]TrainingDatasetFeature, int(tdfsSize))
 	for i, tdf := range tdfsSlice {
 		retTdf := TrainingDatasetFeature{
-			FeatureID:                int(tdf.feature_id),
-			TrainingDataset:          int(tdf.training_dataset),
-			FeatureGroupID:           int(tdf.feature_group_id),
-			Name:                     C.GoString(&tdf.name[0]),
-			Type:                     C.GoString(&tdf.data_type[0]),
-			TDJoinID:                 int(tdf.td_join_id),
-			IDX:                      int(tdf.idx),
-			Label:                    int(tdf.label),
-			FeatureViewID:            int(tdf.feature_view_id),
+			FeatureID:       int(tdf.feature_id),
+			TrainingDataset: int(tdf.training_dataset),
+			FeatureGroupID:  int(tdf.feature_group_id),
+			Name:            C.GoString(&tdf.name[0]),
+			Type:            C.GoString(&tdf.data_type[0]),
+			TDJoinID:        int(tdf.td_join_id),
+			IDX:             int(tdf.idx),
+			Label:           int(tdf.label),
+			FeatureViewID:   int(tdf.feature_view_id),
 		}
 		retTdfs[i] = retTdf
 	}
@@ -291,19 +291,27 @@ func GetFeatureGroupAvroSchema(fgName string, fgVersion int, projectId int) (*Fe
 	cSubjectName := C.CString(subjectName)
 	defer C.free(unsafe.Pointer(cSubjectName))
 
-	var schemaBuff = C.malloc(C.size_t(C.FEATURE_GROUP_SCHEMA_SIZE))
-	defer C.free(schemaBuff)
+	// memory allocated on C side and freed here
+	var schemaBuff *C.char
 
 	ret := C.find_feature_group_schema(
 		(*C.char)(unsafe.Pointer(cSubjectName)),
 		C.int(projectId),
-		(*C.char)(unsafe.Pointer(schemaBuff)))
+		&schemaBuff)
 
 	if ret.http_code != http.StatusOK {
+		if unsafe.Pointer(schemaBuff) != nil {
+			C.free(unsafe.Pointer(schemaBuff))
+		}
 		return nil, cToGoRet(&ret)
 	}
 
-	var schema = C.GoString((*C.char)(unsafe.Pointer(schemaBuff)))
+	var schema = C.GoString(schemaBuff)
+
+	if unsafe.Pointer(schemaBuff) != nil {
+		C.free(unsafe.Pointer(schemaBuff))
+	}
+
 	var avroSchema FeatureGroupAvroSchema
 	err := json.Unmarshal([]byte(schema), &avroSchema)
 	if err != nil {

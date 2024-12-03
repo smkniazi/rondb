@@ -44,7 +44,33 @@ var HopsworksData string
 //go:embed fixed/hopsworks_40_schema.sql
 var HopsworksSchema string
 
-var HopsworksScheme string = HopsworksSchema + HopsworksData
+//Upgrades / patches
+//V5-FSTORE-1537-managed_feature_group.sql
+//V6-FSTORE-1507-python_udfs.sql
+//V7-HWORKS-1627-kube_labels_priorityclasses.sql
+//V8-HWORKS-1670-ray_integration.sql
+//V9-FSTORE-1592-type_column_size.sql
+//V10-FSTORE-1598-FSTORE-1595-avro_schema_fixes.sql
+
+//go:embed fixed/V5-FSTORE-1537-managed_feature_group.sql
+var V5 string
+
+//go:embed fixed/V6-FSTORE-1507-python_udfs.sql
+var V6 string
+
+//go:embed fixed/V7-HWORKS-1627-kube_labels_priorityclasses.sql
+var V7 string
+
+//go:embed fixed/V8-HWORKS-1670-ray_integration.sql
+var V8 string
+
+//go:embed fixed/V9-FSTORE-1592-type_column_size.sql
+var V9 string
+
+//go:embed fixed/V10-FSTORE-1598-FSTORE-1595-avro_schema_fixes.sql
+var V10 string
+
+var HopsworksScheme string = HopsworksSchema + HopsworksData + V5 + V6 + V7 + V8 + V9 + V10
 
 const HOPSWORKS_DB_NAME = "hopsworks"
 
