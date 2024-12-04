@@ -2164,7 +2164,7 @@ get_meminfo(struct ndb_hwinfo *hwinfo)
         return 0;
       }
     }
-    perror("failed to read /sys/fs/cgroup/memory.max, ret_code: %u", ret_code);
+    perror("failed to read /sys/fs/cgroup/memory.max");
     return -1;
   }
   hwinfo->is_running_in_container = 0;
