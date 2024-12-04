@@ -541,7 +541,7 @@ const ConfigInfo::ParamInfo ConfigInfo::m_ParamInfo[] = {
     {CFG_DB_BATCH_SIZE, "BatchSizePerLocalScan", DB_TOKEN,
      "Used to calculate the number of lock records for scan with hold lock",
      ConfigInfo::CI_USED, false, ConfigInfo::CI_INT, STR_VALUE(DEF_BATCH_SIZE),
-     "1", STR_VALUE(MAX_PARALLEL_OP_PER_SCAN)},
+     "1", STR_VALUE(MAX_PARALLEL_OP_PER_SCAN_RC)},
 
     {CFG_DB_NO_TRANSACTIONS, "MaxNoOfConcurrentTransactions", DB_TOKEN,
      "Max number of transaction executing concurrently on the " DB_TOKEN_PRINT
@@ -1653,7 +1653,7 @@ const ConfigInfo::ParamInfo ConfigInfo::m_ParamInfo[] = {
     {CFG_BATCH_SIZE, "BatchSize", "API",
      "The default batch size in number of records", ConfigInfo::CI_USED, false,
      ConfigInfo::CI_INT, STR_VALUE(DEF_BATCH_SIZE), "1",
-     STR_VALUE(MAX_PARALLEL_OP_PER_SCAN)},
+     STR_VALUE(MAX_PARALLEL_OP_PER_SCAN_RC)},
 
     {KEY_INTERNAL, "ConnectionMap", "API",
      "Specifies which DB nodes to connect", ConfigInfo::CI_USED, false,

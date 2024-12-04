@@ -4527,7 +4527,9 @@ Uint32 NdbQueryOperationImpl ::calculateBatchedRows(
                                       getRoot().m_parallelism == Parallelism_max
                                           ? rootFragments
                                           : getRoot().m_parallelism,
-                                      maxBatchRows, batchByteSize);
+                                      maxBatchRows,
+                                      batchByteSize,
+                                      MAX_PARALLEL_OP_PER_SCAN_SPJ);
     assert(maxBatchRows > 0);
     assert(maxBatchRows <= batchByteSize);
 
@@ -5391,8 +5393,11 @@ Uint32 NdbQueryOperationImpl::getMaxBatchBytes() const {
     if (m_operationDef.isScanOperation()) {
       const Ndb *const ndb = getQuery().getNdbTransaction().getNdb();
       const Uint32 parallelism = rootFragments;
-      NdbReceiver::calculate_batch_size(*ndb->theImpl, parallelism, batchRows,
-                                        batchByteSize);
+      NdbReceiver::calculate_batch_size(*ndb->theImpl,
+                                        parallelism,
+                                        batchRows,
+                                        batchByteSize,
+                                        MAX_PARALLEL_OP_PER_SCAN_SPJ);
       assert(batchRows == getMaxBatchRows());
 
       /**

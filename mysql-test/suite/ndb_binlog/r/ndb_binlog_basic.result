@@ -48,7 +48,7 @@ inserts	updates	deletes
 flush logs;
 purge binary logs before now();
 Warnings:
-Warning	1868	file ./binlog.000002 was not purged because it is the active log file.
+Warning	1869	file ./binlog.000002 was not purged because it is the active log file.
 select count(*) from mysql.ndb_binlog_index;
 count(*)
 0

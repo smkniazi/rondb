@@ -480,7 +480,8 @@ inline int NdbScanOperation::scanImpl(
    * Zart
    * TTL
    */
-  if (options->optionsPresent & ScanOptions::SO_TTL_IGNORE) {
+  if (options &&
+      options->optionsPresent & ScanOptions::SO_TTL_IGNORE) {
     m_flags |= OF_TTL_IGNORE;
   }
 
@@ -2212,13 +2213,18 @@ int NdbScanOperation::prepareSendScan(Uint32 /*aTC_ConnectPtr*/,
   /* All scans use NdbRecord internally */
   assert(theStatus == UseNdbRecord);
 
+  Uint32 def_max_batch_size = ScanTabReq::getLockMode(reqInfo) == 0 ?
+    MAX_PARALLEL_OP_PER_SCAN_RC : MAX_PARALLEL_OP_PER_SCAN_WITH_LOCK;
   /**
    * The number of records sent by each LQH is calculated and the kernel
    * is informed of this number by updating the SCAN_TABREQ signal
    */
   Uint32 batch_size = req->first_batch_size;  // Possibly user specified
   Uint32 batch_byte_size = 0;
-  theReceiver.calculate_batch_size(theParallelism, batch_size, batch_byte_size);
+  theReceiver.calculate_batch_size(theParallelism,
+                                   batch_size,
+                                   batch_byte_size,
+                                   def_max_batch_size);
 
   /**
    * Calculate memory req. for the NdbReceiverBuffer and its row buffer:

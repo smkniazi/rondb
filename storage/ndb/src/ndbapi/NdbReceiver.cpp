@@ -501,8 +501,10 @@ void NdbReceiver::prepareReceive(NdbReceiverBuffer *buffer) {
 */
 // static
 void NdbReceiver::calculate_batch_size(const NdbImpl &theImpl,
-                                       Uint32 parallelism, Uint32 &batch_size,
-                                       Uint32 &batch_byte_size) {
+                                       Uint32 parallelism,
+                                       Uint32 &batch_size,
+                                       Uint32 &batch_byte_size,
+                                       Uint32 def_max_batch_size) {
   const NdbApiConfig &cfg = theImpl.get_ndbapi_config_parameters();
   const Uint32 max_scan_batch_size = cfg.m_scan_batch_size;
   const Uint32 max_batch_byte_size = cfg.m_batch_byte_size;
@@ -516,18 +518,23 @@ void NdbReceiver::calculate_batch_size(const NdbImpl &theImpl,
   if (batch_size == 0 || batch_size > max_batch_size) {
     batch_size = max_batch_size;
   }
-  if (unlikely(batch_size > MAX_PARALLEL_OP_PER_SCAN)) {
-    batch_size = MAX_PARALLEL_OP_PER_SCAN;
+  if (unlikely(batch_size > def_max_batch_size)) {
+    batch_size = def_max_batch_size;
   }
   if (unlikely(batch_size > batch_byte_size)) {
     batch_size = batch_byte_size;
   }
 }
 
-void NdbReceiver::calculate_batch_size(Uint32 parallelism, Uint32 &batch_size,
-                                       Uint32 &batch_byte_size) const {
-  calculate_batch_size(*m_ndb->theImpl, parallelism, batch_size,
-                       batch_byte_size);
+void NdbReceiver::calculate_batch_size(Uint32 parallelism,
+                                       Uint32 &batch_size,
+                                       Uint32 &batch_byte_size,
+                                       Uint32 def_max_batch_size) const {
+  calculate_batch_size(*m_ndb->theImpl,
+                       parallelism,
+                       batch_size,
+                       batch_byte_size,
+                       def_max_batch_size);
 }
 
 // static
