@@ -1034,7 +1034,7 @@ ndbd_support_set_location_domain_id(Uint32 x)
   {
     return true;
   }
-  if ((major == 24) && (minor == 10) && (rel >= 0))
+  if ((major == 24) && (minor == 10))
   {
     return true;
   }
