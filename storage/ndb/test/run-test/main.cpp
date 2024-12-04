@@ -1020,7 +1020,7 @@ void test_case_results(TestResult *test_result, const atrt_testcase &testcase) {
 
   if (testcase.m_report ||
       (test_result->result != ERR_OK &&
-        test_result->result != ERR_SKIPPED)) {
+        test_result->result != ERR_TEST_SKIPPED)) {
     if (rename("result", res_dir.c_str()) != 0) {
       g_logger.critical("Failed to rename %s as %s", "result", res_dir.c_str());
       remove_dir("result", true);

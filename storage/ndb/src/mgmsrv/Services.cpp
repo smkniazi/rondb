@@ -275,7 +275,7 @@ const ParserRow<MgmApiSession> commands[] = {
 
     MGM_CMD("get mgm nodeid", &MgmApiSession::get_mgm_nodeid, "", &Basic),
 
-  MGM_CMD("set_location_domain_id", &MgmApiSession::set_location_domain_id, ""),
+  MGM_CMD("set_location_domain_id", &MgmApiSession::set_location_domain_id, "", &Basic),
     MGM_ARG("node", Int, Mandatory, "node"),
     MGM_ARG("new_location_domain_id", Int, Mandatory, "new location_domain_id"),
 
