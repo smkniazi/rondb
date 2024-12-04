@@ -707,17 +707,11 @@ NdbImpl::select_node(NdbTableImpl *table_impl,
      * so we keeping the TC local to this domain always seems preferable
      * to picking the perfect path for this operation.
      */
-    if (m_optimized_node_selection) {
-      nodeId = m_ndb_cluster_connection.select_location_based(this,
-                                                              nodes,
-                                                              cnt,
-                                                              primary_node);
-      DBUG_PRINT("exit",("select_location_based: nodeId: %u", nodeId));
-    } else {
-      /* Backwards compatible setting */
-      nodeId = primary_node;
-      DBUG_PRINT("exit",("Choose primary: nodeId: %u", nodeId));
-    }
+    nodeId = m_ndb_cluster_connection.select_location_based(this,
+                                                            nodes,
+                                                            cnt,
+                                                            primary_node);
+    DBUG_PRINT("exit",("select_location_based: nodeId: %u", nodeId));
   } else if (fullyReplicated) {
     /**
      * Consider any fragment and any replica.

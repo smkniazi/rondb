@@ -1485,7 +1485,7 @@ Uint32 Ndb_cluster_connection_impl::select_any(NdbImpl *impl_ndb) {
   DBUG_ENTER("Ndb_cluster_connection_impl::select_any");
   DBUG_PRINT("enter",("my_domain: %u",
              my_location_domain_id));
-  if (my_location_domain_id == 0 || !impl_ndb->m_optimized_node_selection) {
+  if (my_location_domain_id == 0) {
     // No preference among nodes
     DBUG_RETURN(0);
   }
