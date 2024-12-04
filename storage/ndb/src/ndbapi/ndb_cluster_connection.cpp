@@ -862,7 +862,7 @@ Ndb_cluster_connection_impl::adjust_node_proximity(Uint32 node_id, Int32 adjustm
   const Int32 old_group = m_nodes_proximity[old_idx].adjusted_group;
   const Int32 new_group = old_group + adjustment;
   Node node = m_nodes_proximity[old_idx];
-  node.adjusted_group = new_group;
+  m_nodes_proximity[old_idx].adjusted_group = new_group;
 
   Uint32 new_idx;
   if (adjustment < 0)
