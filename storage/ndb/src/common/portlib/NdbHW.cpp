@@ -2154,11 +2154,12 @@ get_meminfo(struct ndb_hwinfo *hwinfo)
   if (cgroup_meminfo != nullptr) {
     hwinfo->is_running_in_container = 1;
     FileGuard g(cgroup_meminfo); // close at end...
-    int ret_code = fgets(buf, sizeof(buf), cgroup_meminfo))
-    Uint64 memory_size = 0;
-    if (sscanf(buf, "%llu", &memory_size) == 1) {
-      hwinfo->hw_memory_size = memory_size;
-      return 0;
+    if (fgets(buf, sizeof(buf), cgroup_meminfo)) {
+      Uint64 memory_size = 0;
+      if (sscanf(buf, "%llu", &memory_size) == 1) {
+        hwinfo->hw_memory_size = memory_size;
+        return 0;
+      }
     }
     perror("failed to read /sys/fs/cgroup/memory.max");
     return -1;
