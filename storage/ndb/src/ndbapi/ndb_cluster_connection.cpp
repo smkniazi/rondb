@@ -206,7 +206,7 @@ Uint32 Ndb_cluster_connection_impl::get_next_node(
     start = 1;
   for (Uint32 i = start; i < 2; i++) {
     for (Uint32 j = iter.cur_pos; j < no_db_nodes(); j++) {
-      Ndb_cluster_connection_impl::Node &curr_node = nodes[i];
+      Ndb_cluster_connection_impl::Node &curr_node = nodes[j];
       NodeId curr_node_id = curr_node.nodeId;
       if (m_my_location_domain_id == 0 ||
           i == 1 ||
@@ -216,19 +216,20 @@ Uint32 Ndb_cluster_connection_impl::get_next_node(
         return curr_node_id;
       }
     }
-    for (Uint32 j = 0; j < iter.cur_pos; j++) {
-      Ndb_cluster_connection_impl::Node &curr_node = nodes[i];
-      NodeId curr_node_id = curr_node.nodeId;
-      if (m_my_location_domain_id == 0 ||
-          i == 1 ||
-          m_my_location_domain_id ==
-            m_location_domain_id[curr_node_id]) {
-        iter.cur_pos = j + 1;
-        return curr_node_id;
+    if (!any_node) {
+      for (Uint32 j = 0; j < iter.cur_pos; j++) {
+        Ndb_cluster_connection_impl::Node &curr_node = nodes[j];
+        NodeId curr_node_id = curr_node.nodeId;
+        if (m_my_location_domain_id == 0 ||
+            i == 1 ||
+            m_my_location_domain_id ==
+              m_location_domain_id[curr_node_id]) {
+          iter.cur_pos = j + 1;
+          return curr_node_id;
+        }
       }
     }
   }
-  require(false);
   return 0;
 }
 
