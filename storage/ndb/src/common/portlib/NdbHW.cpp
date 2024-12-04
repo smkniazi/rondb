@@ -2151,13 +2151,14 @@ get_meminfo(struct ndb_hwinfo *hwinfo)
 {
   char buf[1024];
   FILE * cgroup_meminfo = fopen("/sys/fs/cgroup/memory.max", "r");
+  int ret_code = 0;
   if (cgroup_meminfo != nullptr) {
     hwinfo->is_running_in_container = 1;
     FileGuard g(cgroup_meminfo); // close at end...
     if (fgets(buf, sizeof(buf), cgroup_meminfo)) {
       fprintf(stderr, "Read %s from /sys/cgroup/memory.max", buf);
       Uint64 memory_size = 0;
-      int ret_code = sscanf(buf, "%llu", &memory_size);
+      ret_code = sscanf(buf, "%llu", &memory_size);
       if (ret_code == 1) {
         hwinfo->hw_memory_size = memory_size;
         return 0;
