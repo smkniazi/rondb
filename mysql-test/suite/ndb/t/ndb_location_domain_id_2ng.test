@@ -22,7 +22,7 @@ create table t1 (a int not null primary key) engine ndb;
 create table t2 (b int not null primary key) engine ndb;
 insert into t1 values (0),(1),(2),(3);
 insert into t2 values (0),(1),(2),(3);
-select * from t1;
+select * from t1 order by a;
 --exec $NDB_MGM --execute "2 ERROR 8121"
 --exec $NDB_MGM --execute "4 ERROR 8121"
 select a from t1 order by a;
