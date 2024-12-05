@@ -34,16 +34,27 @@ class Ndb_cluster_connection_node_iter {
  public:
   Ndb_cluster_connection_node_iter()
       : cur_pos(0) {}
-  void set_current_pos(Uint32 pos) {
+
+  void set_current_pos(unsigned pos) {
     cur_pos = pos;
+  }
+  void init_get_next_node() {
+    start_state = 0;
+    start_state = cur_pos;
+  }
+  void reset_state() {
+    cur_pos = start_state;
   }
  private:
   unsigned cur_pos;
+  unsigned start_state;
+  unsigned start_index;
 };
 
 class Ndb;
 class NdbWaitGroup;
 class LogHandler;
+class NdbImpl;
 
 /**
  * NdbApiLogConsumer
@@ -428,8 +439,8 @@ class Ndb_cluster_connection {
   unsigned get_min_db_version() const;
   unsigned get_min_api_version() const;
 
-  void set_current_pos(Ndb_cluster_connection_node_iter &iter, unsigned pos);
-  unsigned int get_next_node(Ndb_cluster_connection_node_iter &iter, bool any);
+  unsigned int get_next_node(Ndb_cluster_connection_node_iter &iter, NdbImpl*);
+  unsigned int get_next_node_any(Ndb_cluster_connection_node_iter &iter);
   unsigned int get_next_alive_node(Ndb_cluster_connection_node_iter &iter);
   unsigned get_active_ndb_objects() const;
 

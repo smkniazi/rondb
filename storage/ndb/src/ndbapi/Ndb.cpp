@@ -73,9 +73,9 @@ NdbTransaction *Ndb::doConnect(Uint32 tConNode, Uint32 instance) {
   //****************************************************************************
   Uint32 anyInstance = 0;
   Ndb_cluster_connection_node_iter &node_iter = theImpl->m_node_iter;
-  bool any_node = false;
+  node_iter.init_get_next_node();
   while ((tNode = theImpl->m_ndb_cluster_connection.get_next_node(
-    node_iter, any_node))) {
+    node_iter, theImpl))) {
     TretCode = NDB_connect(tNode, anyInstance);
     if ((TretCode == 1) || (TretCode == 2)) {
       //****************************************************************************
@@ -90,7 +90,6 @@ NdbTransaction *Ndb::doConnect(Uint32 tConNode, Uint32 instance) {
     DBUG_PRINT("info",
                ("tried node %d, TretCode %d, error code %d, %s", tNode,
                 TretCode, getNdbError().code, getNdbError().message));
-    any_node = true;
   }
 //****************************************************************************
 // We were unable to find a free connection. If no node alive we will report

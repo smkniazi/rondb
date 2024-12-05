@@ -74,7 +74,8 @@ class Ndb_cluster_connection_impl : public Ndb_cluster_connection {
 
   void do_test();
 
-  Uint32 get_next_node(Ndb_cluster_connection_node_iter &iter, bool any_node);
+  Uint32 get_next_node_any(Ndb_cluster_connection_node_iter &iter);
+  Uint32 get_next_node(Ndb_cluster_connection_node_iter &iter, NdbImpl*);
   Uint32 get_next_alive_node(Ndb_cluster_connection_node_iter &iter);
 
   inline unsigned get_connect_count() const;

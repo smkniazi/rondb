@@ -128,8 +128,7 @@ int Ndb::init(int aMaxNoOfTransactions) {
 
     /* Configure RR + proximity aware unhinted iterators */
     theImpl->theCurrentConnectIndex = tcNodeChoiceOffset;
-    theImpl->m_ndb_cluster_connection.set_current_pos(
-      theImpl->m_node_iter, theImpl->theCurrentConnectIndex);
+    theImpl->m_node_iter.set_current_pos(theImpl->theCurrentConnectIndex);
   }
 
   /* Init cached min node version */
@@ -1816,7 +1815,7 @@ int NdbImpl::send_to_nodes(NdbApiSignal *aSignal, bool is_poll_owner,
     lock();
   }
   Ndb_cluster_connection_node_iter node_iter;
-  while ((tNode = m_ndb_cluster_connection.get_next_node(node_iter, true))) {
+  while ((tNode = m_ndb_cluster_connection.get_next_node_any(node_iter))) {
     if (send_to_node(aSignal, tNode, is_poll_owner) == 0) {
       /* Successful send */
       if (!send_to_all) {
