@@ -213,7 +213,7 @@ Uint32 Ndb_cluster_connection_impl::get_next_node(
       NodeId curr_node_id = curr_node.nodeId;
       bool same_domain =
         m_my_location_domain_id == m_location_domain_id[curr_node_id];
-      bool available = impl_ndb->get_node_available(curr_node_id); 
+      bool available = impl_ndb->get_node_alive(curr_node_id); 
       if (available && same_domain) {
         iter.cur_pos = j + 1;
         DBUG_PRINT("exit", ("1: node: %u, cur_pos: %u",
@@ -226,7 +226,7 @@ Uint32 Ndb_cluster_connection_impl::get_next_node(
       NodeId curr_node_id = curr_node.nodeId;
       bool same_domain =
         m_my_location_domain_id == m_location_domain_id[curr_node_id];
-      bool available = impl_ndb->get_node_available(curr_node_id); 
+      bool available = impl_ndb->get_node_alive(curr_node_id); 
       if (available && same_domain) {
         iter.cur_pos = j + 1;
         DBUG_PRINT("exit", ("2: node: %u, cur_pos: %u",
@@ -245,7 +245,7 @@ Uint32 Ndb_cluster_connection_impl::get_next_node(
       bool same_domain =
         (m_my_location_domain_id == m_location_domain_id[curr_node_id] &&
          m_my_location_domain_id != 0);
-      bool available = impl_ndb->get_node_available(curr_node_id); 
+      bool available = impl_ndb->get_node_alive(curr_node_id); 
       if (available && !same_domain) {
         iter.cur_pos = j + 1;
         DBUG_PRINT("exit", ("3: node: %u, cur_pos: %u",
@@ -259,7 +259,7 @@ Uint32 Ndb_cluster_connection_impl::get_next_node(
       bool same_domain =
         (m_my_location_domain_id == m_location_domain_id[curr_node_id] &&
          m_my_location_domain_id != 0);
-      bool available = impl_ndb->get_node_available(curr_node_id); 
+      bool available = impl_ndb->get_node_alive(curr_node_id); 
       if (available && !same_domain) {
         iter.cur_pos = j + 1;
         DBUG_PRINT("exit", ("4: node: %u, cur_pos: %u",
