@@ -73,8 +73,9 @@ NdbTransaction *Ndb::doConnect(Uint32 tConNode, Uint32 instance) {
   //****************************************************************************
   Uint32 anyInstance = 0;
   Ndb_cluster_connection_node_iter &node_iter = theImpl->m_node_iter;
+  bool any_node = false;
   while ((tNode = theImpl->m_ndb_cluster_connection.get_next_node(
-    node_iter, false))) {
+    node_iter, any_node))) {
     TretCode = NDB_connect(tNode, anyInstance);
     if ((TretCode == 1) || (TretCode == 2)) {
       //****************************************************************************
@@ -89,6 +90,7 @@ NdbTransaction *Ndb::doConnect(Uint32 tConNode, Uint32 instance) {
     DBUG_PRINT("info",
                ("tried node %d, TretCode %d, error code %d, %s", tNode,
                 TretCode, getNdbError().code, getNdbError().message));
+    any_node = true;
   }
 //****************************************************************************
 // We were unable to find a free connection. If no node alive we will report
@@ -705,17 +707,11 @@ NdbImpl::select_node(NdbTableImpl *table_impl,
      * so we keeping the TC local to this domain always seems preferable
      * to picking the perfect path for this operation.
      */
-    if (m_optimized_node_selection) {
-      nodeId = m_ndb_cluster_connection.select_location_based(this,
-                                                              nodes,
-                                                              cnt,
-                                                              primary_node);
-      DBUG_PRINT("exit",("select_location_based: nodeId: %u", nodeId));
-    } else {
-      /* Backwards compatible setting */
-      nodeId = primary_node;
-      DBUG_PRINT("exit",("Choose primary: nodeId: %u", nodeId));
-    }
+    nodeId = m_ndb_cluster_connection.select_location_based(this,
+                                                            nodes,
+                                                            cnt,
+                                                            primary_node);
+    DBUG_PRINT("exit",("select_location_based: nodeId: %u", nodeId));
   } else if (fullyReplicated) {
     /**
      * Consider any fragment and any replica.

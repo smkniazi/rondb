@@ -1,5 +1,5 @@
 -- source include/have_ndb.inc
-
+# ndb_optimized_node_selection is now always on, so will be same result no matter what
 # store start value
 SET @global_start_value = @@global.ndb_optimized_node_selection;
 SELECT @global_start_value;

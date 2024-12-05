@@ -816,18 +816,24 @@ Ndb_cluster_connection_impl::set_location_domain_id(Uint32 nodeId,
  */
 void Ndb_cluster_connection_impl::adjust_node_comm_group(Uint32 node_id,
                                                          Int32 adjustment) {
+  DBUG_ENTER("adjust_node_comm_group");
+  DBUG_PRINT("enter", ("node_id: %u, adjustment: %d, my_node: %u",
+    node_id, adjustment, m_my_node_id));
   assert(m_db_nodes.get(node_id));
   if (adjustment == 0) return;  // No change
 
   Uint32 inx = m_node_index[node_id];
   require(inx > 0);
-  Node node = m_nodes_comm_group[inx - 1];
+  Node & node = m_nodes_comm_group[inx - 1];
   node.adjusted_group += adjustment;
+  DBUG_PRINT("info", ("Set adjusted_group to %u for node_index: %u, node: %u",
+    node.adjusted_group, inx, node_id));
   /**
    * Clear hint count since the node adjusted will not have a
    * hint count in sync with its new group.
    */
   m_node_hint_count[inx - 1] = 0;
+  DBUG_VOID_RETURN;
 }
 
 void Ndb_cluster_connection_impl::set_data_node_neighbour(Uint32 node) {
@@ -1479,7 +1485,7 @@ Uint32 Ndb_cluster_connection_impl::select_any(NdbImpl *impl_ndb) {
   DBUG_ENTER("Ndb_cluster_connection_impl::select_any");
   DBUG_PRINT("enter",("my_domain: %u",
              my_location_domain_id));
-  if (my_location_domain_id == 0 || !impl_ndb->m_optimized_node_selection) {
+  if (my_location_domain_id == 0) {
     // No preference among nodes
     DBUG_RETURN(0);
   }
@@ -1535,7 +1541,7 @@ Ndb_cluster_connection_impl::select_location_based(NdbImpl *impl_ndb,
         impl_ndb->get_node_available(nodes[i]))
     {
       if (i == 0) {
-        return nodes[0];
+        DBUG_RETURN(nodes[0]);
       }
       DBUG_PRINT("info",("Prospective node: %u", nodes[i]));
       prospective_node_ids[num_prospective_nodes++] = nodes[i];
@@ -1560,15 +1566,13 @@ Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
                                          Uint32 primary_node)
 {
   DBUG_ENTER("Ndb_cluster_connection_impl::select_node");
-  DBUG_PRINT("enter",("cnt: %u, primary: %u, my_domain: %u",
-             cnt, primary_node, m_my_location_domain_id));
+  DBUG_PRINT("enter",("cnt: %u, primary: %u, my_domain: %u, my_node: %u",
+             cnt, primary_node, m_my_location_domain_id, m_my_node_id));
   if (cnt == 1) {
     DBUG_RETURN(nodes[0]);
   } else if (cnt == 0) {
     DBUG_RETURN(0);
   }
-
-  Node *nodes_arr = m_nodes_comm_group.getBase();
 
   Uint32 best_node = nodes[0];
   Uint32 best_idx = Uint32(~0);
@@ -1587,22 +1591,23 @@ Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
     if (!impl_ndb->get_node_available(candidate_node)) continue;
     Uint16 node_index = m_node_index[candidate_node];
     require(node_index > 0);
-    Node *node = &nodes_arr[node_index - 1];
-    if (node->adjusted_group > best_score) {
+    Node & node = m_nodes_comm_group[node_index - 1];
+    if (node.adjusted_group > best_score) {
       // We already got a better match
       // Further matches can only be the same or worse, stop
       // search on this candidate.
       continue;
     }
-    if (node->adjusted_group < best_score) {
+    if (node.adjusted_group < best_score) {
       best_idx = node_index;
       best_node = candidate_node;
-      best_score = node->adjusted_group;
-      best_usage = m_node_hint_count[best_idx];
-      DBUG_PRINT("info",("1: node: %u, best_score: %u, best_usage: %u",
-        candidate_node, best_score, best_usage));
-    } else if (node->adjusted_group == best_score) {
-      Uint32 usage = m_node_hint_count[best_idx];
+      best_score = node.adjusted_group;
+      best_usage = m_node_hint_count[best_idx - 1];
+      DBUG_PRINT("info",("1: node: %u, best_score: %u, best_usage: %u,"
+                 " node_index: %u",
+        candidate_node, best_score, best_usage, node_index));
+    } else if (node.adjusted_group == best_score) {
+      Uint32 usage = m_node_hint_count[node_index - 1];
       if (candidate_node == primary_node) {
         /**
          * hint_count may wrap, for this calculation it is assumed that
@@ -1612,8 +1617,9 @@ Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
         best_idx = node_index;
         best_node = candidate_node;
         best_usage = usage;
-        DBUG_PRINT("info",("2: node: %u, best_score: %u, best_usage: %u",
-          candidate_node, best_score, best_usage));
+        DBUG_PRINT("info",("2: node: %u, best_score: %u, best_usage: %u,"
+                   " node_index: %u",
+          candidate_node, best_score, best_usage, node_index));
       } else {
         if (best_usage - usage < HINT_COUNT_HALF &&
             best_node != primary_node) {
@@ -1625,15 +1631,20 @@ Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
           best_idx = node_index;
           best_node = candidate_node;
           best_usage = usage;
-          DBUG_PRINT("info",("3: node: %u, best_score: %u,best_usage:%u",
-            candidate_node, best_score, best_usage));
+          DBUG_PRINT("info",("3: node: %u, best_score: %u,best_usage: %u"
+                     ", node_index: %u",
+            candidate_node, best_score, best_usage, node_index));
         }
       }
     }
   }
+  if (!impl_ndb->get_node_available(best_node)) {
+    DBUG_RETURN(0);
+  }
+
   if (best_idx != Uint32(~0)) {
-    m_node_hint_count[best_idx] =
-      (m_node_hint_count[best_idx]) & HINT_COUNT_MASK;
+    m_node_hint_count[best_idx - 1] =
+      (m_node_hint_count[best_idx - 1]) & HINT_COUNT_MASK;
   }
   DBUG_RETURN(best_node);
 }
