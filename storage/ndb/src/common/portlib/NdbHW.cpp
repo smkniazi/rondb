@@ -1971,7 +1971,6 @@ get_meminfo(struct ndb_hwinfo *hwinfo)
     hwinfo->is_running_in_container = 1;
     FileGuard g(cgroup_meminfo); // close at end...
     if (fgets(buf, sizeof(buf), cgroup_meminfo)) {
-      fprintf(stderr, "Read %s from /sys/cgroup/memory.max", buf);
       if (memcmp(buf, "max", 3) != 0) {
         Uint64 memory_size = 0;
         ret_code = sscanf(buf, "%llu", &memory_size);
