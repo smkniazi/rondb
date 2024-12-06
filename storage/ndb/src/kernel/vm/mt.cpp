@@ -3394,7 +3394,9 @@ wait_time_tracking(thr_data *selfptr, Uint64 wait_time_in_ns)
       return;
     }
   }
-  require(false);
+  /* We are in overload state, but avoid crashing still, only report it */
+  g_eventLogger->info("wait_time_tracking: wait_time: %llu milliseconds",
+    wait_time_in_ns / Uint64(1000000));
 }
 
 static bool check_queues_empty(thr_data *selfptr);
