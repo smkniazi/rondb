@@ -20,6 +20,7 @@ HeartbeatIntervalDbDb=         30000
 HeartbeatIntervalDbApi=        30000
 SchemaMemory= 200M
 NumCPUs=4
+TotalMemoryConfig=500M
 
 [mysqld]
 ndbcluster
