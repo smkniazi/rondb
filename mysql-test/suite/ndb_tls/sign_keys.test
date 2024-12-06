@@ -17,7 +17,7 @@ SELECT 1;
 
 # Look at the transporters table
 SELECT node_id, remote_node_id, encrypted from ndbinfo.transporters
-ORDER BY node_id;
+ORDER BY node_id, remote_node_id;
 
 # On startup, none of the files exist
 --error 1
