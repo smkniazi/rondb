@@ -19,6 +19,7 @@ BackupLogBufferSize=           2M
 HeartbeatIntervalDbDb=         30000
 HeartbeatIntervalDbApi=        30000
 SchemaMemory= 200M
+NumCPUs=4
 
 [mysqld]
 ndbcluster
