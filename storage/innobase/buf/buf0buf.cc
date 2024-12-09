@@ -102,9 +102,11 @@ struct set_numa_interleave_t {
       struct bitmask *numa_nodes = numa_get_mems_allowed();
       if (set_mempolicy(MPOL_INTERLEAVE, numa_nodes->maskp, numa_nodes->size) !=
           0) {
+        /*
         ib::warn(ER_IB_MSG_48) << "Failed to set NUMA memory"
                                   " policy to MPOL_INTERLEAVE: "
                                << strerror(errno);
+        */
       }
       numa_bitmask_free(numa_nodes);
     }
@@ -112,12 +114,16 @@ struct set_numa_interleave_t {
 
   ~set_numa_interleave_t() {
     if (srv_numa_interleave) {
+      /*
       ib::info(ER_IB_MSG_49) << "Setting NUMA memory policy to"
                                 " MPOL_DEFAULT";
+      */
       if (set_mempolicy(MPOL_DEFAULT, nullptr, 0) != 0) {
+        /*
         ib::warn(ER_IB_MSG_50) << "Failed to set NUMA memory"
                                   " policy to MPOL_DEFAULT: "
                                << strerror(errno);
+        */
       }
     }
   }
