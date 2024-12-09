@@ -40,6 +40,7 @@
 #include <stdexcept>
 #include <fstream>
 #include <sstream>
+#include <optional>
 
 namespace metadata {
 

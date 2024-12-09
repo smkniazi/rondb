@@ -216,11 +216,11 @@ ConvertAvroToJson(const avro::GenericDatum &datum) {
     }
 
   } catch (const std::exception &e) {
-    return std::make_tuple(
-        CRS_Status(HTTP_CODE::SERVER_ERROR,
-                   "Exception occurred: " + std::string(e.what()))
-            .status,
-        std::nullopt);
+    return {
+      CRS_Status(HTTP_CODE::SERVER_ERROR,
+                 "Exception occurred: " + std::string(e.what()))
+          .status,
+          std::nullopt};
+    }
   }
-}
 
