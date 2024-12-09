@@ -15,7 +15,9 @@
 //
 module hopsworks.ai/rdrs2
 
-go 1.20
+go 1.22.0
+
+toolchain go1.23.3
 
 require (
 	github.com/gin-contrib/sse v0.1.0 // indirect
@@ -49,8 +51,10 @@ require (
 	github.com/chenzhuoyu/iasm v0.9.1 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/golang/snappy v0.0.4 // indirect
+	github.com/hamba/avro/v2 v2.27.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/matttproud/golang_protobuf_extensions/v2 v2.0.0 // indirect
+	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.45.0 // indirect
 	github.com/prometheus/procfs v0.12.0 // indirect

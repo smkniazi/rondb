@@ -644,7 +644,8 @@ std::string ConvertBinaryToJsonMessage(const std::vector<char> &data) {
   // string to base64string
   std::string dataStr(data.begin(), data.end());
   std::string unquotedStr = removeQuotes(dataStr);
-  std::string base64Str = base64_decode(unquotedStr);
+  std::string base64Str;
+  base64_decode(unquotedStr, base64Str);
   std::string jsonStr = "\"" + base64Str + "\"";
   return jsonStr;
 }
@@ -702,7 +703,8 @@ void ValidateResponseWithDataExcludeCols(
     }
     if (cols[i].find("binary") != std::string::npos) {
       std::string gotStr = std::string(got.get_string().value());
-      std::string decodedStr = base64_decode(gotStr);
+      std::string decodedStr;
+      base64_decode(gotStr, decodedStr);
       simdjson::dom::parser parser;
       if (parser.parse(decodedStr).get(got) != simdjson::SUCCESS) {
         FAIL() << "Cannot parse decoded binary data: " << decodedStr;
@@ -1129,70 +1131,6 @@ TEST_F(FeatureStoreTest, DISABLED_TestConvertAvroToJson) {
       s2v(R"({"int1":[1,2,3],"int2":[3,null,5]})"));
 }
 
-TEST_F(FeatureStoreTest, DISABLED_Test_GetFeatureVector_Success_ComplexType) {
-  auto fsName = FSDB002;
-  const auto *fvName = "sample_complex_type";
-  auto fvVersion = 1;
-  auto [rows, pks, cols, status] =
-    GetSampleData(fsName, "sample_complex_type_1");
-  ASSERT_EQ(status.http_code,
-            static_cast<HTTP_CODE>(drogon::HttpStatusCode::k200OK))
-    << "Cannot get sample data with error: " << status.message;
-  metadata::AvroDecoder mapDecoder;
-  metadata::AvroDecoder arrayDecoder;
-  try {
-    mapDecoder = metadata::AvroDecoder(
-      "[\"null\",{\"type\":\"record\",\"name\":\"r854762204\",\"namespace\":\"struct\","
-      "\"fields\":[{\"name\":\"int1\",\"type\":[\"null\",\"long\"]},{\"name\":\"int2\",\"type\":["
-      "\"null\",\"long\"]}]}]");
-  } catch (const std::exception &e) {
-    FAIL() << "Failed to create mapDecoder: " << e.what();
-  }
-  try {
-    arrayDecoder =
-        metadata::AvroDecoder(
-          "[\"null\",{\"type\":\"array\",\"items\":[\"null\",\"long\"]}]");
-  } catch (const std::exception &e) {
-    FAIL() << "Failed to create arrayDecoder: " << e.what();
-  }
-  for (auto &row : rows) {
-    auto fsReq = CreateFeatureStoreRequest(fsName,
-                                           fvName,
-                                           fvVersion,
-                                           pks,
-                                           GetPkValues(row,
-                                                       pks,
-                                                       cols), {}, {});
-    fsReq.metadataRequest = {true, true};
-    auto fsResp = GetFeatureStoreResponse(fsReq);
-    EXPECT_NE(fsResp, nullptr) << "Failed to get feature store response";
-    // convert data to object in json format
-    auto arrayJson = ConvertBinaryToJsonMessage(row[2]);
-    auto [arrayPt, err1] = DeserialiseComplexFeature(
-        std::vector<char>(arrayJson.begin(), arrayJson.end()), arrayDecoder);
-    row[2] = arrayPt;
-    if (err1 != nullptr) {
-      FAIL() << "Cannot deserailize feature with error " << err1->GetReason();
-    }
-    // convert data to object in json format
-    auto mapJson = ConvertBinaryToJsonMessage(row[3]);
-    auto [mapPt, err2] =
-        DeserialiseComplexFeature(
-          std::vector<char>(mapJson.begin(), mapJson.end()), mapDecoder);
-    row[3] = mapPt;
-    if (err2 != nullptr) {
-      FAIL() << "Cannot deserailize feature with error " << err2->GetReason();
-    }
-
-    // validate
-    ValidateResponseWithData(row, cols, *fsResp);
-    ValidateResponseMetadata(fsResp->metadata,
-                             fsReq.metadataRequest,
-                             fsName,
-                             fvName,
-                             fvVersion);
-  }
-}
 
 class BatchFeatureStoreTest : public ::testing::Test {
  protected:
@@ -1220,67 +1158,7 @@ class BatchFeatureStoreTest : public ::testing::Test {
 
 // TODO RS_Status RunQueriesOnDataCluster(std::string sqlQueries)
 // TODO TEST_F(FeatureStoreTest,
-// Test_GetFeatureVector_Success_ComplexType_With_Schema_Change)
 
-TEST_F(BatchFeatureStoreTest, DISABLED_Test_GetFeatureVector_Success_ComplexType) {
-  auto fsName = FSDB002;
-  const auto *fvName = "sample_complex_type";
-  auto fvVersion = 1;
-  auto [rows, pks, cols, status] =
-    GetSampleData(fsName, "sample_complex_type_1");
-  ASSERT_EQ(status.http_code,
-            static_cast<HTTP_CODE>(drogon::HttpStatusCode::k200OK))
-    << "Cannot get sample data with error: " << status.message;
-  metadata::AvroDecoder mapDecoder;
-  metadata::AvroDecoder arrayDecoder;
-  try {
-    mapDecoder = metadata::AvroDecoder(
-      "[\"null\",{\"type\":\"record\",\"name\":\"r854762204\",\"namespace\":\"struct\","
-      "\"fields\":[{\"name\":\"int1\",\"type\":[\"null\",\"long\"]},{\"name\":\"int2\",\"type\":["
-      "\"null\",\"long\"]}]}]");
-  } catch (const std::exception &e) {
-    FAIL() << "Failed to create mapDecoder: " << e.what();
-  }
-  try {
-    arrayDecoder =
-        metadata::AvroDecoder(
-          "[\"null\",{\"type\":\"array\",\"items\":[\"null\",\"long\"]}]");
-  } catch (const std::exception &e) {
-    FAIL() << "Failed to create arrayDecoder: " << e.what();
-  }
-
-  auto fsReq = CreateFeatureStoreRequest(
-    fsName, fvName, fvVersion, pks, GetPkValuesBatch(rows, pks, cols), {}, {});
-  fsReq.metadataRequest = {true, true};
-  auto fsResp = GetFeatureStoreResponse(fsReq);
-  for (auto row : rows) {
-    // convert data to object in json format
-    auto arrayJson = ConvertBinaryToJsonMessage(row[2]);
-    auto [arrayPt, err1] = DeserialiseComplexFeature(
-        std::vector<char>(arrayJson.begin(), arrayJson.end()), arrayDecoder);
-    row[2] = arrayPt;
-    if (err1 != nullptr) {
-      FAIL() << "Cannot deserailize feature with error " << err1->GetReason();
-    }
-    // convert data to object in json format
-    auto mapJson = ConvertBinaryToJsonMessage(row[3]);
-    auto [mapPt, err2] =
-        DeserialiseComplexFeature(
-          std::vector<char>(mapJson.begin(), mapJson.end()), mapDecoder);
-    row[3] = mapPt;
-    if (err2 != nullptr) {
-      FAIL() << "Cannot deserailize feature with error " << err2->GetReason();
-    }
-  }
-
-  // validate
-  ValidateBatchResponseWithData(rows, cols, *fsResp);
-  ValidateResponseMetadata(fsResp->metadata,
-                           fsReq.metadataRequest,
-                           fsName,
-                           fvName,
-                           fvVersion);
-}
 
 int main(int argc, char **argv) {
   ndb_init();

@@ -122,11 +122,8 @@ RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
     wget -N --progress=bar:force -P $DOWNLOADS_CACHE_DIR https://github.com/apache/avro/archive/refs/tags/release-$AVRO_VERSION.tar.gz && \
     tar xf release-$AVRO_VERSION.tar.gz && \
     cd avro-release-$AVRO_VERSION/lang/c++ && \
-    mkdir build && \
-    cd build && \
-    cmake -G "Unix Makefiles" .. && \
-    make -j$THREADS_ARG && \
-    make install && \ 
+    ./build.sh install && \
+    cd $DOWNLOADS_CACHE_DIR && \
     rm -rf release-* avro-* 
 
 # Install updated jsoncpp

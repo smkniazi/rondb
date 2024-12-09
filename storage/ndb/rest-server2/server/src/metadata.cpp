@@ -53,12 +53,20 @@ AvroDecoder::AvroDecoder() = default;
 
 AvroDecoder::AvroDecoder(const std::string &schemaJson) {
   schema = avro::compileJsonSchemaFromString(schemaJson);
+  if (!schema.root()) {
+    printf("--------> Error. invalid schema\n");
+    xxx
+  }
 }
 
 avro::GenericDatum
   AvroDecoder::decode(const std::vector<Uint8> &inData) const {
   auto inStream = avro::memoryInputStream(inData.data(), inData.size());
   avro::DecoderPtr decoder = avro::binaryDecoder();
+  if(!decoder) {
+    printf("--------> Error. bad decoder\n");
+    xxx
+  }
   decoder->init(*inStream);
   avro::GenericDatum datum(schema);
   try {
@@ -68,6 +76,8 @@ avro::GenericDatum
     throw std::runtime_error(std::string("Decoding failed: ") + e.what());
   }
 }
+
+
 
 std::tuple<avro::GenericDatum, std::vector<Uint8>, RS_Status>
 AvroDecoder::NativeFromBinary(const std::vector<Uint8> &buf) {
@@ -267,6 +277,7 @@ newFeatureViewMetadata(const std::string &featureStoreName,
           }
           fgSchemaCache[feature.featureGroupId] = newFgSchema;
         }
+
         std::tie(schema, status) =
           fgSchemaCache[feature.featureGroupId].getSchemaByFeatureName(
             feature.name);
