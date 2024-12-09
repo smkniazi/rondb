@@ -118,7 +118,7 @@ class AvroDecoder {
   }
 
   // Decode binary data into a GenericDatum
-  avro::GenericDatum decode(const std::vector<Uint8> &inData) const;
+  std::pair<RS_Status, std::optional<avro::GenericDatum>> decode(const std::vector<Uint8> &inData) const;
 
   std::tuple<avro::GenericDatum, std::vector<Uint8>, RS_Status>
   NativeFromBinary(const std::vector<Uint8> &buf);

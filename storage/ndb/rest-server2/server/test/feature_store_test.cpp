@@ -857,12 +857,12 @@ void testConvertAvroToJson(const std::string &schema,
   if (err.http_code != static_cast<HTTP_CODE>(drogon::HttpStatusCode::k200OK)) {
     FAIL() << "Failed to convert avro to json with error: " << err.message;
   }
-  auto [actual, status] = ConvertAvroToJson(native, decoder.getSchema());
+  auto [status, actual] = ConvertAvroToJson(native);
   if (status.http_code !=
         static_cast<HTTP_CODE>(drogon::HttpStatusCode::k200OK)) {
     FAIL() << "Failed to convert avro to json with error: " << status.message;
   }
-  std::string actualStr(actual.begin(), actual.end());
+  std::string actualStr(actual.value().begin(), actual.value().end());
   std::string expectedStr(expectedJson.begin(), expectedJson.end());
   simdjson::dom::parser parser;
   simdjson::dom::element actualJson;
@@ -1055,29 +1055,31 @@ TEST_F(FeatureStoreTest, DISABLED_TestConvertAvroToJsonCpx) {
 }
 
 TEST_F(FeatureStoreTest, DISABLED_TestConvertAvroToJsonSimple) {
-  std::string schemaJson = R"({
-      "type": "record",
-      "name": "LongList",
-      "fields" : [
-        {"name": "next", "type": ["null", "LongList"], "default": null}
-      ]
-    })";
+// BAD TEST
 
-  metadata::AvroDecoder decoder(schemaJson);
-
-  std::vector<Uint8> buf = {0x02, 0x02, 0x00};
-
-  try {
-    auto result = decoder.decode(buf);
-    std::string expectedJson =
-      R"({"next":{"LongList":{"next":{"LongList":{"next":null}}}}})";
-    auto [resultBytes, status] = ConvertAvroToJson(result, decoder.getSchema());
-    std::string resultJson =
-      std::string(resultBytes.begin(), resultBytes.end());
-    ASSERT_EQ(resultJson, expectedJson);
-  } catch (const std::exception &e) {
-    FAIL() << "Failed to decode avro: " << e.what();
-  }
+//  std::string schemaJson = R"({
+//      "type": "record",
+//      "name": "LongList",
+//      "fields" : [
+//        {"name": "next", "type": ["null", "LongList"], "default": null}
+//      ]
+//    })";
+//
+//  metadata::AvroDecoder decoder(schemaJson);
+//
+//  std::vector<Uint8> buf = {0x02, 0x02, 0x00};
+//
+//  try {
+//    auto result = decoder.decode(buf);
+//    std::string expectedJson =
+//      R"({"next":{"LongList":{"next":{"LongList":{"next":null}}}}})";
+//    auto [status, resultBytes] = ConvertAvroToJson(result);
+//    std::string resultJson =
+//      std::string(resultBytes.begin(), resultBytes.end());
+//    ASSERT_EQ(resultJson, expectedJson);
+//  } catch (const std::exception &e) {
+//    FAIL() << "Failed to decode avro: " << e.what();
+//  }
 }
 
 TEST_F(FeatureStoreTest, DISABLED_TestConvertAvroToJson) {

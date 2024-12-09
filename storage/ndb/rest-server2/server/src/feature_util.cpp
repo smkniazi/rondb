@@ -17,8 +17,10 @@
  * USA.
  */
 #include "feature_util.hpp"
+#include "prometheus_ctrl.hpp"
 #include <drogon/HttpTypes.h>
 #include <memory>
+#include <optional>
 #include <simdjson.h>
 #include <vector>
 
@@ -34,11 +36,14 @@ base64_decode(const std::string &encoded_string, std::string &decoded_string) {
       base64_decode(src, src_len, decoded_data.data(), &end_ptr, flags);
 
   if (decoded_len < 0) {
-    return CRS_Status(HTTP_CODE::SERVER_ERROR, "Failed to decode base64 string.").status;
+    return CRS_Status(HTTP_CODE::SERVER_ERROR,
+                      "Failed to decode base64 string.")
+        .status;
   }
 
- decoded_string.assign(decoded_data.begin(), decoded_data.begin() + decoded_len);
- return CRS_Status::SUCCESS.status;
+  decoded_string.assign(decoded_data.begin(),
+                        decoded_data.begin() + decoded_len);
+  return CRS_Status::SUCCESS.status;
 }
 
 std::tuple<std::vector<char>, std::shared_ptr<RestErrorCode>>
@@ -59,34 +64,32 @@ DeserialiseComplexFeature(const std::vector<char> &value,
 
   valueString = element.get_string().value();
   std::string jsonDecode;
-    RS_Status status = base64_decode(valueString, jsonDecode);
-    if (status.http_code !=  HTTP_CODE::SUCCESS) {
-    return std::make_tuple(std::vector<char>{},
-                           std::make_shared<RestErrorCode>(
-                               status.message,
-                               static_cast<int>(drogon::k500InternalServerError)));
-    }
-
-  std::vector<Uint8> binaryData(jsonDecode.begin(), jsonDecode.end());
-  avro::GenericDatum native;
-  try {
-    native = decoder.decode(binaryData);
-  } catch (const std::runtime_error &e) {
+  RS_Status status = base64_decode(valueString, jsonDecode);
+  if (status.http_code != HTTP_CODE::SUCCESS) {
     return std::make_tuple(
         std::vector<char>{},
         std::make_shared<RestErrorCode>(
-            e.what(), static_cast<int>(drogon::k400BadRequest)));
+            status.message, static_cast<int>(drogon::k500InternalServerError)));
   }
 
-  auto nativeJson = ConvertAvroToJson(native);
-  if (std::get<1>(nativeJson).http_code != HTTP_CODE::SUCCESS) {
+  std::vector<Uint8> binaryData(jsonDecode.begin(), jsonDecode.end());
+  auto [native_status, native] = decoder.decode(binaryData);
+  if (native_status.http_code != HTTP_CODE::SUCCESS) {
+    return std::make_tuple(
+        std::vector<char>{},
+        std::make_shared<RestErrorCode>(
+            native_status.message, static_cast<int>(drogon::k400BadRequest)));
+  }
+
+  auto [json_status, json] = ConvertAvroToJson(native.value());
+  if (json_status.http_code != HTTP_CODE::SUCCESS) {
     return std::make_tuple(
         std::vector<char>{},
         std::make_shared<RestErrorCode>(
             "Failed to convert Avro to JSON.",
             static_cast<int>(drogon::k500InternalServerError)));
   }
-  return std::make_tuple(std::get<0>(nativeJson), nullptr);
+  return std::make_tuple(json.value(), nullptr);
 }
 
 template <typename T>
@@ -107,7 +110,7 @@ AppendBytesToVector(std::vector<char> &vec, const std::vector<Uint8> &bytes) {
 }
 
 // Recursive function to process Avro data
-void
+RS_Status
 processDatum(const avro::GenericDatum &datum, std::ostringstream &oss) {
   switch (datum.type()) {
   case avro::AVRO_NULL:
@@ -189,27 +192,35 @@ processDatum(const avro::GenericDatum &datum, std::ostringstream &oss) {
         << "\"";
     break;
   default:
-    throw std::runtime_error("Unsupported Avro type");
+    CRS_Status(HTTP_CODE::SERVER_ERROR,
+               "Failed to convert avro::GenericDatum to JSON");
   }
+  return CRS_Status::SUCCESS.status;
 }
 
 // Convert Avro data to JSON
-std::tuple<std::vector<char>, RS_Status>
+std::pair<RS_Status, std::optional<std::vector<char>>>
 ConvertAvroToJson(const avro::GenericDatum &datum) {
   try {
+
     // Convert Avro data to JSON
     std::ostringstream oss;
-    processDatum(datum, oss);
+    RS_Status status = processDatum(datum, oss);
+    if (status.http_code != HTTP_CODE::SUCCESS) {
+      return {status, std::nullopt};
 
-    std::string finalJsonStr = oss.str();
-    return {{finalJsonStr.begin(), finalJsonStr.end()},
-            CRS_Status::SUCCESS.status};
+    } else {
+      std::string finalJsonStr = oss.str();
+      return {CRS_Status::SUCCESS.status,
+              std::vector<char>{finalJsonStr.begin(), finalJsonStr.end()}};
+    }
+
   } catch (const std::exception &e) {
     return std::make_tuple(
-        std::vector<char>{},
         CRS_Status(HTTP_CODE::SERVER_ERROR,
                    "Exception occurred: " + std::string(e.what()))
-            .status);
+            .status,
+        std::nullopt);
   }
 }
 

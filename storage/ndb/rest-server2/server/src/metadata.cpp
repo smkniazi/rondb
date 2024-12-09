@@ -23,6 +23,7 @@
 #include "fs_cache.hpp"
 
 #include <avro/Exception.hh>
+#include <optional>
 #include <tuple>
 #include <util/require.h>
 #include <EventLogger.hpp>
@@ -53,31 +54,30 @@ AvroDecoder::AvroDecoder() = default;
 
 AvroDecoder::AvroDecoder(const std::string &schemaJson) {
   schema = avro::compileJsonSchemaFromString(schemaJson);
-  if (!schema.root()) {
-    printf("--------> Error. invalid schema\n");
-    xxx
-  }
 }
 
-avro::GenericDatum
+std::pair<RS_Status, std::optional<avro::GenericDatum>>
   AvroDecoder::decode(const std::vector<Uint8> &inData) const {
+
+  if (!schema.root()) {
+    return {CRS_Status(HTTP_CODE::SERVER_ERROR, "Invalid avro schema").status, std::nullopt} ;
+  }
+
   auto inStream = avro::memoryInputStream(inData.data(), inData.size());
   avro::DecoderPtr decoder = avro::binaryDecoder();
   if(!decoder) {
-    printf("--------> Error. bad decoder\n");
-    xxx
+    return {CRS_Status(HTTP_CODE::SERVER_ERROR, "Avro failed to decode data").status, std::nullopt};
   }
+
   decoder->init(*inStream);
   avro::GenericDatum datum(schema);
   try {
     avro::decode(*decoder, datum);
-    return datum;
+    return {CRS_Status::SUCCESS.status, datum};
   } catch (const std::exception &e) {
-    throw std::runtime_error(std::string("Decoding failed: ") + e.what());
+    return {CRS_Status(HTTP_CODE::SERVER_ERROR, std::string("Decoding failed: ") + e.what()).status, std::nullopt};
   }
 }
-
-
 
 std::tuple<avro::GenericDatum, std::vector<Uint8>, RS_Status>
 AvroDecoder::NativeFromBinary(const std::vector<Uint8> &buf) {
