@@ -910,9 +910,11 @@ bool buf_pool_t::allocate_chunk(ulonglong mem_size, buf_chunk_t *chunk) {
                    MPOL_INTERLEAVE, numa_nodes->maskp, numa_nodes->size,
                    MPOL_MF_MOVE);
     if (st != 0) {
+      /*
       ib::warn(ER_IB_MSG_54, low_level_info.base_ptr,
                low_level_info.allocation_size, "MPOL_INTERLEAVE",
                "MPOL_MF_MOVE", strerror(errno));
+      */
     }
     numa_bitmask_free(numa_nodes);
   }
