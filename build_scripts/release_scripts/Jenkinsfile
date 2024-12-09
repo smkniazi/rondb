@@ -89,6 +89,7 @@ pipeline {
                   --tag rondb-build-all:$RONDB_VERSION \
                   --target build-all \
                   --no-cache \
+                  --security-opt seccomp=unconfined \
                   --build-arg BUILD_THREADS=$BUILD_CORES \
                   --build-arg DEPLOY_TO_REPO=1 \
                   $RELEASE_TARBALL_ARG \
@@ -121,6 +122,7 @@ pipeline {
                  -f $DOCKER_FILE_NAME \
                  --tag rdrs:$RONDB_VERSION \
                  --target rdrs \
+                 --security-opt seccomp=unconfined \
                  --build-arg BUILD_THREADS=$BUILD_CORES 
                  
                  RDRS_IMAGE_TAR_FILE="docker-image-rdrs-$RONDB_VERSION.tar.gz"
