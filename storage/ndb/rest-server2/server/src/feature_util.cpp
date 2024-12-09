@@ -78,7 +78,7 @@ DeserialiseComplexFeature(const std::vector<char> &value,
             e.what(), static_cast<int>(drogon::k400BadRequest)));
   }
 
-  auto nativeJson = ConvertAvroToJson(native, decoder.getSchema());
+  auto nativeJson = ConvertAvroToJson(native);
   if (std::get<1>(nativeJson).http_code != HTTP_CODE::SUCCESS) {
     return std::make_tuple(
         std::vector<char>{},
@@ -195,8 +195,7 @@ processDatum(const avro::GenericDatum &datum, std::ostringstream &oss) {
 
 // Convert Avro data to JSON
 std::tuple<std::vector<char>, RS_Status>
-ConvertAvroToJson(const avro::GenericDatum &datum,
-                  const avro::ValidSchema &schema) {
+ConvertAvroToJson(const avro::GenericDatum &datum) {
   try {
     // Convert Avro data to JSON
     std::ostringstream oss;
