@@ -22,7 +22,7 @@ USE test;
 USE test;
 --enable_query_log
 
-let $rdrs_ronsql = curl --fail-with-body -X POST
+let $rdrs_ronsql = curl --no-progress-meter --fail-with-body -X POST
   -H "Content-Type: application/json"
   http://$RDRS_NOKEY_HOST:$RDRS_NOKEY_PORT/0.1.0/ronsql -d;
 
@@ -108,43 +108,6 @@ let $rdrs_ronsql = curl --fail-with-body -X POST
 --echo == RDRS, EXPLAIN SELECT, explainMode=FORCE ==
 # todo Remove "outputFormat":"TEXT" when json format implemented for explain
 --exec $rdrs_ronsql '{"query":"explain $query","database":"db1","explainMode":"FORCE","outputFormat":"TEXT"}'
-
-
-
-# todo Uncomment when fixed
-#--echo ===== Prepare table for encoding tests =====
-## todo add test for TEXT data type when RonSQL supports it
-#CREATE TABLE db1.encoding_test (
-#  sintkey SMALLINT NOT NULL,
-#  vc_latin1  VARCHAR(50) CHARACTER SET latin1  NOT NULL,
-#  vc_greek   VARCHAR(50) CHARACTER SET greek   NOT NULL,
-#  vc_utf8mb4 VARCHAR(50) CHARACTER SET utf8mb4 NOT NULL,
-#  vc_utf16   VARCHAR(50) CHARACTER SET utf16   NOT NULL,
-#  ch_latin1  CHAR(50)    CHARACTER SET latin1  NOT NULL,
-#  ch_greek   CHAR(50)    CHARACTER SET greek   NOT NULL,
-#  ch_utf8mb4 CHAR(50)    CHARACTER SET utf8mb4 NOT NULL,
-#  ch_utf16   CHAR(50)    CHARACTER SET utf16   NOT NULL,
-#  PRIMARY KEY USING HASH (sintkey)) ENGINE=NDB CHARSET=latin1;
-#INSERT INTO db1.encoding_test VALUES
-#  (1,
-#   'ABCabc', 'ABCabc', 'ABCabc', 'ABCabc',
-#   'ABCabc', 'ABCabc', 'ABCabc', 'ABCabc'),
-#  (2,
-#    'XYZÅÄÖxyzåäö_', '(unsupported)', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_',
-#    'XYZÅÄÖxyzåäö_', '(unsupported)', 'XYZÅÄÖxyzåäö_', 'XYZÅÄÖxyzåäö_'),
-#  (3,
-#    '(unsupported)', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_',
-#    '(unsupported)', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_', 'ΑΒΓαβγ_');
-#SELECT * FROM db1.encoding_test order by sintkey;
-#--echo ===== Test encoding handling in RonSQL =====
-#let $enc_query=select max(sintkey) as mk,
-#    vc_latin1, vc_greek, vc_utf8mb4, vc_utf16,
-#    ch_latin1, ch_greek, ch_utf8mb4, ch_utf16
-#  from encoding_test
-#  group by
-#    vc_latin1, vc_greek, vc_utf8mb4, vc_utf16,
-#    ch_latin1, ch_greek, ch_utf8mb4, ch_utf16;
-#--exec $rdrs_ronsql '{"query":"$enc_query;","database":"db1"}'
 
 
 

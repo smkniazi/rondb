@@ -28,6 +28,7 @@
 #include "define_formatter.hpp"
 #include "RonSQLPreparer.hpp"
 #include "mysql/strings/dtoa.h"
+#include <sql_string.h>
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
 //#define DEBUG_RONSQLPRINTER 1
@@ -62,17 +63,31 @@ DEFINE_FORMATTER(quoted_identifier, LexCString, {
   os.put('`');
 })
 
-static void print_json_string_from_utf8(std::ostream& output_stream, LexString ls, bool utf8_output);
+static void print_string(std::ostream& output_stream,
+                         LexString ls,
+                         CHARSET_INFO* charset,
+                         bool json_escape,
+                         bool utf8_output,
+                         bool trim_space_suffix);
 static double convert_result_to_double(NdbAggregator::Result result);
+
+static inline void
+soft_assert(bool condition, const char* msg)
+{
+  if (likely(condition)) return;
+  throw runtime_error(msg);
+}
 
 ResultPrinter::ResultPrinter(ArenaMalloc* amalloc,
                              struct SelectStatement* query,
                              DynamicArray<LexCString>* column_names,
+                             CHARSET_INFO** column_charset_map,
                              RonSQLExecParams::OutputFormat output_format,
                              std::basic_ostream<char>* err):
   m_amalloc(amalloc),
   m_query(query),
   m_column_names(column_names),
+  m_column_charset_map(column_charset_map),
   m_output_format(output_format),
   m_err(err),
   m_program(amalloc),
@@ -80,8 +95,9 @@ ResultPrinter::ResultPrinter(ArenaMalloc* amalloc,
   m_outputs(amalloc),
   m_col_idx_groupby_map(amalloc)
 {
-  assert(query != NULL);
   assert(amalloc != NULL);
+  assert(query != NULL);
+  assert(column_names != NULL);
   switch (output_format)
   {
   case RonSQLExecParams::OutputFormat::JSON:
@@ -281,6 +297,13 @@ ResultPrinter::compile()
         Cmd cmd;
         cmd.type = Cmd::Type::PRINT_GROUP_BY_COLUMN;
         cmd.print_group_by_column.reg_g = m_col_idx_groupby_map[o->column.col_idx];
+        // During EXPLAIN SELECT without access to ndb we still need to compile,
+        // and then charset will always be NULL. That's ok, because it won't be
+        // used.
+        cmd.print_group_by_column.charset =
+          m_column_charset_map != NULL
+          ? m_column_charset_map[o->column.col_idx]
+          : NULL;
         m_program.push(cmd);
         break;
       }
@@ -507,18 +530,17 @@ ResultPrinter::print_record(NdbAggregator::ResultRecord& record, std::ostream& o
           feature_not_implemented("Print GROUP BY column of type Decimalunsigned");
         case NdbDictionary::Column::Type::Char:          ///< Len. A fixed array of 1-byte chars
           {
+            CHARSET_INFO* charset = cmd.print_group_by_column.charset;
+            soft_assert(charset != nullptr, "Could not find charset for CHAR column");
             LexString content = LexString{ column.data(), column.byte_size() };
             // todo it's nowadays ok to put brace on same line. (This todo from review 2024-08-22 with MR)
-            while (content.len > 0 && content.str[content.len - 1] == 0x20) {
-              content.len--;
-            }
             if (m_json_output) {
-              print_json_string_from_utf8(out,
-                                          content,
-                                          m_utf8_output);
+              out << '"';
+              print_string(out, content, charset, true, m_utf8_output, true);
+              out << '"';
             }
             else if (m_tsv_output) {
-              out << content; // todo mysql-like escape
+              print_string(out, content, charset, false, true, true);
             }
             else {
               abort();
@@ -527,17 +549,19 @@ ResultPrinter::print_record(NdbAggregator::ResultRecord& record, std::ostream& o
           }
         case NdbDictionary::Column::Type::Varchar:       ///< Length bytes: 1, Max: 255
           {
+            CHARSET_INFO* charset = cmd.print_group_by_column.charset;
+            soft_assert(charset != nullptr, "Could not find charset for VARCHAR column");
             LexString content = LexString{ &column.data()[1],
                                            (size_t)column.data()[0] };
             if (m_json_output)
             {
-              print_json_string_from_utf8(out,
-                                          content,
-                                          m_utf8_output);
+              out << '"';
+              print_string(out, content, charset, true, m_utf8_output, false);
+              out << '"';
             }
             else if (m_tsv_output)
             {
-              out << content; // todo mysql-like escape
+              print_string(out, content, charset, false, true, false);
             }
             else
             {
@@ -631,9 +655,23 @@ ResultPrinter::print_record(NdbAggregator::ResultRecord& record, std::ostream& o
       out.write(cmd.print_str.content.str, cmd.print_str.content.len);
       break;
     case Cmd::Type::PRINT_STR_JSON:
-      print_json_string_from_utf8(out,
-                                  cmd.print_str.content,
-                                  m_utf8_output);
+      if (m_json_output) {
+        out << '"';
+        print_string(out,
+                     cmd.print_str.content,
+                     &my_charset_utf8mb4_bin,
+                     true,
+                     m_utf8_output,
+                     false);
+        out << '"';
+      } else {
+        print_string(out,
+                     cmd.print_str.content,
+                     &my_charset_utf8mb4_bin,
+                     false,
+                     true,
+                     false);
+      }
       break;
     default:
       abort();
@@ -641,109 +679,266 @@ ResultPrinter::print_record(NdbAggregator::ResultRecord& record, std::ostream& o
   }
 }
 
-// Print a JSON representation of ls to output_stream, assuming ls is correctly
-// UTF-8 encoded. utf8_output determines the output encoding:
-// utf8_output == true:  If ls contains invalid UTF-8, the output will likewise
-//                       be invalid.
-// todo perhaps validate
-// utf8_output == false: Use \u escape for characters with code point U+0080 and
-//                       above. Crash if ls contains invalid UTF-8.
-// todo perhaps throw rather than crash.
+// Print a representation of ls to out, converting it from the given charset.
+// json_escape == true:        Escape characters using JSON standard. (Do not
+//                             print quotes.)
+// json_escape == false:       Escape characters similarly to mysql CLI.
+// utf8_output == true:        Output is UTF-8 encoded.
+// utf8_output == false:       Use \u escape for characters with code point
+//                             U+00a0 and above. Only to be used with
+//                             json_escape == true.
+// trim_space_suffix == true:  Ignore trailing spaces
+// trim_space_suffix == false: Print trailing spaces
+// Inspired by `well_formed_copy_nchars` in ../../../../sql-common/sql_string.cc
 static void
-print_json_string_from_utf8(std::ostream& out,
-                            LexString ls,
-                            bool utf8_output)
+print_string(std::ostream& out,
+             LexString ls,
+             CHARSET_INFO* charset,
+             bool json_escape,
+             bool utf8_output,
+             bool trim_space_suffix)
 {
-  const char* str = ls.str;
-  const char* end = &ls.str[ls.len];
-  out << '"';
-  while (str < end)
-  {
-    static const char* hex = "0123456789abcdef";
-    char ch = *str;
-    if (utf8_output || (ch & 0x80) == 0x00)
-    {
-      // 1-byte encoding for values 0-7 bits in length if utf8_output == true,
-      // or all bytes if utf8_output == false.
-      switch (ch)
-      {
-      case '"':  out << "\\\""; break;
-      case '\\': out << "\\\\"; break;
-      case '/':  out << "\\/";  break;
-      case '\b': out << "\\b";  break;
-      case '\f': out << "\\f";  break;
-      case '\n': out << "\\n";  break;
-      case '\r': out << "\\r";  break;
-      case '\t': out << "\\t";  break;
-      default:   out << ch;     break;
-      }
+  const uchar* str = pointer_cast<const uchar *>(ls.str);
+  const uchar* end = pointer_cast<const uchar *>(&ls.str[ls.len]);
+  my_wc_t wc;
+  my_charset_conv_mb_wc mb_wc = charset->cset->mb_wc;
+  static const char* hex = "0123456789abcdef";
+  int spaces_withheld = 0;
+  while(str < end) {
+    int cnvres = (*mb_wc)(charset, &wc, str, end);
+    // Convert one character from str to a unicode code point
+    if (cnvres > 0) {
+      str += cnvres;
+    } else if (cnvres == MY_CS_ILSEQ) {
+      // Not well-formed according to source charset
       str++;
-      continue;
+      wc = 0xfffd;
+    } else if (cnvres > MY_CS_TOOSMALL) {
+      // A correct multibyte sequence detected, but without Unicode mapping.
+      str += (-cnvres);
+      wc = 0xfffd;
+    } else {
+      // Not enough characters.
+      assert(str + charset->mbmaxlen >= end);
+      str = end;
+      wc = 0xfffd;
     }
-    if ((ch & 0xe0) == 0xc0)
-    {
-      // 2-byte encoding for values 8-11 bits in length
-      char ch2 = str[1];
-      assert((ch  & 0x3e) != 0x00 &&
-             (ch2 & 0xc0) == 0x80);
-      Uint32 codepoint = ((ch  & 0x1f) << 6) |
-                          (ch2 & 0x3f);
-      out << "\\u0"
-          << hex[codepoint >> 8]
-          << hex[(codepoint >> 4) & 0x0f]
-          << hex[codepoint & 0x0f];
-      str += 2;
-      continue;
+    // Encode the character in JSON
+    if (unlikely(trim_space_suffix)) {
+      if (wc == 0x20) {
+        spaces_withheld++;
+        continue;
+      } else {
+        while(spaces_withheld) {
+          out << ' ';
+          spaces_withheld--;
+        }
+      }
     }
-    if ((ch & 0xf0) == 0xe0)
-    {
-      // 3-byte encoding for values 12-16 bits in length
-      char ch2 = str[1];
-      char ch3 = str[2];
-      assert((ch2 & 0xc0) == 0x80 &&
-             (ch3 & 0xc0) == 0x80);
-      Uint32 codepoint = ((ch  & 0x0f) << 12) |
-                         ((ch2 & 0x3f) <<  6) |
-                          (ch3 & 0x3f);
-      assert((codepoint & 0xf800) != 0xd800);
-      out << "\\u"
-          << hex[codepoint >> 12]
-          << hex[(codepoint >> 8) & 0xf]
-          << hex[(codepoint >> 4) & 0xf]
-          << hex[codepoint & 0xf];
-      str += 3;
-      continue;
+    if (likely(wc < 0x80)) {
+      if (likely(json_escape)) {
+        static const char *json_encode_lookup =
+        /* Code points U+0000 -- U+007f
+         *  / Code point
+         *  |         / JSON encoding padded to 6 bytes
+         *  |         |          / Length
+         *  |         |          |        */
+          /* U+0000 */ "\\u0000"  "\x06"
+          /* U+0001 */ "\\u0001"  "\x06"
+          /* U+0002 */ "\\u0002"  "\x06"
+          /* U+0003 */ "\\u0003"  "\x06"
+          /* U+0004 */ "\\u0004"  "\x06"
+          /* U+0005 */ "\\u0005"  "\x06"
+          /* U+0006 */ "\\u0006"  "\x06"
+          /* U+0007 */ "\\u0007"  "\x06"
+          /* U+0008 */ "\\b    "  "\x02"
+          /* U+0009 */ "\\t    "  "\x02"
+          /* U+000a */ "\\n    "  "\x02"
+          /* U+000b */ "\\u000b"  "\x06"
+          /* U+000c */ "\\f    "  "\x02"
+          /* U+000d */ "\\r    "  "\x02"
+          /* U+000e */ "\\u000e"  "\x06"
+          /* U+000f */ "\\u000f"  "\x06"
+          /* U+0010 */ "\\u0010"  "\x06"
+          /* U+0011 */ "\\u0011"  "\x06"
+          /* U+0012 */ "\\u0012"  "\x06"
+          /* U+0013 */ "\\u0013"  "\x06"
+          /* U+0014 */ "\\u0014"  "\x06"
+          /* U+0015 */ "\\u0015"  "\x06"
+          /* U+0016 */ "\\u0016"  "\x06"
+          /* U+0017 */ "\\u0017"  "\x06"
+          /* U+0018 */ "\\u0018"  "\x06"
+          /* U+0019 */ "\\u0019"  "\x06"
+          /* U+001a */ "\\u001a"  "\x06"
+          /* U+001b */ "\\u001b"  "\x06"
+          /* U+001c */ "\\u001c"  "\x06"
+          /* U+001d */ "\\u001d"  "\x06"
+          /* U+001e */ "\\u001e"  "\x06"
+          /* U+001f */ "\\u001f"  "\x06"
+          /* U+0020 */ "      "   "\x01"
+          /* U+0021 */ "!     "   "\x01"
+          /* U+0022 */ "\\\"    " "\x02"
+          /* U+0023 */ "#     "   "\x01"
+          /* U+0024 */ "$     "   "\x01"
+          /* U+0025 */ "%     "   "\x01"
+          /* U+0026 */ "&     "   "\x01"
+          /* U+0027 */ "'     "   "\x01"
+          /* U+0028 */ "(     "   "\x01"
+          /* U+0029 */ ")     "   "\x01"
+          /* U+002a */ "*     "   "\x01"
+          /* U+002b */ "+     "   "\x01"
+          /* U+002c */ ",     "   "\x01"
+          /* U+002d */ "-     "   "\x01"
+          /* U+002e */ ".     "   "\x01"
+          /* U+002f */ "/     "   "\x01"
+          /* U+0030 */ "0     "   "\x01"
+          /* U+0031 */ "1     "   "\x01"
+          /* U+0032 */ "2     "   "\x01"
+          /* U+0033 */ "3     "   "\x01"
+          /* U+0034 */ "4     "   "\x01"
+          /* U+0035 */ "5     "   "\x01"
+          /* U+0036 */ "6     "   "\x01"
+          /* U+0037 */ "7     "   "\x01"
+          /* U+0038 */ "8     "   "\x01"
+          /* U+0039 */ "9     "   "\x01"
+          /* U+003a */ ":     "   "\x01"
+          /* U+003b */ ";     "   "\x01"
+          /* U+003c */ "<     "   "\x01"
+          /* U+003d */ "=     "   "\x01"
+          /* U+003e */ ">     "   "\x01"
+          /* U+003f */ "?     "   "\x01"
+          /* U+0040 */ "@     "   "\x01"
+          /* U+0041 */ "A     "   "\x01"
+          /* U+0042 */ "B     "   "\x01"
+          /* U+0043 */ "C     "   "\x01"
+          /* U+0044 */ "D     "   "\x01"
+          /* U+0045 */ "E     "   "\x01"
+          /* U+0046 */ "F     "   "\x01"
+          /* U+0047 */ "G     "   "\x01"
+          /* U+0048 */ "H     "   "\x01"
+          /* U+0049 */ "I     "   "\x01"
+          /* U+004a */ "J     "   "\x01"
+          /* U+004b */ "K     "   "\x01"
+          /* U+004c */ "L     "   "\x01"
+          /* U+004d */ "M     "   "\x01"
+          /* U+004e */ "N     "   "\x01"
+          /* U+004f */ "O     "   "\x01"
+          /* U+0050 */ "P     "   "\x01"
+          /* U+0051 */ "Q     "   "\x01"
+          /* U+0052 */ "R     "   "\x01"
+          /* U+0053 */ "S     "   "\x01"
+          /* U+0054 */ "T     "   "\x01"
+          /* U+0055 */ "U     "   "\x01"
+          /* U+0056 */ "V     "   "\x01"
+          /* U+0057 */ "W     "   "\x01"
+          /* U+0058 */ "X     "   "\x01"
+          /* U+0059 */ "Y     "   "\x01"
+          /* U+005a */ "Z     "   "\x01"
+          /* U+005b */ "[     "   "\x01"
+          /* U+005c */ "\\\\    " "\x02"
+          /* U+005d */ "]     "   "\x01"
+          /* U+005e */ "^     "   "\x01"
+          /* U+005f */ "_     "   "\x01"
+          /* U+0060 */ "`     "   "\x01"
+          /* U+0061 */ "a     "   "\x01"
+          /* U+0062 */ "b     "   "\x01"
+          /* U+0063 */ "c     "   "\x01"
+          /* U+0064 */ "d     "   "\x01"
+          /* U+0065 */ "e     "   "\x01"
+          /* U+0066 */ "f     "   "\x01"
+          /* U+0067 */ "g     "   "\x01"
+          /* U+0068 */ "h     "   "\x01"
+          /* U+0069 */ "i     "   "\x01"
+          /* U+006a */ "j     "   "\x01"
+          /* U+006b */ "k     "   "\x01"
+          /* U+006c */ "l     "   "\x01"
+          /* U+006d */ "m     "   "\x01"
+          /* U+006e */ "n     "   "\x01"
+          /* U+006f */ "o     "   "\x01"
+          /* U+0070 */ "p     "   "\x01"
+          /* U+0071 */ "q     "   "\x01"
+          /* U+0072 */ "r     "   "\x01"
+          /* U+0073 */ "s     "   "\x01"
+          /* U+0074 */ "t     "   "\x01"
+          /* U+0075 */ "u     "   "\x01"
+          /* U+0076 */ "v     "   "\x01"
+          /* U+0077 */ "w     "   "\x01"
+          /* U+0078 */ "x     "   "\x01"
+          /* U+0079 */ "y     "   "\x01"
+          /* U+007a */ "z     "   "\x01"
+          /* U+007b */ "{     "   "\x01"
+          /* U+007c */ "|     "   "\x01"
+          /* U+007d */ "}     "   "\x01"
+          /* U+007e */ "~     "   "\x01"
+          /* U+007f */ "\\u007f"  "\x06"
+          ;
+        out << std::string_view(&json_encode_lookup[wc * 7],
+                                json_encode_lookup[wc * 7 + 6]);
+      } else {
+        switch(char(wc)) {
+          case 0x00: out << "\\0"; break;
+          case 0x09: out << "\\t"; break;
+          case 0x0a: out << "\\n"; break;
+          case 0x5c: out << "\\\\"; break;
+          default: out << char(wc); break;
+        }
+      }
+   } else if (unlikely(wc <= 0x009f)) {
+      if (likely(json_escape)) {
+        out << "\\u00"
+            << hex[(wc >> 4) & 0x0f]
+            << hex[wc & 0x0f];
+      } else {
+        out << char(0xc2)
+            << char(wc);
+      }
+    } else if (likely(wc <= 0x07ff)) {
+      if (likely(utf8_output)) {
+        out << char(0xc0 | (wc >> 6))
+            << char(0x80 | (wc & 0x3f));
+      } else {
+        out << "\\u0"
+            << hex[wc >> 8]
+            << hex[(wc >> 4) & 0x0f]
+            << hex[wc & 0x0f];
+      }
+    } else if (unlikely((wc & (~my_wc_t(0x07ff))) == 0xd800)) {
+      // Illegal surrogate
+      out << "�"; // U+fffd
+    } else if (likely(wc <= 0xffff)) {
+      if (likely(utf8_output)) {
+        out << char(0xe0 | (wc >> 12))
+            << char(0x80 | ((wc >> 6) & 0x3f))
+            << char(0x80 | (wc & 0x3f));
+      } else {
+        out << "\\u"
+            << hex[wc >> 12]
+            << hex[(wc >> 8) & 0x0f]
+            << hex[(wc >> 4) & 0x0f]
+            << hex[wc & 0x0f];
+      }
+    } else if (likely(wc <= 0x10ffff)) {
+      if (likely(utf8_output)) {
+        out << char(0xf0 | (wc >> 18))
+            << char(0x80 | ((wc >> 12) & 0x3f))
+            << char(0x80 | ((wc >> 6) & 0x3f))
+            << char(0x80 | (wc & 0x3f));
+      } else {
+        my_wc_t wco = wc - 0x010000;
+        out << "\\ud"
+            << hex[0x08 | (wco >> 18)]
+            << hex[(wco >> 14) & 0x0f]
+            << hex[(wco >> 10) & 0x0f]
+            << "\\ud"
+            << hex[0x0c | ((wco >> 8) & 0x03)]
+            << hex[(wco >> 4) & 0x0f]
+            << hex[wco & 0x0f];
+      }
+    } else {
+      // Illegal code point
+      out << "�"; // U+fffd
     }
-    if ((ch & 0xf8) == 0xf0)
-    {
-      // 4-byte encoding for values 17-21 bits in length
-      char ch2 = str[1];
-      char ch3 = str[2];
-      char ch4 = str[3];
-      assert((ch2 & 0xc0) == 0x80 &&
-             (ch3 & 0xc0) == 0x80 &&
-             (ch4 & 0xc0) == 0x80);
-      Uint32 codepoint = ((ch  & 0x07) << 18) |
-                         ((ch2 & 0x3f) << 12) |
-                         ((ch3 & 0x3f) <<  6) |
-                          (ch4 & 0x3f);
-      assert((codepoint & 0x1f0000) != 0x000000);
-      Uint32 sp = codepoint - 0x10000;
-      assert((sp & 0x100000) == 0);
-      out << "\\ud"
-          << hex[(sp >> 18) | 0x8]
-          << hex[(sp >> 14) & 0xf]
-          << hex[(sp >> 10) & 0xf]
-          << "\\ud"
-          << hex[((sp >> 8) & 0x3) | 0xc]
-          << hex[(sp >> 4) & 0xf]
-          << hex[sp & 0xf];
-      str += 4;
-      continue;
-    }
-    abort();
   }
-  out << '"';
 }
 
 inline void

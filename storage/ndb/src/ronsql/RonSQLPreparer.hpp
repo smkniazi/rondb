@@ -137,6 +137,7 @@ private:
   Context m_context;
   DynamicArray<LexCString> m_columns;
   NdbAttrId* m_column_attrId_map = NULL;
+  CHARSET_INFO** m_column_charset_map = NULL;
   const NdbDictionary::Dictionary* m_dict = NULL;
   const NdbDictionary::Table* m_table = NULL;
   yyscan_t m_scanner;

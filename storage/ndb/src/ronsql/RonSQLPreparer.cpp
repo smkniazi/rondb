@@ -113,10 +113,8 @@ RonSQLPreparer::RonSQLPreparer(RonSQLExecParams conf):
 static inline void
 soft_assert(bool condition, const char* msg)
 {
-  if (!condition)
-  {
-    throw runtime_error(msg);
-  }
+  if (likely(condition)) return;
+  throw runtime_error(msg);
 }
 
 void
@@ -486,9 +484,10 @@ RonSQLPreparer::load()
    * instead, RonSQLPreparer::programAggregator will read the program from m_agg
    * and map col_idx to attrId before speaking to NdbAggregator.
    */
-  // Populate m_dict, m_table and m_column_attrId_map, on the condition that
-  // m_conf.ndb is available. If m_conf.ndb is not available, we'll still be
-  // able to do a (partial) EXPLAIN SELECT, so no need to fail yet.
+  // Populate m_dict, m_table, m_column_attrId_map and m_column_charset_map, on
+  // the condition that m_conf.ndb is available. If m_conf.ndb is not available,
+  // we'll still be able to do a (partial) EXPLAIN SELECT, so no need to fail
+  // yet.
   Ndb* ndb = m_conf.ndb;
   if (ndb != NULL)
   {
@@ -498,6 +497,8 @@ RonSQLPreparer::load()
                 "Failed to get table. Note that RonSQL only supports tables with"
                 " ENGINE=NDB.");
     NdbAttrId* col_id_map = m_amalloc->alloc_exc<NdbAttrId>(m_columns.size());
+    CHARSET_INFO** charset_map =
+      m_amalloc->alloc_exc<CHARSET_INFO*>(m_columns.size());
     for (Uint32 col_idx = 0; col_idx < m_columns.size(); col_idx++)
     {
       const char* col_name = m_columns[col_idx].c_str();
@@ -516,8 +517,10 @@ RonSQLPreparer::load()
         throw ColumnNotFoundError();
       }
       col_id_map[col_idx] = col->getAttrId();
+      charset_map[col_idx] = col->getCharset();
     }
     m_column_attrId_map = col_id_map;
+    m_column_charset_map = charset_map;
   }
 
   /*
@@ -680,6 +683,7 @@ RonSQLPreparer::compile()
     ResultPrinter(m_amalloc,
                   &m_context.ast_root,
                   &m_columns,
+                  m_column_charset_map,
                   m_conf.output_format,
                   m_conf.err_stream);
 }
@@ -1363,6 +1367,7 @@ RonSQLPreparer::programAggregator(NdbAggregator* aggregator)
   std::basic_ostream<char>& err = *m_conf.err_stream;
   SelectStatement& ast_root = m_context.ast_root;
   // Program groupby columns
+  assert(m_column_attrId_map != NULL); // Ensured in RonSQLPreparer::load
   struct GroupbyColumns* groupby = ast_root.groupby_columns;
   while (groupby != NULL)
   {
@@ -1382,7 +1387,6 @@ RonSQLPreparer::programAggregator(NdbAggregator* aggregator)
     {
     case AggregationAPICompiler::SVMInstrType::Load:
     {
-      assert(m_column_attrId_map != NULL);
       NdbAttrId col_id = m_column_attrId_map[src];
       if (!aggregator->LoadColumn(col_id, dest))
       {

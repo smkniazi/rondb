@@ -57,10 +57,10 @@ struct RonSQLExecParams
   enum class OutputFormat
   {
     JSON,          // Output a JSON representation of the result set or EXPLAIN
-                   // output. Characters with code point U+0080 and above are
+                   // output. Characters with code point U+00a0 and above are
                    // encoded as UTF-8.
     JSON_ASCII,    // Output a JSON representation of the result set or EXPLAIN
-                   // output. Characters with code point U+007f and above are
+                   // output. Characters with code point U+00a0 and above are
                    // encoded using \u escape sequences, meaning the output stream
                    // will only contain ASCII characters 0x0a, 0x20 -- 0x7e.
     TEXT,          // For query output, mimic mysql tab-separated output with

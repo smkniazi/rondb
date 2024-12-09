@@ -139,7 +139,7 @@ void assert_end_of_doc(simdjson::ondemand::document& doc) {
 }
 
 RS_Status handle_parse_error(ConfigParseError& e,
-                             const simdjson::padded_string& paddedJson,
+                             const simdjson::padded_string_view& paddedJson,
                              const simdjson::ondemand::document* doc) {
   std::string message = e.m_error_message;
   const char *location = nullptr;
