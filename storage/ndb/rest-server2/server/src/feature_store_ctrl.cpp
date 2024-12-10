@@ -326,13 +326,13 @@ std::tuple<std::vector<std::vector<char>>,
             decoderIt != featureView.complexFeatures.end()) {
             auto deserResult =
               DeserialiseComplexFeature(value, decoderIt->second);
-            if (std::get<1>(deserResult) == nullptr) {
-              (featureValues)[it->second] = std::get<0>(deserResult);
+            if (std::get<0>(deserResult) == nullptr) {
+              (featureValues)[it->second] = std::get<1>(deserResult);
             } else {
               status = feature_store_data_structs::FeatureStatus::Error;
               err = DESERIALISE_FEATURE_FAIL->NewMessage(
                 "Feature name: " + featureName + "; " +
-              std::get<1>(deserResult)->Error());
+              std::get<0>(deserResult)->Error());
             }
           } else {
             (featureValues)[it->second] = value;

@@ -46,7 +46,7 @@ base64_decode(const std::string &encoded_string, std::string &decoded_string) {
   return CRS_Status::SUCCESS.status;
 }
 
-std::tuple<std::vector<char>, std::shared_ptr<RestErrorCode>>
+std::tuple<std::shared_ptr<RestErrorCode>, std::vector<char>>
 DeserialiseComplexFeature(const std::vector<char> &value,
                           const metadata::AvroDecoder &decoder) {
   std::string valueString(value.begin(), value.end());
@@ -56,10 +56,10 @@ DeserialiseComplexFeature(const std::vector<char> &value,
   auto error = parser.parse(valueString).get(element);
   if (error != 0U) {
     return std::make_tuple(
-        std::vector<char>{},
         std::make_shared<RestErrorCode>(
             "Failed to unmarshal JSON value.",
-            static_cast<int>(drogon::k500InternalServerError)));
+            static_cast<int>(drogon::k500InternalServerError)),
+        std::vector<char>{});
   }
 
   valueString = element.get_string().value();
@@ -67,29 +67,29 @@ DeserialiseComplexFeature(const std::vector<char> &value,
   RS_Status status = base64_decode(valueString, jsonDecode);
   if (status.http_code != HTTP_CODE::SUCCESS) {
     return std::make_tuple(
-        std::vector<char>{},
         std::make_shared<RestErrorCode>(
-            status.message, static_cast<int>(drogon::k500InternalServerError)));
+            status.message, static_cast<int>(drogon::k500InternalServerError)),
+        std::vector<char>{});
   }
 
   std::vector<Uint8> binaryData(jsonDecode.begin(), jsonDecode.end());
   auto [native_status, native] = decoder.decode(binaryData);
   if (native_status.http_code != HTTP_CODE::SUCCESS) {
     return std::make_tuple(
-        std::vector<char>{},
         std::make_shared<RestErrorCode>(
-            native_status.message, static_cast<int>(drogon::k400BadRequest)));
+            native_status.message, static_cast<int>(drogon::k400BadRequest)),
+        std::vector<char>{});
   }
 
   auto [json_status, json] = ConvertAvroToJson(native.value());
   if (json_status.http_code != HTTP_CODE::SUCCESS) {
     return std::make_tuple(
-        std::vector<char>{},
         std::make_shared<RestErrorCode>(
             "Failed to convert Avro to JSON.",
-            static_cast<int>(drogon::k500InternalServerError)));
+            static_cast<int>(drogon::k500InternalServerError)),
+        std::vector<char>{});
   }
-  return std::make_tuple(json.value(), nullptr);
+  return std::make_tuple(nullptr, json.value());
 }
 
 template <typename T>
@@ -216,11 +216,10 @@ ConvertAvroToJson(const avro::GenericDatum &datum) {
     }
 
   } catch (const std::exception &e) {
-    return {
-      CRS_Status(HTTP_CODE::SERVER_ERROR,
-                 "Exception occurred: " + std::string(e.what()))
-          .status,
-          std::nullopt};
-    }
+    return {CRS_Status(HTTP_CODE::SERVER_ERROR,
+                       "Exception occurred: " + std::string(e.what()))
+                .status,
+            std::nullopt};
   }
+}
 
