@@ -1067,6 +1067,21 @@ retry_trx:
       if (purge_worker_exit_) {
         break;
       }
+      /*
+       * Transaction may be failed by the schema changing,
+       * here we getTable() to get the latest NdbObject(the
+       * previous has already been removed by removeCachedObject()
+       * in the 'err' handling
+       */
+      ttl_tab = dict->getTable(table_str.c_str());
+      if (ttl_tab == nullptr) {
+        g_eventLogger->warning("[TTL PWorker] Failed to get table: "
+                              "%s, error: %d(%s). Retry...",
+                               table_str.c_str(),
+                               dict->getNdbError().code,
+                               dict->getNdbError().message);
+        goto err;
+      }
       trans = worker_ndb_->startTransaction();
       if (trans == nullptr) {
         g_eventLogger->warning("[TTL PWorker] Failed to start "
@@ -1482,6 +1497,7 @@ err:
         purge_worker_exit_ = true;
         break;
       } else if (purge_trx_started) {
+        dict->removeCachedTable(table_str.c_str());
         goto retry_trx;
       } else {
         // retry from begining
