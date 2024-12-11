@@ -61,7 +61,7 @@ set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${RDRS_AVRO_CMAKE_MODULES_DIR_64})
 find_path(AVROCPP_INCLUDE_DIR avro/ValidSchema.hh
   PATHS /usr/local/include /usr/include /opt/homebrew/include
 )
-find_library(AVROCPP_LIBRARIES NAMES avrocpp
+find_library(AVROCPP_LIBRARIES NAMES libavrocpp_s.a avrocpp
   PATHS /usr/local/lib /usr/lib /opt/homebrew/lib
 )
 
