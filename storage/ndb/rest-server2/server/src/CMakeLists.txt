@@ -61,8 +61,7 @@ set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${RDRS_AVRO_CMAKE_MODULES_DIR_64})
 find_path(AVROCPP_INCLUDE_DIR avro/ValidSchema.hh
   PATHS /usr/local/include /usr/include /opt/homebrew/include
 )
-
-find_library(AVROCPP_LIBRARIES NAMES avrocpp
+find_library(AVROCPP_LIBRARIES NAMES libavrocpp_s.a avrocpp
   PATHS /usr/local/lib /usr/lib /opt/homebrew/lib
 )
 
@@ -77,6 +76,14 @@ else()
 
   message(FATAL_ERROR "Failed to configure rdrs2. avrocpp NOT FOUND")
 endif()
+
+find_library(OSSP_UUID_LIBRARY NAMES ossp-uuid
+  PATHS /lib64 /usr/lib64
+)
+
+find_library(UUID_LIBRARY NAMES uuid
+  PATHS /lib64 /usr/lib64
+)
 
 find_package(Jsoncpp REQUIRED)
 find_package(Threads REQUIRED)
@@ -167,6 +174,77 @@ target_include_directories(rdrs2_lib PUBLIC ${RDRS_DROGON_INCLUDE_DIR})
 target_include_directories(rdrs2_lib PUBLIC ${RDRS_SIMDJSON_INCLUDE_DIR})
 target_include_directories(rdrs2_lib PUBLIC ${RDRS_AVRO_INCLUDE_DIR})
 target_link_directories(rdrs2_lib PUBLIC ${RDRS_DROGON_LIB_DIR})
+
+# Install jsoncpp library
+EXECUTE_PROCESS(
+       COMMAND readlink "${JSONCPP_LIBRARIES}" OUTPUT_VARIABLE JSONCPP_VERSION_LINK
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+EXECUTE_PROCESS(
+       COMMAND dirname "${JSONCPP_LIBRARIES}" OUTPUT_VARIABLE JSONCPP_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+EXECUTE_PROCESS(
+       COMMAND readlink -f "${JSONCPP_LIBRARIES}" OUTPUT_VARIABLE JSONCPP_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+INSTALL(FILES ${JSONCPP_LIBRARIES} DESTINATION lib)
+INSTALL(FILES ${JSONCPP_VERSION_DIR}/${JSONCPP_VERSION_LINK} DESTINATION lib)
+INSTALL(FILES ${JSONCPP_VERSION} DESTINATION lib
+      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                  GROUP_READ GROUP_EXECUTE
+                  WORLD_READ WORLD_EXECUTE
+)
+
+# Install prometheus-cpp libraries
+get_target_property(lib_core_path prometheus-cpp::core IMPORTED_LOCATION_NOCONFIG)
+get_target_property(lib_push_path prometheus-cpp::push IMPORTED_LOCATION_NOCONFIG)
+INSTALL(FILES ${lib_core_path} DESTINATION lib
+      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                  GROUP_READ GROUP_EXECUTE
+                  WORLD_READ WORLD_EXECUTE
+)
+INSTALL(FILES ${lib_push_path} DESTINATION lib
+      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                  GROUP_READ GROUP_EXECUTE
+                  WORLD_READ WORLD_EXECUTE
+)
+EXECUTE_PROCESS(
+       COMMAND dirname "${lib_core_path}" OUTPUT_VARIABLE PROMETHEUS_CPP_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+INSTALL(FILES "${PROMETHEUS_CPP_DIR}/libprometheus-cpp-core.so.1.3" DESTINATION lib)
+INSTALL(FILES "${PROMETHEUS_CPP_DIR}/libprometheus-cpp-push.so.1.3" DESTINATION lib)
+
+# Install uuid library
+if(UUID_LIBRARY)
+    message(STATUS "Found uuid_library: ${UUID_LIBRARY}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${UUID_LIBRARY}" OUTPUT_VARIABLE UUID_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${UUID_LIBRARY}" OUTPUT_VARIABLE UUID_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${UUID_VERSION} DESTINATION lib)
+    INSTALL(FILES "${UUID_VERSION_DIR}/libuuid.so.1" DESTINATION lib
+      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                  GROUP_READ GROUP_EXECUTE
+                  WORLD_READ WORLD_EXECUTE
+    )
+endif()
+
+# Install ossp-uuid library
+if(OSSP_UUID_LIBRARY)
+    message(STATUS "Found ossp_uuid_library: ${OSSP_UUID_LIBRARY}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${OSSP_UUID_LIBRARY}" OUTPUT_VARIABLE OSSP_UUID_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${OSSP_UUID_LIBRARY}" OUTPUT_VARIABLE OSSP_UUID_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${OSSP_UUID_VERSION} DESTINATION lib)
+    INSTALL(FILES "${OSSP_UUID_VERSION_DIR}/libossp-uuid.so.16" DESTINATION lib
+      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
+                  GROUP_READ GROUP_EXECUTE
+                  WORLD_READ WORLD_EXECUTE
+    )
+endif()
 
 # todo-ronsql is ronsql needed for rdrs2_lib? It's used in ../test/api_key_test
 TARGET_LINK_LIBRARIES(rdrs2_lib

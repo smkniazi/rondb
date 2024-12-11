@@ -159,7 +159,7 @@ RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
     ./b2 install && \
     rm -rf boost_* 
 
-# Install avro
+# Install avro (only static library)
 RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
     cd $DOWNLOADS_CACHE_DIR && \
     rm -rf release-* avro-* && \
@@ -172,7 +172,7 @@ RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
     cmake -G "Unix Makefiles" .. && \
     make -j$THREADS_ARG && \
     make install && \ 
-    rm -rf release-* avro-* 
+    rm -rf release-* avro-*
 
 # Install updated jsoncpp
 RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
