@@ -169,11 +169,10 @@ RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
     mkdir build && \
     cd build && \
     source scl_source enable gcc-toolset-12 && \
-    cmake -G "Unix Makefiles" .. && \
+    cmake -DBUILD_SHARED_LIBS=OFF -G "Unix Makefiles" .. && \
     make -j$THREADS_ARG && \
     make install && \ 
     rm -rf release-* avro-* \
-    rm /usr/local/lib/libavrocpp.so*
 
 # Install updated jsoncpp
 RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
