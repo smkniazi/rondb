@@ -79,35 +79,35 @@ else()
 endif()
 
 find_library(OSSP_UUID_LIBRARY NAMES ossp-uuid
-  PATHS /lib64
+  PATHS /lib64 /usr/lib64
 )
 
 find_library(UUID_LIBRARY NAMES uuid
-  PATHS /lib64
+  PATHS /lib64 /usr/lib64
 )
 
 find_library(BOOST_FS NAMES boost_filesystem
-  PATHS /usr/local/lib
+  PATHS /usr/local/lib /usr/local/lib64
 )
 
 find_library(BOOST_IO NAMES boost_iostream
-  PATHS /usr/local/lib
+  PATHS /usr/local/lib /usr/local/lib64
 )
 
 find_library(BOOST_PO NAMES boost_program_options
-  PATHS /usr/local/lib
+  PATHS /usr/local/lib /usr/local/lib64
 )
 
 find_library(BOOST_RE NAMES boost_regex
-  PATHS /usr/local/lib
+  PATHS /usr/local/lib /usr/local/lib64
 )
 
 find_library(BOOST_SY NAMES boost_system
-  PATHS /usr/local/lib
+  PATHS /usr/local/lib /usr/local/lib64
 )
 
 find_library(BOOST_AT NAMES boost_atomic
-  PATHS /usr/local/lib
+  PATHS /usr/local/lib /usr/local/lib64
 )
 
 find_package(Jsoncpp REQUIRED)
@@ -267,7 +267,7 @@ if(BOOST_FS)
     EXECUTE_PROCESS(
        COMMAND dirname "${BOOST_FS}" OUTPUT_VARIABLE BOOST_FS_VERSION_DIR
       OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_FS} DESTINATION lib)
+    INSTALL(FILES ${BOOST_FS_VERSION} DESTINATION lib)
     INSTALL(FILES "${BOOST_FS_VERSION_DIR}/libboost_filesystem.so" DESTINATION lib)
 endif()
 
@@ -280,7 +280,7 @@ if(BOOST_IO)
     EXECUTE_PROCESS(
        COMMAND dirname "${BOOST_IO}" OUTPUT_VARIABLE BOOST_IO_VERSION_DIR
       OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_IO} DESTINATION lib)
+    INSTALL(FILES ${BOOST_IO_VERSION} DESTINATION lib)
     INSTALL(FILES "${BOOST_IO_VERSION_DIR}/libboost_iostreams.so" DESTINATION lib)
 endif()
 
@@ -293,11 +293,11 @@ if(BOOST_PO)
     EXECUTE_PROCESS(
        COMMAND dirname "${BOOST_PO}" OUTPUT_VARIABLE BOOST_PO_VERSION_DIR
       OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_PO} DESTINATION lib)
+    INSTALL(FILES ${BOOST_PO_VERSION} DESTINATION lib)
     INSTALL(FILES "${BOOST_PO_VERSION_DIR}/libboost_program_options.so" DESTINATION lib)
 endif()
 
-# Install boost_filesystem library
+# Install boost_regex library
 if(BOOST_RE)
     message(STATUS "Found boost_regex_library: ${BOOST_RE}")
     EXECUTE_PROCESS(
@@ -306,7 +306,7 @@ if(BOOST_RE)
     EXECUTE_PROCESS(
        COMMAND dirname "${BOOST_RE}" OUTPUT_VARIABLE BOOST_RE_VERSION_DIR
       OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_RE} DESTINATION lib)
+    INSTALL(FILES ${BOOST_RE_VERSION} DESTINATION lib)
     INSTALL(FILES "${BOOST_RE_VERSION_DIR}/libboost_regex.so" DESTINATION lib)
 endif()
 
@@ -319,7 +319,7 @@ if(BOOST_SY)
     EXECUTE_PROCESS(
        COMMAND dirname "${BOOST_SY}" OUTPUT_VARIABLE BOOST_SY_VERSION_DIR
       OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_SY} DESTINATION lib)
+    INSTALL(FILES ${BOOST_SY_VERSION} DESTINATION lib)
     INSTALL(FILES "${BOOST_SY_VERSION_DIR}/libboost_system.so" DESTINATION lib)
 endif()
 
@@ -332,7 +332,7 @@ if(BOOST_AT)
     EXECUTE_PROCESS(
        COMMAND dirname "${BOOST_AT}" OUTPUT_VARIABLE BOOST_AT_VERSION_DIR
       OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_AT} DESTINATION lib)
+    INSTALL(FILES ${BOOST_AT_VERSION} DESTINATION lib)
     INSTALL(FILES "${BOOST_AT_VERSION_DIR}/libboost_atomic.so" DESTINATION lib)
 endif()
 
