@@ -61,7 +61,6 @@ set(CMAKE_PREFIX_PATH ${CMAKE_PREFIX_PATH} ${RDRS_AVRO_CMAKE_MODULES_DIR_64})
 find_path(AVROCPP_INCLUDE_DIR avro/ValidSchema.hh
   PATHS /usr/local/include /usr/include /opt/homebrew/include
 )
-
 find_library(AVROCPP_LIBRARIES NAMES avrocpp
   PATHS /usr/local/lib /usr/lib /opt/homebrew/lib
 )
@@ -84,30 +83,6 @@ find_library(OSSP_UUID_LIBRARY NAMES ossp-uuid
 
 find_library(UUID_LIBRARY NAMES uuid
   PATHS /lib64 /usr/lib64
-)
-
-find_library(BOOST_FS NAMES boost_filesystem
-  PATHS /usr/local/lib /usr/local/lib64
-)
-
-find_library(BOOST_IO NAMES boost_iostreams
-  PATHS /usr/local/lib /usr/local/lib64
-)
-
-find_library(BOOST_PO NAMES boost_program_options
-  PATHS /usr/local/lib /usr/local/lib64
-)
-
-find_library(BOOST_RE NAMES boost_regex
-  PATHS /usr/local/lib /usr/local/lib64
-)
-
-find_library(BOOST_SY NAMES boost_system
-  PATHS /usr/local/lib /usr/local/lib64
-)
-
-find_library(BOOST_AT NAMES boost_atomic
-  PATHS /usr/local/lib /usr/local/lib64
 )
 
 find_package(Jsoncpp REQUIRED)
@@ -200,17 +175,6 @@ target_include_directories(rdrs2_lib PUBLIC ${RDRS_SIMDJSON_INCLUDE_DIR})
 target_include_directories(rdrs2_lib PUBLIC ${RDRS_AVRO_INCLUDE_DIR})
 target_link_directories(rdrs2_lib PUBLIC ${RDRS_DROGON_LIB_DIR})
 
-# Install avrocpp library
-INSTALL(FILES ${AVROCPP_LIBRARIES} DESTINATION lib)
-EXECUTE_PROCESS(
-      COMMAND readlink -f "${AVROCPP_LIBRARIES}" OUTPUT_VARIABLE AVROCPP_VERSION
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-INSTALL(FILES ${AVROCPP_VERSION} DESTINATION lib
-      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                  GROUP_READ GROUP_EXECUTE
-                  WORLD_READ WORLD_EXECUTE
-)
-
 # Install jsoncpp library
 EXECUTE_PROCESS(
        COMMAND readlink "${JSONCPP_LIBRARIES}" OUTPUT_VARIABLE JSONCPP_VERSION_LINK
@@ -276,108 +240,6 @@ if(OSSP_UUID_LIBRARY)
       OUTPUT_STRIP_TRAILING_WHITESPACE)
     INSTALL(FILES ${OSSP_UUID_VERSION} DESTINATION lib)
     INSTALL(FILES "${OSSP_UUID_VERSION_DIR}/libossp-uuid.so.16" DESTINATION lib
-      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                  GROUP_READ GROUP_EXECUTE
-                  WORLD_READ WORLD_EXECUTE
-    )
-endif()
-
-# Install boost_filesystem library
-if(BOOST_FS)
-    message(STATUS "Found boost_filesystem_library: ${BOOST_FS}")
-    EXECUTE_PROCESS(
-       COMMAND readlink -f "${BOOST_FS}" OUTPUT_VARIABLE BOOST_FS_VERSION
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    EXECUTE_PROCESS(
-       COMMAND dirname "${BOOST_FS}" OUTPUT_VARIABLE BOOST_FS_VERSION_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_FS_VERSION} DESTINATION lib)
-    INSTALL(FILES "${BOOST_FS_VERSION_DIR}/libboost_filesystem.so" DESTINATION lib
-      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                  GROUP_READ GROUP_EXECUTE
-                  WORLD_READ WORLD_EXECUTE
-    )
-endif()
-
-# Install boost_iostreams library
-if(BOOST_IO)
-    message(STATUS "Found boost_iostreams_library: ${BOOST_IO}")
-    EXECUTE_PROCESS(
-       COMMAND readlink -f "${BOOST_IO}" OUTPUT_VARIABLE BOOST_IO_VERSION
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    EXECUTE_PROCESS(
-       COMMAND dirname "${BOOST_IO}" OUTPUT_VARIABLE BOOST_IO_VERSION_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_IO_VERSION} DESTINATION lib)
-    INSTALL(FILES "${BOOST_IO_VERSION_DIR}/libboost_iostreams.so" DESTINATION lib
-      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                  GROUP_READ GROUP_EXECUTE
-                  WORLD_READ WORLD_EXECUTE
-    )
-endif()
-
-# Install boost_program_options library
-if(BOOST_PO)
-    message(STATUS "Found boost_program_options_library: ${BOOST_PO}")
-    EXECUTE_PROCESS(
-       COMMAND readlink -f "${BOOST_PO}" OUTPUT_VARIABLE BOOST_PO_VERSION
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    EXECUTE_PROCESS(
-       COMMAND dirname "${BOOST_PO}" OUTPUT_VARIABLE BOOST_PO_VERSION_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_PO_VERSION} DESTINATION lib)
-    INSTALL(FILES "${BOOST_PO_VERSION_DIR}/libboost_program_options.so" DESTINATION lib
-      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                  GROUP_READ GROUP_EXECUTE
-                  WORLD_READ WORLD_EXECUTE
-    )
-endif()
-
-# Install boost_regex library
-if(BOOST_RE)
-    message(STATUS "Found boost_regex_library: ${BOOST_RE}")
-    EXECUTE_PROCESS(
-       COMMAND readlink -f "${BOOST_RE}" OUTPUT_VARIABLE BOOST_RE_VERSION
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    EXECUTE_PROCESS(
-       COMMAND dirname "${BOOST_RE}" OUTPUT_VARIABLE BOOST_RE_VERSION_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_RE_VERSION} DESTINATION lib)
-    INSTALL(FILES "${BOOST_RE_VERSION_DIR}/libboost_regex.so" DESTINATION lib
-      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                  GROUP_READ GROUP_EXECUTE
-                  WORLD_READ WORLD_EXECUTE
-    )
-endif()
-
-# Install boost_system library
-if(BOOST_SY)
-    message(STATUS "Found boost_system_library: ${BOOST_SY}")
-    EXECUTE_PROCESS(
-       COMMAND readlink -f "${BOOST_SY}" OUTPUT_VARIABLE BOOST_SY_VERSION
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    EXECUTE_PROCESS(
-       COMMAND dirname "${BOOST_SY}" OUTPUT_VARIABLE BOOST_SY_VERSION_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_SY_VERSION} DESTINATION lib)
-    INSTALL(FILES "${BOOST_SY_VERSION_DIR}/libboost_system.so" DESTINATION lib
-      PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
-                  GROUP_READ GROUP_EXECUTE
-                  WORLD_READ WORLD_EXECUTE
-    )
-endif()
-
-# Install boost_atomic library
-if(BOOST_AT)
-    message(STATUS "Found boost_atomic_library: ${BOOST_AT}")
-    EXECUTE_PROCESS(
-       COMMAND readlink -f "${BOOST_AT}" OUTPUT_VARIABLE BOOST_AT_VERSION
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    EXECUTE_PROCESS(
-       COMMAND dirname "${BOOST_AT}" OUTPUT_VARIABLE BOOST_AT_VERSION_DIR
-      OUTPUT_STRIP_TRAILING_WHITESPACE)
-    INSTALL(FILES ${BOOST_AT_VERSION} DESTINATION lib)
-    INSTALL(FILES "${BOOST_AT_VERSION_DIR}/libboost_atomic.so" DESTINATION lib
       PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE
                   GROUP_READ GROUP_EXECUTE
                   WORLD_READ WORLD_EXECUTE
