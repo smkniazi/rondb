@@ -78,6 +78,38 @@ else()
   message(FATAL_ERROR "Failed to configure rdrs2. avrocpp NOT FOUND")
 endif()
 
+find_library(OSSP_UUID_LIBRARY NAMES ossp-uuid
+  PATHS /lib64
+)
+
+find_library(UUID_LIBRARY NAMES uuid
+  PATHS /lib64
+)
+
+find_library(BOOST_FS NAMES boost_filesystem
+  PATHS /usr/local/lib
+)
+
+find_library(BOOST_IO NAMES boost_iostream
+  PATHS /usr/local/lib
+)
+
+find_library(BOOST_PO NAMES boost_program_options
+  PATHS /usr/local/lib
+)
+
+find_library(BOOST_RE NAMES boost_regex
+  PATHS /usr/local/lib
+)
+
+find_library(BOOST_SY NAMES boost_system
+  PATHS /usr/local/lib
+)
+
+find_library(BOOST_AT NAMES boost_atomic
+  PATHS /usr/local/lib
+)
+
 find_package(Jsoncpp REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -199,6 +231,110 @@ EXECUTE_PROCESS(
       OUTPUT_STRIP_TRAILING_WHITESPACE)
 INSTALL(FILES "${PROMETHEUS_CPP_DIR}/libprometheus-cpp-core.so.1.3" DESTINATION lib)
 INSTALL(FILES "${PROMETHEUS_CPP_DIR}/libprometheus-cpp-push.so.1.3" DESTINATION lib)
+
+# Install uuid library
+if(UUID_LIBRARY)
+    message(STATUS "Found uuid_library: ${UUID_LIBRARY}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${UUID_LIBRARY}" OUTPUT_VARIABLE UUID_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${UUID_LIBRARY}" OUTPUT_VARIABLE UUID_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${UUID_VERSION} DESTINATION lib)
+    INSTALL(FILES "${UUID_VERSION_DIR}/libuuid.so.1" DESTINATION lib)
+endif()
+
+# Install ossp-uuid library
+if(OSSP_UUID_LIBRARY)
+    message(STATUS "Found ossp_uuid_library: ${OSSP_UUID_LIBRARY}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${OSSP_UUID_LIBRARY}" OUTPUT_VARIABLE OSSP_UUID_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${OSSP_UUID_LIBRARY}" OUTPUT_VARIABLE OSSP_UUID_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${OSSP_UUID_VERSION} DESTINATION lib)
+    INSTALL(FILES "${OSSP_UUID_VERSION_DIR}/libossp-uuid.so.16" DESTINATION lib)
+endif()
+
+# Install boost_filesystem library
+if(BOOST_FS)
+    message(STATUS "Found boost_filesystem_library: ${BOOST_FS}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${BOOST_FS}" OUTPUT_VARIABLE BOOST_FS_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${BOOST_FS}" OUTPUT_VARIABLE BOOST_FS_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${BOOST_FS} DESTINATION lib)
+    INSTALL(FILES "${BOOST_FS_VERSION_DIR}/libboost_filesystem.so" DESTINATION lib)
+endif()
+
+# Install boost_iostreams library
+if(BOOST_IO)
+    message(STATUS "Found boost_iostreams_library: ${BOOST_IO}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${BOOST_IO}" OUTPUT_VARIABLE BOOST_IO_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${BOOST_IO}" OUTPUT_VARIABLE BOOST_IO_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${BOOST_IO} DESTINATION lib)
+    INSTALL(FILES "${BOOST_IO_VERSION_DIR}/libboost_iostreams.so" DESTINATION lib)
+endif()
+
+# Install boost_program_options library
+if(BOOST_PO)
+    message(STATUS "Found boost_program_options_library: ${BOOST_PO}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${BOOST_PO}" OUTPUT_VARIABLE BOOST_PO_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${BOOST_PO}" OUTPUT_VARIABLE BOOST_PO_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${BOOST_PO} DESTINATION lib)
+    INSTALL(FILES "${BOOST_PO_VERSION_DIR}/libboost_program_options.so" DESTINATION lib)
+endif()
+
+# Install boost_filesystem library
+if(BOOST_RE)
+    message(STATUS "Found boost_regex_library: ${BOOST_RE}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${BOOST_RE}" OUTPUT_VARIABLE BOOST_RE_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${BOOST_RE}" OUTPUT_VARIABLE BOOST_RE_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${BOOST_RE} DESTINATION lib)
+    INSTALL(FILES "${BOOST_RE_VERSION_DIR}/libboost_regex.so" DESTINATION lib)
+endif()
+
+# Install boost_system library
+if(BOOST_SY)
+    message(STATUS "Found boost_system_library: ${BOOST_SY}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${BOOST_SY}" OUTPUT_VARIABLE BOOST_SY_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${BOOST_SY}" OUTPUT_VARIABLE BOOST_SY_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${BOOST_SY} DESTINATION lib)
+    INSTALL(FILES "${BOOST_SY_VERSION_DIR}/libboost_system.so" DESTINATION lib)
+endif()
+
+# Install boost_atomic library
+if(BOOST_AT)
+    message(STATUS "Found boost_atomic_library: ${BOOST_AT}")
+    EXECUTE_PROCESS(
+       COMMAND readlink -f "${BOOST_AT}" OUTPUT_VARIABLE BOOST_AT_VERSION
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    EXECUTE_PROCESS(
+       COMMAND dirname "${BOOST_AT}" OUTPUT_VARIABLE BOOST_AT_VERSION_DIR
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    INSTALL(FILES ${BOOST_AT} DESTINATION lib)
+    INSTALL(FILES "${BOOST_AT_VERSION_DIR}/libboost_atomic.so" DESTINATION lib)
+endif()
 
 # todo-ronsql is ronsql needed for rdrs2_lib? It's used in ../test/api_key_test
 TARGET_LINK_LIBRARIES(rdrs2_lib
