@@ -37,7 +37,7 @@ extern EventLogger *g_eventLogger;
 #endif
 
 #ifdef DEBUG_ENC
-#define DEB_ENC(...) do { g_eventLogger->debug(__VA_ARGS__); } while (0)
+#define DEB_ENC(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
 #else
 #define DEB_ENC(...) do { } while (0)
 #endif
