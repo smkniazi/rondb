@@ -23,6 +23,18 @@
 #include <optional>
 #include <simdjson.h>
 #include <vector>
+#include <iostream>
+
+#ifdef DEBUG_UTILS
+#define DEB_UTILS(...)                                                         \
+  do {                                                                         \
+    g_eventLogger->info(__VA_ARGS__);                                          \
+  } while (0)
+#else
+#define DEB_UTILS(...)                                                         \
+  do {                                                                         \
+  } while (0)
+#endif
 
 RS_Status
 base64_decode(const std::string &encoded_string, std::string &decoded_string) {
@@ -75,6 +87,10 @@ DeserialiseComplexFeature(const std::vector<char> &value,
   std::vector<Uint8> binaryData(jsonDecode.begin(), jsonDecode.end());
   auto [native_status, native] = decoder.decode(binaryData);
   if (native_status.http_code != HTTP_CODE::SUCCESS) {
+    DEB_UTILS("Decode failed. HttpCode: %d, Msg: %s. Schema: %s \n",
+              native_status.http_code,
+              native_status.message,
+              decoder.getSchema().toJson().c_str());
     return std::make_tuple(
         std::make_shared<RestErrorCode>(
             native_status.message, static_cast<int>(drogon::k400BadRequest)),
@@ -126,10 +142,12 @@ processDatum(const avro::GenericDatum &datum, std::ostringstream &oss) {
     oss << datum.value<int64_t>();
     break;
   case avro::AVRO_FLOAT:
-    oss << datum.value<float>();
+    oss << std::setprecision(std::numeric_limits<float>::digits10 + 1)
+        << datum.value<float>();
     break;
   case avro::AVRO_DOUBLE:
-    oss << datum.value<double>();
+    oss << std::setprecision(std::numeric_limits<double>::digits10 + 1)
+        << datum.value<double>();
     break;
   case avro::AVRO_STRING:
     oss << "\"" << datum.value<std::string>() << "\"";

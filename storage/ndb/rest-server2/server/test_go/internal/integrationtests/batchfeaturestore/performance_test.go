@@ -18,150 +18,278 @@
 package batchfeaturestore
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/rand"
 	"net/http"
+	"runtime"
+	"sort"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
+	"github.com/linkedin/goavro/v2"
 	"hopsworks.ai/rdrs2/internal/config"
+	fshelper "hopsworks.ai/rdrs2/internal/integrationtests/feature_store"
 	"hopsworks.ai/rdrs2/internal/integrationtests/testclient"
+	"hopsworks.ai/rdrs2/internal/log"
 	"hopsworks.ai/rdrs2/internal/testutils"
-	"hopsworks.ai/rdrs2/pkg/api"
 	"hopsworks.ai/rdrs2/resources/testdbs"
-
-	"hopsworks.ai/rdrs2/internal/integrationtests"
 )
 
-/*
-	 The number of parallel client go-routines spawned in RunParallel()
-	 can be influenced by setting runtime.GOMAXPROCS(). It defaults to the
-	 number of CPUs.
+type GetRandomRequest func(b *testing.B, batchSize int) (string, string, string)
 
-	 This test can be run as follows:
+func BenchmarkBatchSimple(b *testing.B) {
+	var batchSize = 10
+	fn := func(b *testing.B, batchSize int) (verb, url, body string) {
+		var fsName = testdbs.FSDB001
+		var fvName = "sample_1"
+		var fvVersion = 1
 
-		 go test \
-			 -test.bench BenchmarkSimple \
-			 -test.run=thisexpressionwontmatchanytest \
-			 -cpu 1,2,4,8 \
-			 -benchmem \
-			 -benchtime=100x \ 		// 100 times
-			 -benchtime=10s \ 		// 10 sec
-			 ./internal/integrationtests/batchfeaturestore/
-*/
-
-const totalNumRequest = 100000
-
-// func Benchmark(b *testing.B) {
-// 	for _, n := range []int{10, 50, 100} {
-// 		run(b, testdbs.FSDB001, "sample_1", 1, n)
-// 	}
-// }
-
-// func Benchmark_join(b *testing.B) {
-// 	for _, n := range []int{5, 25, 50} {
-// 		run(b, testdbs.FSDB001, "sample_1n2", 1, n)
-// 	}
-// }
-
-// func getSampleData(n int, fsName string, fvName string, fvVersion int) ([][]interface{}, []string, []string, error) {
-// 	switch fmt.Sprintf("%s|%s|%d", fsName, fvName, fvVersion) {
-// 	case "fsdb001|sample_1|1":
-// 		return fshelper.GetNSampleData(testdbs.FSDB001, "sample_1_1", n)
-// 	case "fsdb001|sample_3|1":
-// 		return fshelper.GetNSampleData(testdbs.FSDB001, "sample_3_1", n)
-// 	case "fsdb001|sample_1n2|1":
-// 		return fshelper.GetNSampleDataWithJoin(n, testdbs.FSDB001, "sample_1_1", testdbs.FSDB001, "sample_2_1", "fg2_")
-// 	default:
-// 		panic("No sample data for given feature view")
-// 	}
-// }
-
-// func run(b *testing.B, fsName string, fvName string, fvVersion int, batchSize int) {
-// 	const nReq = 100
-
-// 	log.Infof("Test config: fs: %s fv: %s version: %d batch_size: %d", fsName, fvName, fvVersion, batchSize)
-// 	var metadata, err = feature_store.GetFeatureViewMetadata(fsName, fvName, fvVersion)
-// 	if err != nil {
-// 		panic("Cannot get metadata.")
-// 	}
-// 	log.Infof(`
-// 	Number of tables: %d
-// 	Batch size in robdb request: %d
-// 	Number of columns: %d`,
-// 		len(metadata.FeatureGroupFeatures), len(metadata.FeatureGroupFeatures)*batchSize, metadata.NumOfFeatures)
-
-// 	var fsReqs = make([]string, 0, nReq)
-// 	for i := 0; i < nReq; i++ {
-// 		rows, pks, cols, err := getSampleData(batchSize, fsName, fvName, fvVersion)
-// 		if err != nil {
-// 			panic("Failed to get sample data: " + err.Error())
-// 		}
-// 		var fsReq = CreateFeatureStoreRequest(
-// 			fsName,
-// 			fvName,
-// 			fvVersion,
-// 			pks,
-// 			*GetPkValues(&rows, &pks, &cols),
-// 			nil,
-// 			nil,
-// 		)
-// 		reqBody := fsReq.String()
-// 		fsReqs = append(fsReqs, reqBody)
-
-// 	}
-// 	integrationtests.RunRestTemplate(b, config.FEATURE_STORE_HTTP_VERB, testutils.NewBatchFeatureStoreURL(), &fsReqs, totalNumRequest)
-// }
-
-// Include this benchmark for comparison
-func BenchmarkSimple(b *testing.B) {
-	var batchSize = 100
-	table := "table_1"
-	col := "id0"
-	var reqs = make([]string, 0)
-	for i := 0; i < batchSize; i++ {
-		numRows := testdbs.BENCH_DB_NUM_ROWS
-		operations := []api.BatchSubOperationTestInfo{}
-		for i := 0; i < batchSize; i++ {
-			// We will set the pk to filter later
-			operations = append(operations, createSubOperation(b, table, testdbs.Benchmark, "", http.StatusOK))
-		}
-		batchTestInfo := api.BatchOperationTestInfo{
-			HttpCode:       []int{http.StatusOK},
-			Operations:     operations,
-			ErrMsgContains: "",
-		}
-		for _, op := range batchTestInfo.Operations {
-			op.SubOperation.Body.Filters = testclient.NewFilter(&col, rand.Intn(numRows))
-		}
-		subOps := []api.BatchSubOp{}
-		for _, op := range batchTestInfo.Operations {
-			subOps = append(subOps, op.SubOperation)
-		}
-		batch := api.BatchOpRequest{Operations: &subOps}
-		body, err := json.Marshal(batch)
+		verb = config.FEATURE_STORE_HTTP_VERB
+		url = testutils.NewBatchFeatureStoreURL()
+		rows, pks, cols, err := fshelper.GetSampleDataN(fsName, fmt.Sprintf("%s_%d", fvName, fvVersion), batchSize)
 		if err != nil {
-			b.Fatalf("Failed to marshall test request %v", err)
+			b.Fatalf("Cannot get sample data with error %s ", err)
+			return
 		}
-		reqs = append(reqs, string(body))
+
+		var fsReq = CreateFeatureStoreRequest(
+			fsName,
+			fvName,
+			fvVersion,
+			pks,
+			*GetPkValues(&rows, &pks, &cols),
+			nil,
+			nil)
+
+		strBytes, err := json.MarshalIndent(fsReq, "", "")
+		if err != nil {
+			b.Fatalf("Failed to marshal FeatureStoreRequest. Error: %v", err)
+			return
+		}
+		body = string(strBytes)
+
+		return
 	}
-	integrationtests.RunRestTemplate(b, config.BATCH_HTTP_VERB, testutils.NewBatchReadURL(), &reqs, totalNumRequest)
+
+	WrapperBenchmark(b, batchSize, fn)
 }
 
-func createSubOperation(t testing.TB, table string, database string, pk string, expectedStatus int) api.BatchSubOperationTestInfo {
-	respKVs := []interface{}{"col0"}
-	return api.BatchSubOperationTestInfo{
-		SubOperation: api.BatchSubOp{
-			Method:      &[]string{config.PK_HTTP_VERB}[0],
-			RelativeURL: &[]string{string(database + "/" + table + "/" + config.PK_DB_OPERATION)}[0],
-			Body: &api.PKReadBody{
-				Filters:     testclient.NewFiltersKVs("id0", pk),
-				ReadColumns: testclient.NewReadColumns("col", 1),
-				OperationID: testclient.NewOperationID(5),
-			},
-		},
-		Table:    table,
-		DB:       database,
-		HttpCode: []int{expectedStatus},
-		RespKVs:  respKVs,
+func BenchmarkBatchJoin(b *testing.B) {
+	var batchSize = 10
+	fn := func(b *testing.B, batchSize int) (verb, url, body string) {
+		var fsName = testdbs.FSDB001
+		var fvName = "sample_1n2"
+		var fvVersion = 1
+
+		verb = config.FEATURE_STORE_HTTP_VERB
+		url = testutils.NewBatchFeatureStoreURL()
+		rows, pks, cols, err := fshelper.GetSampleDataN(fsName, "sample_1_1", batchSize)
+		if err != nil {
+			b.Fatalf("Cannot get sample data with error %s ", err)
+			return
+		}
+
+		var fsReq = CreateFeatureStoreRequest(
+			fsName,
+			fvName,
+			fvVersion,
+			pks,
+			*GetPkValues(&rows, &pks, &cols),
+			nil,
+			nil)
+
+		strBytes, err := json.MarshalIndent(fsReq, "", "")
+		if err != nil {
+			b.Fatalf("Failed to marshal FeatureStoreRequest. Error: %v", err)
+			return
+		}
+		body = string(strBytes)
+
+		return
 	}
+
+	WrapperBenchmark(b, batchSize, fn)
+}
+
+func BenchmarkBatchComplex512(b *testing.B) {
+
+	// Uncomment this if you want to generate more random data in the test table
+	// generateRandomComplexData(10/*number of rows*/, 512/*number of cols*/)
+
+	var batchSize = 10
+	fn := func(b *testing.B, batchSize int) (verb, url, body string) {
+		var fsName = testdbs.FSDB002
+		var fvName = "sample_complex_type_512"
+		var fvVersion = 1
+
+		verb = config.FEATURE_STORE_HTTP_VERB
+		url = testutils.NewBatchFeatureStoreURL()
+		rows, pks, cols, err := fshelper.GetSampleDataN(fsName, fmt.Sprintf("%s_%d", fvName, fvVersion), batchSize)
+		if err != nil {
+			b.Fatalf("Cannot get sample data with error %s ", err)
+			return
+		}
+
+		var fsReq = CreateFeatureStoreRequest(
+			fsName,
+			fvName,
+			fvVersion,
+			pks,
+			*GetPkValues(&rows, &pks, &cols),
+			nil,
+			nil)
+
+		strBytes, err := json.MarshalIndent(fsReq, "", "")
+		if err != nil {
+			b.Fatalf("Failed to marshal FeatureStoreRequest. Error: %v", err)
+			return
+		}
+		body = string(strBytes)
+
+		return
+	}
+
+	WrapperBenchmark(b, batchSize, fn)
+}
+
+func WrapperBenchmark(b *testing.B, batchSize int, fn GetRandomRequest) {
+	fmt.Printf("Running Benchmark\n")
+
+	// Number of total requests
+	numRequests := b.N
+
+	latenciesChannel := make(chan time.Duration, numRequests)
+
+	b.ResetTimer()
+
+	start := time.Now()
+	last := time.Now()
+	var ops atomic.Uint64
+	runtime.GOMAXPROCS(20)
+	threadId := 0
+
+	/*
+		Assuming GOMAXPROCS is not set, a 10-core CPU
+		will run 10 Go-routines here.
+		These 10 Go-routines will split up b.N requests
+		amongst each other. RunParallel() will only be
+		run 10 times then (in contrast to bp.Next()).
+	*/
+	b.RunParallel(func(bp *testing.PB) {
+
+		// Every go-routine will always query the same row
+		threadId++
+
+		// create a request
+		verb, url, body := fn(b, batchSize)
+
+		// One http connection per go-routine
+		var httpClient *http.Client
+		httpClient = testutils.SetupHttpClient(b)
+
+		/*
+			Given 10 go-routines and b.N==50, each go-routine
+			will run this 5 times.
+		*/
+		for bp.Next() {
+
+			requestStartTime := time.Now()
+
+			testclient.SendHttpRequestWithClient(b, httpClient, verb, url, body, "", http.StatusOK)
+
+			latenciesChannel <- time.Since(requestStartTime)
+			count := ops.Add(1)
+			if count%20000 == 0 {
+				tempTotalPkLookups := 20000 * batchSize
+				tempPkLookupsPerSecond := float64(tempTotalPkLookups) / time.Since(last).Seconds()
+				b.Logf("Throughput:                 %f REST op/second", tempPkLookupsPerSecond)
+				last = time.Now()
+			}
+		}
+	})
+	b.StopTimer()
+
+	numTotalLookups := numRequests * batchSize
+	opsPerSecond := float64(numTotalLookups) / time.Since(start).Seconds()
+
+	latencies := make([]time.Duration, numRequests)
+	for i := 0; i < numRequests; i++ {
+		latencies[i] = <-latenciesChannel
+	}
+	sort.Slice(latencies, func(i, j int) bool {
+		return latencies[i] < latencies[j]
+	})
+	p50 := latencies[int(float64(numRequests)*0.5)]
+	p99 := latencies[int(float64(numRequests)*0.99)]
+
+	b.Logf("Number of requests:         %d", numRequests)
+	b.Logf("Batch size (per requests):  %d", batchSize)
+	b.Logf("Number of threads:          %d", threadId)
+	b.Logf("Throughput:                 %f REST ops/second", opsPerSecond)
+	b.Logf("50th percentile latency:    %v us", p50.Microseconds())
+	b.Logf("99th percentile latency:    %v us", p99.Microseconds())
+	b.Log("-------------------------------------------------")
+}
+
+// generate additional data in the fsdb002.sample_complex_type_512_1
+func generateRandomComplexData(rows int, cols int) {
+
+	schemaStr := `[
+       "null",
+       {
+         "type": "array",
+         "items": ["null", "long"]
+       }
+     ]`
+
+	codec, err := goavro.NewCodec(schemaStr)
+	if err != nil {
+		log.Fatalf("Failed to create codec: %v", err)
+	}
+
+	//random arrays
+	rand.Seed(time.Now().UnixNano())
+	for i := 0; i < rows; i++ {
+		testArray := map[string]interface{}{
+			"array": generateArray(cols),
+		}
+
+		encodedData, err := codec.BinaryFromNative(nil, testArray)
+		if err != nil {
+			log.Fatalf("Failed to encode data: %v", err)
+		}
+
+		// Convert the encoded data to hex
+		hexData := hex.EncodeToString(encodedData)
+
+		// id := rand.Int63()
+		id, err := uuid.NewRandom()
+		if err != nil {
+			fmt.Printf("Failed to generate UUID: %v\n", err)
+			return
+		}
+		err = testutils.RunQueriesOnDataCluster(fmt.Sprintf("INSERT INTO fsdb002.sample_complex_type_512_1 VALUES ( \"%s\", 0x%s );\n", id.String(), hexData))
+		if err != nil {
+			fmt.Printf("Failed to insert data %v\n", err)
+		}
+	}
+}
+
+func generateArray(n int) []interface{} {
+	rand.Seed(time.Now().UnixNano())
+	array := make([]interface{}, n)
+
+	for i := 0; i < n; i++ {
+		if rand.Intn(2) == 0 {
+			array[i] = nil // Randomly insert null
+		} else {
+			array[i] = map[string]interface{}{"long": rand.Int63()}
+		}
+	}
+
+	return array
 }

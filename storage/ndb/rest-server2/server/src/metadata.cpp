@@ -32,12 +32,19 @@ extern EventLogger *g_eventLogger;
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
 //#define DEBUG_MD_CACHE 1
+#define INFO_MD_CACHE 1
 #endif
 
 #ifdef DEBUG_MD_CACHE
 #define DEB_MD_CACHE(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
 #else
 #define DEB_MD_CACHE(...) do { } while (0)
+#endif
+
+#ifdef INFO_MD_CACHE
+#define INF_MD_CACHE(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
+#else
+#define INF_MD_CACHE(...) do { } while (0)
 #endif
 
 namespace metadata {
@@ -75,6 +82,7 @@ std::pair<RS_Status, std::optional<avro::GenericDatum>>
     avro::decode(*decoder, datum);
     return {CRS_Status::SUCCESS.status, datum};
   } catch (const std::exception &e) {
+    INF_MD_CACHE("Avro decode failed data len %lu, AvroError:   %s.\n", inData.size(),  e.what());
     return {CRS_Status(HTTP_CODE::SERVER_ERROR, std::string("Decoding failed: ") + e.what()).status, std::nullopt};
   }
 }

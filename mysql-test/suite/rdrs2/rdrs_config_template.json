@@ -19,5 +19,13 @@
   },
   "Log": {
     "Level": "INFO"
+  },
+  "Testing": {
+    "MySQL": {
+        "Servers": [ { "IP": "@mysqld.1.1.#host",
+                       "Port": @mysqld.1.1.port } ],
+      "User": "root",
+      "Password": ""
+    }
   }
 }

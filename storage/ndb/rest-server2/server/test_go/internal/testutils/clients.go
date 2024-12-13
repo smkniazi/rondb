@@ -50,6 +50,8 @@ func SetupHttpClient(t testing.TB) *http.Client {
 //////// gRPC ////////
 //////////////////////
 
+// TODO REMOVE this
+
 func CreateGrpcConn(withAuth, withTLS bool) (*grpc.ClientConn, error) {
 	grpcDialOptions := []grpc.DialOption{}
 	if withAuth {

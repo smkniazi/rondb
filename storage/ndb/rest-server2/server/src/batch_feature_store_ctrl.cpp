@@ -254,6 +254,8 @@ void BatchFeatureStoreCtrl::batch_featureStore(
                            currentThreadIndex);
     if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
                    drogon::HttpStatusCode::k200OK)) {
+      DEB_BFS_CTRL("pk_batch_read failed: http_code: %u, message: %s",
+                    status.http_code, status.message);
       auto fsError = TranslateRonDbError(status.http_code, status.message);
       resp->setBody(fsError->Error());
       resp->setStatusCode(
@@ -422,10 +424,8 @@ BatchResponseJSON
 
 void fillPassedFeaturesMultipleEntries(
     std::vector<std::vector<std::vector<char>>> &features,
-    const std::vector<std::unordered_map<
-      std::string, std::vector<char>>> &passedFeatures,
-    std::unordered_map<std::string,
-      std::vector<metadata::FeatureMetadata>> &featureMetadata,
+    const std::vector<std::unordered_map<std::string, std::vector<char>>> &passedFeatures,
+    std::unordered_map<std::string, std::vector<metadata::FeatureMetadata>> &featureMetadata,
     std::unordered_map<std::string, int> &indexLookup,
     const std::vector<feature_store_data_structs::FeatureStatus> &status) {
   if (!passedFeatures.empty() && !passedFeatures.empty()) {

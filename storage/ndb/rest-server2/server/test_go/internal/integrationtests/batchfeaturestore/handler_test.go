@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/hamba/avro/v2"
+
 	fsmetadata "hopsworks.ai/rdrs2/internal/feature_store"
 
 	// "hopsworks.ai/rdrs2/internal/handlers/feature_store"
@@ -1454,7 +1455,7 @@ func Test_GetFeatureVector_WrongPkValue(t *testing.T) {
 	ValidateResponseWithData(t, &rows, &cols, fsResp)
 }
 
-func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
+func Test_GetFeatureVector_Success_ComplexType_ST(t *testing.T) {
 	var fsName = testdbs.FSDB002
 	var fvName = "sample_complex_type"
 	var fvVersion = 1
@@ -1500,6 +1501,64 @@ func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
 		}
 		mapPt, err := feature_store.DeserialiseComplexFeature(t, mapJson, &mapSchema) // map
 		row[3] = *mapPt
+		if err != nil {
+			t.Fatalf("Cannot deserailize feature with error %s ", err)
+		}
+	}
+	// validate
+	ValidateResponseWithData(t, &rows, &cols, fsResp)
+	fshelper.ValidateResponseMetadata(t, &fsResp.Metadata, fsReq.MetadataRequest, fsName, fvName, fvVersion)
+
+}
+
+// a complex feature test with 512 elements
+func Test_GetFeatureVector_Success_ComplexType_512(t *testing.T) {
+
+	var fsName = testdbs.FSDB002
+	var fvName = "sample_complex_type_512"
+	var fvVersion = 1
+	rows, pks, cols, err := fshelper.GetSampleData(fsName, "sample_complex_type_512_1")
+	if err != nil {
+		t.Fatalf("Cannot get sample data with error %s ", err)
+	}
+
+	arraySchema, err := avro.Parse(`["null",{"type":"array","items":["null","long"]}]`)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	var fsReq = CreateFeatureStoreRequest(
+		fsName,
+		fvName,
+		fvVersion,
+		pks,
+		*GetPkValues(&rows, &pks, &cols),
+		nil,
+		nil,
+	)
+	bytes, err := json.MarshalIndent(fsReq, "", " ")
+	if err != nil {
+		t.Fatal("marshal failed")
+	} else {
+		fmt.Printf("req %s\n", string(bytes))
+	}
+
+	fsReq.MetadataRequest = &api.MetadataRequest{FeatureName: true, FeatureType: true}
+	fsResp := GetFeatureStoreResponse(t, fsReq)
+	bytes, err = json.MarshalIndent(fsResp, "", " ")
+	if err != nil {
+		t.Fatal("marshal failed")
+	} else {
+		fmt.Printf("response %s\n", string(bytes))
+	}
+	for _, row := range rows {
+		// convert data to object in json format
+		arrayJson, err := fshelper.ConvertBinaryToJsonMessage(row[1])
+		if err != nil {
+			t.Fatalf("Cannot convert to json with error %s ", err)
+		}
+		arrayPt, err := feature_store.DeserialiseComplexFeature(t, arrayJson, &arraySchema) // array
+		row[1] = *arrayPt
 		if err != nil {
 			t.Fatalf("Cannot deserailize feature with error %s ", err)
 		}
