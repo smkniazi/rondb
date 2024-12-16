@@ -80,7 +80,7 @@ cmd-bench() {
     *) die "Too many arguments" ;;
   esac
   go test -v \
-     -test.bench BenchmarkSimple \
+     -test.bench Benchmark \
      -test.run=thisexpressionwontmatchanytest \
      -benchmem \
      -benchtime=${BENCHMARK_DURATION}s \
