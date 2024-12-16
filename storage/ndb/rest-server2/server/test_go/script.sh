@@ -120,7 +120,7 @@ cmd-bench() {
     *) die "Too many arguments" ;;
   esac
   go test -v \
-     -test.bench Benchmark \
+     -test.bench ${BENCHMARK_NAME} \
      -test.run=thisexpressionwontmatchanytest \
      -benchmem \
      -benchtime=${BENCHMARK_DURATION}s \
