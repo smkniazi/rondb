@@ -1054,34 +1054,6 @@ TEST_F(FeatureStoreTest, DISABLED_TestConvertAvroToJsonCpx) {
   }
 }
 
-TEST_F(FeatureStoreTest, DISABLED_TestConvertAvroToJsonSimple) {
-// BAD TEST
-
-//  std::string schemaJson = R"({
-//      "type": "record",
-//      "name": "LongList",
-//      "fields" : [
-//        {"name": "next", "type": ["null", "LongList"], "default": null}
-//      ]
-//    })";
-//
-//  metadata::AvroDecoder decoder(schemaJson);
-//
-//  std::vector<Uint8> buf = {0x02, 0x02, 0x00};
-//
-//  try {
-//    auto result = decoder.decode(buf);
-//    std::string expectedJson =
-//      R"({"next":{"LongList":{"next":{"LongList":{"next":null}}}}})";
-//    auto [status, resultBytes] = ConvertAvroToJson(result);
-//    std::string resultJson =
-//      std::string(resultBytes.begin(), resultBytes.end());
-//    ASSERT_EQ(resultJson, expectedJson);
-//  } catch (const std::exception &e) {
-//    FAIL() << "Failed to decode avro: " << e.what();
-//  }
-}
-
 TEST_F(FeatureStoreTest, DISABLED_TestConvertAvroToJson) {
   // map
   testConvertAvroToJson(
