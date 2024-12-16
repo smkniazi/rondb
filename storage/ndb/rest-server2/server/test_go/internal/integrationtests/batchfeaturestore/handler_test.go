@@ -45,7 +45,7 @@ func Test_GetFeatureVector_CacheFG_5entries_Metadata_Success(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		fsName,
 		fvName,
 		fvVersion,
@@ -66,7 +66,7 @@ func Test_GetFeatureVector_Success_1entries(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 	for _, row := range rows {
-		var fsReq = CreateFeatureStoreRequest(
+		var fsReq = CreateBatchFeatureStoreRequest(
 			testdbs.FSDB002,
 			"sample_2",
 			1,
@@ -86,7 +86,7 @@ func Test_GetFeatureVector_Success_5entries(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -108,7 +108,7 @@ func Test_GetFeatureVector_5entries_Metadata_Success(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		fsName,
 		fvName,
 		fvVersion,
@@ -132,7 +132,7 @@ func Test_GetFeatureVector_5entries_Metadata_Name_Success(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		fsName,
 		fvName,
 		fvVersion,
@@ -153,7 +153,7 @@ func Test_GetFeatureVector_Success_10entries(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -172,7 +172,7 @@ func Test_GetFeatureVector_RequiredParametersAreNil(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -195,7 +195,7 @@ func Test_GetFeatureVector_OptionalParametersAreNil(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -214,7 +214,7 @@ func Test_GetFeatureVector_FsNotExist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		"NA",
 		"sample_2",
 		1,
@@ -231,7 +231,7 @@ func Test_GetFeatureVector_FvNotExist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"NA",
 		1,
@@ -249,7 +249,7 @@ func Test_GetFeatureVector_ReadDeletedFg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"test_deleted_fg",
 		1,
@@ -266,7 +266,7 @@ func Test_GetFeatureVector_ReadDeletedJointFg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"test_deleted_joint_fg",
 		1,
@@ -283,7 +283,7 @@ func Test_GetFeatureVector_CompositePrimaryKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -301,7 +301,7 @@ func Test_GetFeatureVector_ReturnMixedDataType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -319,7 +319,7 @@ func Test_GetFeatureVector_Join(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_1n2",
 		1,
@@ -344,7 +344,7 @@ func Test_GetFeatureVector_Join_FeatureNameCollision(t *testing.T) {
 		pkValues = append(pkValues, []interface{}{row[0]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n2_no_prefix",
 		1,
@@ -374,7 +374,7 @@ func Test_GetFeatureVector_Join_PkOnly(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n2_pkonly",
 		1,
@@ -394,7 +394,7 @@ func Test_GetFeatureVector_JoinItself(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n1_self",
 		1,
@@ -416,7 +416,7 @@ func Test_GetFeatureVector_Join_Metadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		fsName,
 		fvName,
 		fvVersion,
@@ -439,7 +439,7 @@ func Test_GetFeatureVector_Join_Metadata_Name(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		fsName,
 		fvName,
 		fvVersion,
@@ -459,7 +459,7 @@ func Test_GetFeatureVector_joinSameFg(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n1",
 		1,
@@ -480,7 +480,7 @@ func Test_GetFeatureVector_TestServingKey_Join(t *testing.T) {
 
 	// exclude entry 'fg2_id1' from the request
 	var pkFiltered, pkValueFiltered = GetPkValuesExclude(&rows, &pks, &cols, []string{"fg2_id1"})
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n2",
 		1,
@@ -505,7 +505,7 @@ func Test_GetFeatureVector_TestServingKey_Join_ExtraKey(t *testing.T) {
 		var pkValue = *fshelper.GetPkValues(&row, &pks, &cols)
 		pksExtraKey = append(pksExtraKey, []interface{}{pkValue[0], []byte(fmt.Sprintf("%d", 999999))})
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n2",
 		1,
@@ -527,7 +527,7 @@ func Test_GetFeatureVector_TestServingKey_SelfJoin(t *testing.T) {
 
 	// exclude entry 'fg1_id1' from the request
 	var pkFiltered, pkValueFiltered = GetPkValuesExclude(&rows, &pks, &cols, []string{"fg1_id1"})
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n1_self",
 		1,
@@ -561,7 +561,7 @@ func Test_GetFeatureVector_TestServingKey_Join_LeftColOnRightId(t *testing.T) {
 		pkValues = append(pkValues, []interface{}{row[0], row[4], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3_joinoncol",
 		1,
@@ -599,7 +599,7 @@ func Test_GetFeatureVector_TestServingKey_Join_LeftColOnRightId_FallbackToRawFea
 		pkValues = append(pkValues, []interface{}{row[0], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3_joinoncol",
 		1,
@@ -635,7 +635,7 @@ func Test_GetFeatureVector_TestServingKey_Join_ColOnCol(t *testing.T) {
 		pkValues = append(pkValues, []interface{}{row[0], row[4], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3_joincoloncol",
 		1,
@@ -671,7 +671,7 @@ func Test_GetFeatureVector_TestServingKey_PrefixCollision(t *testing.T) {
 		pkValues = append(pkValues, []interface{}{row[0], row[4], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3",
 		1,
@@ -704,7 +704,7 @@ func Test_GetFeatureVector_TestServingKey_JoinOnCol_WithPrefix_PkFallbackToRawFe
 		pkValues = append(pkValues, []interface{}{row[0], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3_pk",
 		1,
@@ -737,7 +737,7 @@ func Test_GetFeatureVector_TestServingKey_Join_WithoutPrefix_PkFallbackToRawFeat
 		pkValues = append(pkValues, []interface{}{row[0], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3_no_prefix_pk",
 		1,
@@ -770,7 +770,7 @@ func Test_GetFeatureVector_TestCorrectPkValue_WithPrefix_RequiredValueProvided(t
 		pkValues = append(pkValues, []interface{}{row[0], row[4], row[5], []byte(`"notvalid"`)})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_4n3_on_id",
 		1,
@@ -799,7 +799,7 @@ func Test_GetFeatureVector_TestCorrectPkValue_WithPrefix_RequiredValueNotProvide
 		pkValues = append(pkValues, []interface{}{row[4], row[5], []byte(`"notvalid"`)})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_4n3_on_id",
 		1,
@@ -833,7 +833,7 @@ func Test_GetFeatureVector_TestCorrectPkValue_WithPrefix_PrefixNotProvided(t *te
 		pkValues = append(pkValues, []interface{}{row[4], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_4n3_on_id",
 		1,
@@ -862,7 +862,7 @@ func Test_GetFeatureVector_excludeLabelColumn(t *testing.T) {
 	exCols["data1"] = true
 	var fvName = "sample_1n2_label"
 	var fvVersion = 1
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		fvName,
 		fvVersion,
@@ -889,7 +889,7 @@ func Test_GetFeatureVector_excludeLabelFg(t *testing.T) {
 	exCols["ts"] = true
 	var fvName = "sample_1n2_labelonly"
 	var fvVersion = 1
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		fvName,
 		fvVersion,
@@ -910,7 +910,7 @@ func Test_GetFeatureVector_Shared(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_share_1n2",
 		1,
@@ -929,7 +929,7 @@ func Test_GetFeatureVector_NotShared(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		"fsdb_isolate",
 		"sample_4",
 		1,
@@ -952,7 +952,7 @@ func Test_GetFeatureVector_WrongPrimaryKey_NotExist(t *testing.T) {
 	for i, pk := range pks {
 		wrongPks[i] = pk + "abcd"
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -979,7 +979,7 @@ func Test_GetFeatureVector_PrimaryKeyNoMatch(t *testing.T) {
 		{[]byte(strconv.Itoa(9876543))},
 		{[]byte(strconv.Itoa(9876544))},
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -1009,7 +1009,7 @@ func Test_GetFeatureVector_PrimaryKeyNoMatch_Partial(t *testing.T) {
 		{[]byte(strconv.Itoa(9876543))},
 		{[]byte(strconv.Itoa(9876544))},
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -1030,7 +1030,7 @@ func Test_GetFeatureVector_PrimaryKeyNoMatch_Partial(t *testing.T) {
 }
 
 func Test_GetFeatureVector_NoPrimaryKey(t *testing.T) {
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -1059,7 +1059,7 @@ func Test_GetFeatureVector_IncompletePrimaryKey(t *testing.T) {
 	exCols["binary"] = true
 
 	var pkValues = *GetPkValues(&rows, &pks, &cols)
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -1104,7 +1104,7 @@ func Test_GetFeatureVector_IncompletePrimaryKey_Join(t *testing.T) {
 		pkValues = append(pkValues, []interface{}{row[4], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3",
 		1,
@@ -1150,7 +1150,7 @@ func Test_GetFeatureVector_IncompletePrimaryKey_JoinOnCol_PkWithPrefix_IncludePk
 		pkValues = append(pkValues, []interface{}{row[4], row[5], []byte(`"invalid"`)})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3_pk",
 		1,
@@ -1191,7 +1191,7 @@ func Test_GetFeatureVector_IncompletePrimaryKey_JoinOnCol_PkWithoutPrefix_Includ
 		pkValues = append(pkValues, []interface{}{row[4], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3_pk",
 		1,
@@ -1225,7 +1225,7 @@ func Test_GetFeatureVector_IncompletePrimaryKey_Join_IncludePk(t *testing.T) {
 		pkValues = append(pkValues, []interface{}{row[4]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n1_self",
 		1,
@@ -1255,7 +1255,7 @@ func Test_GetFeatureVector_IncompletePrimaryKey_PartialFail(t *testing.T) {
 	}
 
 	var pkValues = *GetPkValues(&rows, &pks, &cols)
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -1287,7 +1287,7 @@ func Test_GetFeatureVector_WrongPrimaryKey_FeatureNotPk(t *testing.T) {
 
 	var pkValues = *GetPkValues(&rows, &pks, &cols)
 	pks[0] = "ts"
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -1312,7 +1312,7 @@ func Test_GetFeatureVector_WrongPrimaryKey_FeatureNotPk_PartialFail(t *testing.T
 	}
 
 	var pkValues = *GetPkValues(&rows, &pks, &cols)
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -1347,7 +1347,7 @@ func Test_GetFeatureVector_WrongPrimaryKey_TooManyPk(t *testing.T) {
 	for i := range pkValues {
 		pkValues[i] = append(pkValues[i], []byte(`"2022-01-01"`))
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -1379,7 +1379,7 @@ func Test_GetFeatureVector_WrongPkType_Int(t *testing.T) {
 		}
 		pkValues = append(pkValues, pkValue)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -1412,7 +1412,7 @@ func Test_GetFeatureVector_WrongPkType_Str(t *testing.T) {
 		pkValues = append(pkValues, pkValue)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -1438,7 +1438,7 @@ func Test_GetFeatureVector_WrongPkValue(t *testing.T) {
 		{[]byte(`"abc1"`), []byte(`"abc2"`)},
 		{[]byte(`"abc3"`), []byte(`"abc4"`)},
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -1472,7 +1472,7 @@ func Test_GetFeatureVector_Success_ComplexType_ST(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		fsName,
 		fvName,
 		fvVersion,
@@ -1527,7 +1527,7 @@ func Test_GetFeatureVector_Success_ComplexType_512(t *testing.T) {
 		t.Fatal(err.Error())
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		fsName,
 		fvName,
 		fvVersion,
@@ -1578,7 +1578,7 @@ func Test_GetFeatureVector_WrongPkValue_PartialFail(t *testing.T) {
 	var pkValues = *GetPkValues(&rows, &pks, &cols)
 	pkValues[1] = []interface{}{[]byte(`"abc3"`), []byte(`"abc4"`)}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		1,
@@ -1617,7 +1617,7 @@ func Test_PassedFeatures_Success_AllTypes(t *testing.T) {
 		copy(row, passedFeatures)
 		row[len(passedFeatures)-1] = []byte(`"EEFF"`)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -1639,7 +1639,7 @@ func Test_PassedFeatures_WrongKey_FeatureNotExist(t *testing.T) {
 	for _, row := range rows {
 		row[2] = []byte("999")
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -1661,7 +1661,7 @@ func Test_PassedFeatures_WrongKey_FeatureNotExist_PartialFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -1684,7 +1684,7 @@ func Test_PassedFeatures_WrongType_NotString(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -1706,7 +1706,7 @@ func Test_PassedFeatures_WrongType_NotString_PartialFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -1730,7 +1730,7 @@ func Test_PassedFeatures_WrongType_NotNumber(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -1753,7 +1753,7 @@ func Test_PassedFeatures_WrongType_NotNumber_PartialFail(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -1776,7 +1776,7 @@ func Test_PassedFeatures_WrongType_NotBoolean(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -1798,7 +1798,7 @@ func Test_PassedFeatures_WrongType_NotBoolean_PartialFail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -1830,7 +1830,7 @@ func Test_PassedFeature_Success_1entries(t *testing.T) {
 		pfValues[i] = []interface{}{pf}
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -1856,7 +1856,7 @@ func Test_PassedFeature_Success_5entries(t *testing.T) {
 		row[2] = pf
 		pfValues[i] = []interface{}{pf}
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_2",
 		1,
@@ -1882,7 +1882,7 @@ func Test_PassedFeature_Success_10entries(t *testing.T) {
 		row[2] = pf
 		pfValues[i] = []interface{}{pf}
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -1908,7 +1908,7 @@ func Test_PassedFeatures_Join_FeatureNameCollision(t *testing.T) {
 		passedFeatures = append(passedFeatures, []interface{}{[]byte(`1`), []byte(`123`), []byte(`999`), []byte(`245`)})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n2_no_prefix",
 		1,
@@ -1944,7 +1944,7 @@ func Test_PassedFeatures_Join_FeatureNameCollision_NoValidation(t *testing.T) {
 		passedFeatures = append(passedFeatures, []interface{}{[]byte(`1`), []byte(`123`), []byte(`"999"`), []byte(`"000"`)})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n2_no_prefix",
 		1,
@@ -1986,7 +1986,7 @@ func Test_PassedFeatures_LabelShouldFail(t *testing.T) {
 	var fvName = "sample_1n2_label"
 	var fvVersion = 1
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		fvName,
 		fvVersion,
@@ -2013,7 +2013,7 @@ func Test_PassedFeatures_WrongKey_FeatureNotExist_NoValidation(t *testing.T) {
 	for _, row := range rows {
 		row[2] = []byte("999")
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -2034,7 +2034,7 @@ func Test_PassedFeatures_WrongKey_FeatureNotExist_PartialFail_NoValidation(t *te
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 	var originalRows = fshelper.CopyRows(rows)
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -2056,7 +2056,7 @@ func Test_PassedFeatures_WrongType_NotString_NoValidation(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -2081,7 +2081,7 @@ func Test_PassedFeatures_WrongType_NotString_PartialFail_NoValidation(t *testing
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -2106,7 +2106,7 @@ func Test_PassedFeatures_WrongType_NotNumber_NoValidation(t *testing.T) {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -2130,7 +2130,7 @@ func Test_PassedFeatures_WrongType_NotNumber_PartialFail_NoValidation(t *testing
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -2154,7 +2154,7 @@ func Test_PassedFeatures_WrongType_NotBoolean_NoValidation(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -2177,7 +2177,7 @@ func Test_PassedFeatures_WrongType_NotBoolean_PartialFail_NoValidation(t *testin
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_3",
 		2,
@@ -2210,7 +2210,7 @@ func Test_PassedFeature_Success_1entries_NoValidation(t *testing.T) {
 		pfValues[i] = []interface{}{pf}
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB002,
 		"sample_2",
 		1,
@@ -2238,7 +2238,7 @@ func Test_PassedFeature_Success_5entries_NoValidation(t *testing.T) {
 		row[2] = pf
 		pfValues[i] = []interface{}{pf}
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_2",
 		1,
@@ -2263,7 +2263,7 @@ func Test_PassedFeatures_LabelShouldFail_NoValidation(t *testing.T) {
 	var fvName = "sample_1n2_label"
 	var fvVersion = 1
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		fvName,
 		fvVersion,
@@ -2284,7 +2284,7 @@ func Test_IncludeDetailedStatus_SingleTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1",
 		1,
@@ -2319,7 +2319,7 @@ func Test_IncludeDetailedStatus_JoinedTable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n2",
 		1,
@@ -2370,7 +2370,7 @@ func Test_IncludeDetailedStatus_JoinedTablePartialKey(t *testing.T) {
 		pkValues = append(pkValues, []interface{}{row[4], row[5]})
 	}
 
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3",
 		1,
@@ -2417,7 +2417,7 @@ func Test_IncludeDetailedStatus_JoinedTablePartialKey(t *testing.T) {
 }
 
 func Test_IncludeDetailedStatus_JoinedTablePartialKeyAndMissingRow(t *testing.T) {
-	var fsReq = CreateFeatureStoreRequest(
+	var fsReq = CreateBatchFeatureStoreRequest(
 		testdbs.FSDB001,
 		"sample_1n3",
 		1,
