@@ -1536,21 +1536,9 @@ func Test_GetFeatureVector_Success_ComplexType_512(t *testing.T) {
 		nil,
 		nil,
 	)
-	bytes, err := json.MarshalIndent(fsReq, "", " ")
-	if err != nil {
-		t.Fatal("marshal failed")
-	} else {
-		fmt.Printf("req %s\n", string(bytes))
-	}
 
 	fsReq.MetadataRequest = &api.MetadataRequest{FeatureName: true, FeatureType: true}
 	fsResp := GetFeatureStoreResponse(t, fsReq)
-	bytes, err = json.MarshalIndent(fsResp, "", " ")
-	if err != nil {
-		t.Fatal("marshal failed")
-	} else {
-		fmt.Printf("response %s\n", string(bytes))
-	}
 	for _, row := range rows {
 		// convert data to object in json format
 		arrayJson, err := fshelper.ConvertBinaryToJsonMessage(row[1])
