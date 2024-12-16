@@ -26,6 +26,8 @@ ${BOLD}DESCRIPTION${RESET}
         cd .../rondb/build 
         ./mysql-test/mtr --suite rdrs2-golang --start-and-exit
         export RDRS_CONFIG_FILE=\`realpath mysql-test/var/rdrs.1.1_config.json\`
+                               or
+        export RDRS_CONFIG_FILE=\`realpath ../../../../../build/mysql-test/var/rdrs.1.1_config.json\`
 
 ${BOLD}Available commands${RESET}
 

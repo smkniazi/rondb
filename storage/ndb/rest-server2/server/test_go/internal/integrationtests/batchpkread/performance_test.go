@@ -28,43 +28,16 @@ import (
 	"testing"
 	"time"
 
-	"google.golang.org/grpc"
-	"hopsworks.ai/rdrs2/internal/config"
 	"hopsworks.ai/rdrs2/internal/integrationtests/testclient"
 	"hopsworks.ai/rdrs2/internal/testutils"
 	"hopsworks.ai/rdrs2/pkg/api"
 	"hopsworks.ai/rdrs2/resources/testdbs"
 )
 
-/*
-The number of parallel client go-routines spawned in RunParallel()
-can be influenced by setting runtime.GOMAXPROCS(). It defaults to the
-number of CPUs.
-
-The higher the batch size, the higher the GOMAXPROCS can be set to deliver best results.
-
-This tests can be run as follows:
-
-	go test \
-		-test.bench BenchmarkSimple \
-		-test.run=thisexpressionwontmatchanytest \
-		-cpu 1,2,4,8 \
-		-benchmem \
-		-benchtime=100x \ 		// 100 times
-		-benchtime=10s \ 		// 10 sec
-		./internal/integrationtests/batchpkread/
-*/
-
 func BenchmarkSimple(b *testing.B) {
 	// Number of total requests
 	numRequests := b.N
 	const batchSize = 200
-
-	/*
-		IMPORTANT: This benchmark will run requests against EITHER the REST or
-		the gRPC server, depending on this flag.
-	*/
-	runAgainstGrpcServer := false
 
 	table := "table_1"
 	numRows := testdbs.BENCH_DB_NUM_ROWS
@@ -104,18 +77,8 @@ func BenchmarkSimple(b *testing.B) {
 		}
 
 		// One connection per go-routine
-		var err error
-		var grpcConn *grpc.ClientConn
 		var httpClient *http.Client
-		if runAgainstGrpcServer {
-			conf := config.GetAll()
-			grpcConn, err = testutils.CreateGrpcConn(conf.Security.APIKey.UseHopsworksAPIKeys, conf.Security.TLS.EnableTLS)
-			if err != nil {
-				b.Fatal(err.Error())
-			}
-		} else {
-			httpClient = testutils.SetupHttpClient(b)
-		}
+		httpClient = testutils.SetupHttpClient(b)
 
 		/*
 			Given 10 go-routines and b.N==50, each go-routine
@@ -128,11 +91,7 @@ func BenchmarkSimple(b *testing.B) {
 			}
 
 			requestStartTime := time.Now()
-			if runAgainstGrpcServer {
-				batchGRPCTestWithConn(b, batchTestInfo, false, false, grpcConn)
-			} else {
-				batchRESTTestWithClient(b, httpClient, batchTestInfo, false, false)
-			}
+			batchRESTTestWithClient(b, httpClient, batchTestInfo, false, false)
 			latenciesChannel <- time.Since(requestStartTime)
 			count := ops.Add(1)
 			if count%20000 == 0 {
@@ -172,12 +131,6 @@ func BenchmarkManyColumns(b *testing.B) {
 	numRequests := b.N
 	const batchSize = 100
 
-	/*
-		IMPORTANT: This benchmark will run requests against EITHER the REST or
-		the gRPC server, depending on this flag.
-	*/
-	runAgainstGrpcServer := true
-
 	table := "table_3"
 	numRows := testdbs.BENCH_DB_NUM_ROWS
 	threadId := 0
@@ -213,18 +166,8 @@ func BenchmarkManyColumns(b *testing.B) {
 		}
 
 		// One connection per go-routine
-		var err error
-		var grpcConn *grpc.ClientConn
 		var httpClient *http.Client
-		if runAgainstGrpcServer {
-			conf := config.GetAll()
-			grpcConn, err = testutils.CreateGrpcConn(conf.Security.APIKey.UseHopsworksAPIKeys, conf.Security.TLS.EnableTLS)
-			if err != nil {
-				b.Fatal(err.Error())
-			}
-		} else {
-			httpClient = testutils.SetupHttpClient(b)
-		}
+		httpClient = testutils.SetupHttpClient(b)
 
 		/*
 			Given 10 go-routines and b.N==50, each go-routine
@@ -237,11 +180,7 @@ func BenchmarkManyColumns(b *testing.B) {
 			}
 
 			requestStartTime := time.Now()
-			if runAgainstGrpcServer {
-				batchGRPCTestWithConn(b, batchTestInfo, false, false, grpcConn)
-			} else {
-				batchRESTTestWithClient(b, httpClient, batchTestInfo, false, false)
-			}
+			batchRESTTestWithClient(b, httpClient, batchTestInfo, false, false)
 			latenciesChannel <- time.Since(requestStartTime)
 		}
 	})
@@ -273,12 +212,6 @@ func BenchmarkBinary(b *testing.B) {
 	// Number of total requests
 	numRequests := b.N
 	const batchSize = 100
-
-	/*
-		IMPORTANT: This benchmark will run requests against EITHER the REST or
-		the gRPC server, depending on this flag.
-	*/
-	runAgainstGrpcServer := true
 
 	table := "table_2"
 	numRows := testdbs.BENCH_DB_NUM_ROWS
@@ -316,18 +249,8 @@ func BenchmarkBinary(b *testing.B) {
 		}
 
 		// One connection per go-routine
-		var err error
-		var grpcConn *grpc.ClientConn
 		var httpClient *http.Client
-		if runAgainstGrpcServer {
-			conf := config.GetAll()
-			grpcConn, err = testutils.CreateGrpcConn(conf.Security.APIKey.UseHopsworksAPIKeys, conf.Security.TLS.EnableTLS)
-			if err != nil {
-				b.Fatal(err.Error())
-			}
-		} else {
-			httpClient = testutils.SetupHttpClient(b)
-		}
+		httpClient = testutils.SetupHttpClient(b)
 
 		/*
 			Given 10 go-routines and b.N==50, each go-routine
@@ -349,11 +272,7 @@ func BenchmarkBinary(b *testing.B) {
 			}
 
 			requestStartTime := time.Now()
-			if runAgainstGrpcServer {
-				batchGRPCTestWithConn(b, batchTestInfo, true, false, grpcConn)
-			} else {
-				batchRESTTestWithClient(b, httpClient, batchTestInfo, false, false)
-			}
+			batchRESTTestWithClient(b, httpClient, batchTestInfo, false, false)
 			latenciesChannel <- time.Since(requestStartTime)
 		}
 	})

@@ -18,8 +18,6 @@
 package health
 
 import (
-	"context"
-	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
@@ -39,12 +37,6 @@ func TestHealth(t *testing.T) {
 		}
 	}
 
-	if config.GetAll().GRPC.Enable {
-		healthGRPC := sendGRPCHealthRequest(t)
-		if healthGRPC.RonDBHealth != 0 {
-			t.Fatalf("Unexpected RonDB health status. Expected: 0 Got: %v", healthGRPC.RonDBHealth)
-		}
-	}
 }
 
 func getHealthHttp(t *testing.T) *api.HealthResponse {
@@ -60,33 +52,4 @@ func getHealthHttp(t *testing.T) *api.HealthResponse {
 	}
 	health.RonDBHealth = healthInt
 	return &health
-}
-
-func sendGRPCHealthRequest(t *testing.T) *api.HealthResponse {
-	// Create gRPC client
-	conn, err := testclient.InitGRPCConnction()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
-	client := api.NewRonDBRESTClient(conn)
-
-	// Create Request
-	healthRequest := api.HealthRequest{}
-
-	reqProto := api.ConvertHealthRequest(&healthRequest)
-
-	expectedStatus := http.StatusOK
-	respCode := 200
-	var errStr string
-	respProto, err := client.Health(context.Background(), reqProto)
-	if err != nil {
-		respCode = testclient.GetStatusCodeFromError(t, err)
-		errStr = fmt.Sprintf("%v", err)
-	}
-
-	if respCode != expectedStatus {
-		t.Fatalf("Received unexpected status; Expected: %d, Got: %d; Complete Error Message: %v ", expectedStatus, respCode, errStr)
-	}
-
-	return api.ConvertHealthResponseProto(respProto)
 }

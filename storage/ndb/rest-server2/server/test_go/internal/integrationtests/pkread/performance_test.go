@@ -21,45 +21,21 @@ import (
 	"fmt"
 	"math/rand"
 	"net/http"
+	"runtime"
 	"sort"
+	"sync/atomic"
 	"testing"
 	"time"
-	"runtime"
-        "sync/atomic"
 
-	"google.golang.org/grpc"
-	"hopsworks.ai/rdrs2/internal/config"
 	"hopsworks.ai/rdrs2/internal/integrationtests/testclient"
 	"hopsworks.ai/rdrs2/internal/testutils"
 	"hopsworks.ai/rdrs2/pkg/api"
 	"hopsworks.ai/rdrs2/resources/testdbs"
 )
 
-/*
-The number of parallel client go-routines spawned in RunParallel()
-can be influenced by setting runtime.GOMAXPROCS(). It defaults to the
-number of CPUs.
-
-This test can be run as follows:
-
-	go test \
-		-test.bench BenchmarkSimple \
-		-test.run=thisexpressionwontmatchanytest \
-		-cpu 1,2,4,8 \
-		-benchmem \
-		-benchtime=100x \ 		// 100 times
-		-benchtime=10s \ 		// 10 sec
-		./internal/integrationtests/pkread/
-*/
 func BenchmarkSimple(b *testing.B) {
 	// Number of total requests
 	numRequests := b.N
-
-	/*
-		IMPORTANT: This benchmark will run requests against EITHER the REST or
-		the gRPC server, depending on this flag.
-	*/
-	runAgainstGrpcServer := false
 
 	table := "table_1"
 	maxRows := testdbs.BENCH_DB_NUM_ROWS
@@ -69,9 +45,9 @@ func BenchmarkSimple(b *testing.B) {
 
 	b.ResetTimer()
 	start := time.Now()
-        last := time.Now()
+	last := time.Now()
 	runtime.GOMAXPROCS(24)
-        var ops atomic.Uint64
+	var ops atomic.Uint64
 
 	/*
 		Assuming GOMAXPROCS is not set, a 10-core CPU
@@ -102,18 +78,8 @@ func BenchmarkSimple(b *testing.B) {
 		}
 
 		// One connection per go-routine
-		var err error
-		var grpcConn *grpc.ClientConn
 		var httpClient *http.Client
-		if runAgainstGrpcServer {
-			conf := config.GetAll()
-			grpcConn, err = testutils.CreateGrpcConn(conf.Security.APIKey.UseHopsworksAPIKeys, conf.Security.TLS.EnableTLS)
-			if err != nil {
-				b.Fatal(err.Error())
-			}
-		} else {
-			httpClient = testutils.SetupHttpClient(b)
-		}
+		httpClient = testutils.SetupHttpClient(b)
 
 		/*
 			Given 10 go-routines and b.N==50, each go-routine
@@ -125,19 +91,15 @@ func BenchmarkSimple(b *testing.B) {
 			testInfo.PkReq.Filters = filter
 
 			requestStartTime := time.Now()
-			if runAgainstGrpcServer {
-				pkGRPCTestWithConn(b, testInfo, false, false, grpcConn)
-			} else {
-				pkRESTTestWithClient(b, httpClient, testInfo, false, false)
-			}
+			pkRESTTestWithClient(b, httpClient, testInfo, false, false)
 			latenciesChannel <- time.Since(requestStartTime)
-                        count := ops.Add(1)
-                        if count % 4000000 == 0 {
-                                tempTotalPkLookups := 400000
-                                tempPkLookupsPerSecond := float64(tempTotalPkLookups) / time.Since(last).Seconds()
-                                b.Logf("Throughput:                 %f pk lookups/second", tempPkLookupsPerSecond)
-                                last = time.Now()
-                        }
+			count := ops.Add(1)
+			if count%4000000 == 0 {
+				tempTotalPkLookups := 400000
+				tempPkLookupsPerSecond := float64(tempTotalPkLookups) / time.Since(last).Seconds()
+				b.Logf("Throughput:                 %f pk lookups/second", tempPkLookupsPerSecond)
+				last = time.Now()
+			}
 		}
 	})
 	b.StopTimer()

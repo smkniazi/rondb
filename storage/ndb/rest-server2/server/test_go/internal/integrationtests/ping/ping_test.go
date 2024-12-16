@@ -24,11 +24,6 @@ import (
 )
 
 func TestPing(t *testing.T) {
-	// gRPC
-	if config.GetAll().GRPC.Enable {
-		sendGrpcPingRequest(t)
-	}
-
 	// HTTP
 	if config.GetAll().REST.Enable {
 		sendRestPingRequest(t)

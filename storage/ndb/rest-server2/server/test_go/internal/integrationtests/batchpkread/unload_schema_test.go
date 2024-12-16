@@ -169,12 +169,6 @@ func TestUnloadSchema(t *testing.T) {
 
 func somework(t *testing.T, id int, tests map[string]api.BatchOperationTestInfo, stop *bool, done *chan int) {
 	httpClient := testutils.SetupHttpClient(t)
-	grpcConn, err := testclient.InitGRPCConnction()
-	if err != nil {
-		// Cannot fail a test case in a go-routine
-		t.Log(err.Error())
-		return
-	}
 
 	opCount := 0
 	// need to do this if an operation fails
@@ -186,9 +180,6 @@ func somework(t *testing.T, id int, tests map[string]api.BatchOperationTestInfo,
 		for _, testInfo := range tests {
 			if config.GetAll().REST.Enable {
 				batchRESTTestWithClient(t, httpClient, testInfo, false, false)
-			}
-			if config.GetAll().GRPC.Enable {
-				batchGRPCTestWithConn(t, testInfo, false, false, grpcConn)
 			}
 		}
 		opCount++
