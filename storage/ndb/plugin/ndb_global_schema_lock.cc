@@ -164,6 +164,7 @@ static class Ndb_gsl_for_mdl_guard {
 */
 static NdbTransaction *gsl_lock_ext(THD *thd, Ndb *ndb, NdbError &ndb_error,
                                     bool retry, bool no_wait) {
+  Uint32 timeout_count = 0;
   while (true) {
     /*
       while loop to control the behaviour of the attempt to lock the row.
@@ -278,9 +279,22 @@ static NdbTransaction *gsl_lock_ext(THD *thd, Ndb *ndb, NdbError &ndb_error,
         (ndb_is_gsl_participant_active() ||           // 2a)
          ndb_gsl_for_mdl_guard.is_gsl_acquired()) &&  // 2b)
         thd->mdl_context.has_locks_waited_for()) {    // 3)
-      ndb_error = trans->getNdbError();
-      ndb->closeTransaction(trans);
-      return nullptr;
+      timeout_count++;
+      if (timeout_count > 5) {
+        ndb_error = trans->getNdbError();
+        ndb->closeTransaction(trans);
+        return nullptr;
+      } else {
+        /**
+         * In an overloaded file system we can have timeouts happening
+         * and not a deadlock. So to ensure we can handle those situations
+         * without failing metadata statements, we ensure that there is a
+         * deadlock by waiting more than 5 timeout periods.
+         */
+        ndb->closeTransaction(trans);
+        ndb_trans_retry_sleep();
+        continue;
+      }
     }
 
     assert(trans->getNdbError().status == NdbError::TemporaryError);
@@ -489,7 +503,6 @@ static int ndbcluster_global_schema_unlock(THD *thd, bool record_gsl) {
                       ndb_error.code, ndb_error.message);
       thd_ndb->push_ndb_error_warning(ndb_error);
       thd_ndb->push_warning("Failed to release global schema lock");
-      return -1;
     }
 
     ndb_log_info("Global schema lock release");
@@ -644,7 +657,6 @@ bool Ndb_global_schema_lock_guard::unlock() {
                       ndb_error.code, ndb_error.message);
       thd_ndb->push_ndb_error_warning(ndb_error);
       thd_ndb->push_warning("Failed to release global schema lock");
-      return false;
     }
     ndb_log_info("Global schema lock release");
   }
