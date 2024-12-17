@@ -22,6 +22,7 @@
 
 #include "feature_store_error_code.hpp"
 #include "metadata.hpp"
+#include <optional>
 #include <string>
 #include <vector>
 #include <map>
@@ -31,10 +32,14 @@
 #include <simdjson.h>
 #include "base64.h"
 
-std::string base64_decode(const std::string &encoded_string);
-std::tuple<std::vector<char>, std::shared_ptr<RestErrorCode>>
-DeserialiseComplexFeature(const std::vector<char> &value, const metadata::AvroDecoder &decoder);
-std::tuple<std::vector<char>, RS_Status> ConvertAvroToJson(const avro::GenericDatum &datum,
-                                                           const avro::ValidSchema &schema);
+RS_Status
+base64_decode(const std::string &encoded_string, std::string &decoded_string);
+
+std::tuple<std::shared_ptr<RestErrorCode>, std::vector<char>>
+DeserialiseComplexFeature(const std::vector<char> &value,
+                          const metadata::AvroDecoder &decoder);
+
+std::pair<RS_Status, std::optional<std::vector<char>>>
+ConvertAvroToJson(const avro::GenericDatum &datum);
 
 #endif  // STORAGE_NDB_REST_SERVER2_SERVER_SRC_FEATURE_UTIL_HPP_

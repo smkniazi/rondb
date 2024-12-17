@@ -21,6 +21,7 @@
 #include "rdrs_dal.hpp"
 #include <memory>
 #include <tuple>
+#include <my_compiler.h>
 
 std::tuple<int, RS_Status> GetProjectID(const std::string &featureStoreName) {
   int projectID = 0;
@@ -178,20 +179,28 @@ GetFeatureGroupAvroSchema(const std::string &fgName,
     return std::make_tuple(FeatureGroupAvroSchema{}, ret);
   }
 
-  std::string schemaStr;
+  simdjson::padded_string schemaPadded;
   if (schemaBuff != nullptr) {
-    schemaStr = std::string(schemaBuff);
+    schemaPadded = simdjson::padded_string(schemaBuff, strlen(schemaBuff));
     free(schemaBuff);
   }
 
   simdjson::dom::parser parser;
-  auto result = parser.parse(schemaStr);
+  auto result = parser.parse(schemaPadded);
   if (result.error()) {
     return std::make_tuple(FeatureGroupAvroSchema{},
                            CRS_Status(HTTP_CODE::SERVER_ERROR,
                            "Failed to parse schema").status);
   }
+
   FeatureGroupAvroSchema avroSchema;
-  avroSchema.from_json(result.value());
+  RS_Status status = avroSchema.from_json(result.value());
+  if (unlikely(static_cast<drogon::HttpStatusCode>(status.http_code) !=
+      drogon::HttpStatusCode::k200OK)) {
+    return std::make_tuple(FeatureGroupAvroSchema{},
+                           CRS_Status(HTTP_CODE::SERVER_ERROR,
+                           std::string(status.message)).status);
+  }
+
   return std::make_tuple(avroSchema, CRS_Status::SUCCESS.status);
 }

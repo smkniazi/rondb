@@ -19,37 +19,17 @@ package ping
 
 import (
 	"net/http"
+	"runtime"
 	"sort"
 	"testing"
 	"time"
-        "runtime"
 
-	"google.golang.org/grpc"
-	"hopsworks.ai/rdrs2/internal/config"
 	"hopsworks.ai/rdrs2/internal/testutils"
 )
 
-/*
-The number of parallel client go-routines spawned in RunParallel()
-can be influenced by setting runtime.GOMAXPROCS(). It defaults to the
-number of CPUs.
-
-This test can be run as follows:
-
-	go test \
-		-test.bench BenchmarkSimple \
-		-test.run=thisexpressionwontmatchanytest \
-		-cpu 1,2,4,8 \
-		-benchmem \
-		-benchtime=100x \ 		// 100 times
-		-benchtime=10s \ 		// 10 sec
-		./internal/integrationtests/ping/
-*/
 func BenchmarkSimple(b *testing.B) {
 	// Number of total requests
 	numRequests := b.N
-
-	runAgainstGrpcServer := false
 
 	threadId := 0
 
@@ -57,7 +37,7 @@ func BenchmarkSimple(b *testing.B) {
 
 	b.ResetTimer()
 	start := time.Now()
-        runtime.GOMAXPROCS(16)
+	runtime.GOMAXPROCS(16)
 
 	/*
 		With 10-core CPU, this will run 10 Go-routines.
@@ -69,18 +49,8 @@ func BenchmarkSimple(b *testing.B) {
 		threadId++
 
 		// One connection per go-routine
-		conf := config.GetAll()
-		var err error
-		var grpcConn *grpc.ClientConn
 		var httpClient *http.Client
-		if runAgainstGrpcServer {
-			grpcConn, err = testutils.CreateGrpcConn(conf.Security.APIKey.UseHopsworksAPIKeys, conf.Security.TLS.EnableTLS)
-			if err != nil {
-				b.Fatal(err.Error())
-			}
-		} else {
-			httpClient = testutils.SetupHttpClient(b)
-		}
+		httpClient = testutils.SetupHttpClient(b)
 
 		/*
 			Given 10 go-routines and b.N==50, each go-routine
@@ -88,11 +58,7 @@ func BenchmarkSimple(b *testing.B) {
 		*/
 		for bp.Next() {
 			requestStartTime := time.Now()
-			if runAgainstGrpcServer {
-				sendGrpcPingRequestWithConnection(b, grpcConn)
-			} else {
-				sendRestPingRequestWithClient(b, httpClient)
-			}
+			sendRestPingRequestWithClient(b, httpClient)
 			latenciesChannel <- time.Since(requestStartTime)
 		}
 	})

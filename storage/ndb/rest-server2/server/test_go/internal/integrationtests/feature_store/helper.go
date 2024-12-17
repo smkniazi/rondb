@@ -68,13 +68,18 @@ func GetSampleData(database string, table string) ([][]interface{}, []string, []
 	return GetNSampleData(database, table, 2)
 }
 
+// N Samples
+func GetSampleDataN(database string, table string, numberOfSamples int) ([][]interface{}, []string, []string, error) {
+	return GetNSampleData(database, table, numberOfSamples)
+}
+
 func GetNSampleData(database string, table string, n int) ([][]interface{}, []string, []string, error) {
 
 	columnName, pks, colTypes, err := getColumnInfo(database, table)
 	if err != nil {
 		return nil, nil, nil, err
 	}
-	query := fmt.Sprintf("SELECT * FROM `%s`.`%s` LIMIT %d", database, table, n)
+	query := fmt.Sprintf("SELECT * FROM `%s`.`%s` ORDER BY RAND() LIMIT %d", database, table, n)
 	var valueBatch, err1 = fetchDataRows(query, colTypes)
 	if err1 != nil {
 		return nil, nil, nil, err1
@@ -438,6 +443,11 @@ func ValidateResponseWithDataExcludeCols(t *testing.T, data *[]interface{}, cols
 			got = string(binary)
 		}
 		if !reflect.DeepEqual(got, expectedJson) {
+
+			fmt.Printf("--> col: %s\n", (*cols)[k])
+			fmt.Printf("--> Got %s (%s) \n", got, reflect.TypeOf(got))
+			fmt.Printf("--> but expect %s (%s)\n", expectedJson, reflect.TypeOf(expectedJson))
+			fmt.Printf("---------------------------------------------------\n")
 			t.Errorf("col: %s; Got %s (%s) but expect %s (%s)\n", (*cols)[k], got, reflect.TypeOf(got), expectedJson, reflect.TypeOf(expectedJson))
 			break
 		}

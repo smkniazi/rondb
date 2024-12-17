@@ -1,46 +1,79 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if tput bold &> /dev/null; then
+    BOLD=$(tput bold)
+    RESET=$(tput sgr0)
+else
+    BOLD=""
+    RESET=""
+fi
+
 # Show help by `./script.sh help` or just `./script.sh`
 
 cmd-help() {
   [ $# == 0 ] || die "Command $cmd does not take arguments."
-  cat <<"EOF"
-# Before using this script, start a cluster and export a variable pointing to
-# the rdrs2 config location:
-...rondb/build$ ./mysql-test/mtr --suite rdrs2-golang --start-and-exit
-...rondb/build$ export \
-  RDRS_CONFIG_FILE=`realpath mysql-test/var/rdrs.1.1_config.json`
+  cat <<EOF
 
-# Available commands:
+${BOLD}NAME${RESET}
+    script.sh -- runs tests and benchmarks. Also restart RDRS server
 
-$ ./script.sh help
-#    Show this help
+${BOLD}DESCRIPTION${RESET}
 
-$ ./script.sh test [PACKAGE]
-#    Run a test case.
-#    PACKAGE default: hopsworks.ai/rdrs2/internal/integrationtests/batchpkread
-#    To see available packages, run `./script.sh list`
+    Before using this script, start a cluster and export a variable pointing to
+    the rdrs2 config location:
 
-$ ./script.sh bench [PACKAGE] [DURATION]
-#    Run a benchmark.
-#    PACKAGE default: hopsworks.ai/rdrs2/internal/integrationtests/batchpkread
-#    DURATION default: 30
-#    To see available packages, run `./script.sh list`
+        cd .../rondb/build 
+        ./mysql-test/mtr --suite rdrs2-golang --start-and-exit
+        export RDRS_CONFIG_FILE=\`realpath mysql-test/var/rdrs.1.1_config.json\`
+                               or
+        export RDRS_CONFIG_FILE=\`realpath ../../../../../build/mysql-test/var/rdrs.1.1_config.json\`
 
-$ ./script.sh list
-#   Show packages that can be used with `./script test` and `./script bench`.
+${BOLD}Available commands${RESET}
 
-$ ./script.sh restart
-#    Restart rdrs2 without restarting the entire cluster. This is useful for
-#    quick iteration. Note that stdout/stderr will be discarded.
+${BOLD}HELP${RESET}
+    Show this help
+
+        ./script.sh help
+
+${BOLD}RUN TESTS${RESET}
+    Run test cases
+
+        ./script.sh test [PACKAGE] [TEST_NAME]
+
+    ${BOLD}PACKAGE${RESET} default: all packages
+        To see available packages, run ${BOLD}./script.sh list${RESET}
+    ${BOLD}TEST_NAME${RESET} Name of the specific test to run 
+        default: run all tests in the go package
+
+${BOLD}RUN BENCHMARKS${RESET}
+    Run a benchmarks
+
+        ./script.sh bench [PACKAGE] [BENCHMARK_NAME] [DURATION]
+
+    ${BOLD}PACKAGE${RESET} default: all packages 
+        To see available packages, run "./script.sh list"
+    ${BOLD}BENCHMARK_NAME${RESET} Name of the specific test to run 
+        default: run all benchmark tests in the go package
+    ${BOLD}DURATION${RESET} default: 30
+
+${BOLD}LIST GO PACKAGES${RESET}
+    Show packages that can be used with ${BOLD}./script test${RESET} and ${BOLD}./script bench${RESET}
+
+        ./script.sh list
+
+${BOLD}RESTART RDRS${RESET}
+    Restart rdrs2 without restarting the entire cluster. This is useful for
+    quick iteration. Note that stdout/stderr will be discarded
+
+        ./script.sh restart
 
 EOF
 }
 
 cmd-test() {
   [ -f "${RDRS_CONFIG_FILE}" ] || die 'RDRS_CONFIG_FILE must be set and point to an existing file.'
-  TEST_PACKAGE=hopsworks.ai/rdrs2/internal/integrationtests/batchpkread
+  TEST_PACKAGE="./..."
   TEST_CASE=
   case $# in
     0) ;;
@@ -66,8 +99,11 @@ cmd-test() {
 
 cmd-bench() {
   [ -f "${RDRS_CONFIG_FILE}" ] || die 'RDRS_CONFIG_FILE must be set and point to an existing file.'
-  BENCHMARK_PACKAGE=hopsworks.ai/rdrs2/internal/integrationtests/batchpkread
+  BENCHMARK_PACKAGE="./..."
+  BENCHMARK_NAME=Benchmark
   BENCHMARK_DURATION=30
+  PROFILE=""
+
   case $# in
     0) ;;
     1) if [[ "$1" =~ ^[0-9]+$ ]]; then
@@ -76,16 +112,19 @@ cmd-bench() {
          BENCHMARK_PACKAGE="$1"
        fi ;;
     2) BENCHMARK_PACKAGE="$1"
-       BENCHMARK_DURATION="$2" ;;
+       BENCHMARK_NAME="$2" ;;
+    3) BENCHMARK_PACKAGE="$1"
+       BENCHMARK_NAME="$2" 
+       BENCHMARK_DURATION="$3"
+       PROFILE="-cpuprofile cpu.out  -memprofile mem.out" ;;
     *) die "Too many arguments" ;;
   esac
   go test -v \
-     -test.bench BenchmarkSimple \
+     -test.bench ${BENCHMARK_NAME} \
      -test.run=thisexpressionwontmatchanytest \
      -benchmem \
      -benchtime=${BENCHMARK_DURATION}s \
-     -cpuprofile cpu.out \
-     -memprofile mem.out \
+     $PROFILE \
      $BENCHMARK_PACKAGE
 }
 

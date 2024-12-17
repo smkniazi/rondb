@@ -30,7 +30,7 @@ import (
 	"hopsworks.ai/rdrs2/pkg/api"
 )
 
-func CreateFeatureStoreRequest(
+func CreateBatchFeatureStoreRequest(
 	fsName string,
 	fvName string,
 	fvVersion int,

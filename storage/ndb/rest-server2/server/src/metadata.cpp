@@ -23,6 +23,7 @@
 #include "fs_cache.hpp"
 
 #include <avro/Exception.hh>
+#include <optional>
 #include <tuple>
 #include <util/require.h>
 #include <EventLogger.hpp>
@@ -31,12 +32,19 @@ extern EventLogger *g_eventLogger;
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
 //#define DEBUG_MD_CACHE 1
+#define INFO_MD_CACHE 1
 #endif
 
 #ifdef DEBUG_MD_CACHE
 #define DEB_MD_CACHE(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
 #else
 #define DEB_MD_CACHE(...) do { } while (0)
+#endif
+
+#ifdef INFO_MD_CACHE
+#define INF_MD_CACHE(...) do { g_eventLogger->info(__VA_ARGS__); } while (0)
+#else
+#define INF_MD_CACHE(...) do { } while (0)
 #endif
 
 namespace metadata {
@@ -55,17 +63,27 @@ AvroDecoder::AvroDecoder(const std::string &schemaJson) {
   schema = avro::compileJsonSchemaFromString(schemaJson);
 }
 
-avro::GenericDatum
+std::pair<RS_Status, std::optional<avro::GenericDatum>>
   AvroDecoder::decode(const std::vector<Uint8> &inData) const {
+
+  if (!schema.root()) {
+    return {CRS_Status(HTTP_CODE::SERVER_ERROR, "Invalid avro schema").status, std::nullopt} ;
+  }
+
   auto inStream = avro::memoryInputStream(inData.data(), inData.size());
   avro::DecoderPtr decoder = avro::binaryDecoder();
+  if(!decoder) {
+    return {CRS_Status(HTTP_CODE::SERVER_ERROR, "Avro failed to decode data").status, std::nullopt};
+  }
+
   decoder->init(*inStream);
   avro::GenericDatum datum(schema);
   try {
     avro::decode(*decoder, datum);
-    return datum;
+    return {CRS_Status::SUCCESS.status, datum};
   } catch (const std::exception &e) {
-    throw std::runtime_error(std::string("Decoding failed: ") + e.what());
+    INF_MD_CACHE("Avro decode failed data len %lu, AvroError:   %s.\n", inData.size(),  e.what());
+    return {CRS_Status(HTTP_CODE::SERVER_ERROR, std::string("Decoding failed: ") + e.what()).status, std::nullopt};
   }
 }
 
@@ -267,6 +285,7 @@ newFeatureViewMetadata(const std::string &featureStoreName,
           }
           fgSchemaCache[feature.featureGroupId] = newFgSchema;
         }
+
         std::tie(schema, status) =
           fgSchemaCache[feature.featureGroupId].getSchemaByFeatureName(
             feature.name);

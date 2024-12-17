@@ -19,7 +19,4 @@ func pkTest(t testing.TB, testInfo api.PKTestInfo, isBinaryData bool, validate b
 	if config.GetAll().REST.Enable {
 		pkRESTTest(t, testInfo, isBinaryData, validate)
 	}
-	if config.GetAll().GRPC.Enable {
-		pkGRPCTest(t, testInfo, isBinaryData, validate)
-	}
 }

@@ -19,9 +19,6 @@ func batchTest(t testing.TB, testInfo api.BatchOperationTestInfo, isBinaryData b
 	if config.GetAll().REST.Enable {
 		batchRESTTest(t, testInfo, isBinaryData, validate)
 	}
-	if config.GetAll().GRPC.Enable {
-		batchGRPCTest(t, testInfo, isBinaryData, validate)
-	}
 }
 
 func checkOpIDandStatus(

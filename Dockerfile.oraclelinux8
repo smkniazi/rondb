@@ -161,18 +161,15 @@ RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
 
 # Install avro (only static library)
 RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
+    source scl_source enable gcc-toolset-12 && \
     cd $DOWNLOADS_CACHE_DIR && \
     rm -rf release-* avro-* && \
     wget -N --progress=bar:force -P $DOWNLOADS_CACHE_DIR https://github.com/apache/avro/archive/refs/tags/release-$AVRO_VERSION.tar.gz && \
     tar xf release-$AVRO_VERSION.tar.gz && \
     cd avro-release-$AVRO_VERSION/lang/c++ && \
-    mkdir build && \
-    cd build && \
-    source scl_source enable gcc-toolset-12 && \
-    cmake -G "Unix Makefiles" .. && \
-    make -j$THREADS_ARG && \
-    make install && \ 
-    rm -rf release-* avro-*
+    ./build.sh install && \
+    cd $DOWNLOADS_CACHE_DIR && \
+    rm -rf release-* avro-* 
 
 # Install updated jsoncpp
 RUN --mount=type=cache,target=$DOWNLOADS_CACHE_DIR \
