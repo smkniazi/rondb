@@ -32,6 +32,7 @@
 #include "my_time.h"
 #include "mysql_time.h"
 #include "my_inttypes.h"
+#include <my_base.h>
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
 //#define DEBUG_RONSQLPREPARER 1
@@ -505,7 +506,14 @@ RonSQLPreparer::load()
       {
         err << "Failed to get column " << quoted_identifier(col_name) << "."
             << endl << "Note that column names are case sensitive." << endl;
-        throw runtime_error("Failed to get column.");
+        // It's possible that the schema is stale. Since we haven't attempted
+        // any ndb operation yet, we have no error code from NDB and no way to
+        // tell whether this error is due to stale schema or a permanent error
+        // in the query. We unload the schema just in case it is stale, then
+        // throw a separate exception type so that the caller can decide whether
+        // to retry.
+        unload_schema();
+        throw ColumnNotFoundError();
       }
       col_id_map[col_idx] = col->getAttrId();
     }
@@ -903,6 +911,9 @@ RonSQLPreparer::execute()
   }
   catch (const std::exception& e)
   {
+    std::basic_ostream<char>& err = *m_conf.err_stream;
+
+    // Fetch error
     DEB_TRACE();
     NdbError ndb_err;
     if (myTrans != NULL)
@@ -919,7 +930,43 @@ RonSQLPreparer::execute()
       DEB_TRACE();
       throw;
     }
-    std::basic_ostream<char>& err = *m_conf.err_stream;
+
+    // Decide whether to unload and whether the error is temporary
+    if (/*Invalid schema object version*/
+        (ndb_err.mysql_code == HA_ERR_TABLE_DEF_CHANGED &&
+         ndb_err.code == 241)) {
+      unload_schema();
+      err << "Retry after unload is possible" << endl;
+      throw TemporaryError();
+    }
+    if (/*Table is being dropped*/
+               (ndb_err.mysql_code == HA_ERR_NO_SUCH_TABLE &&
+                ndb_err.code == 283)) {
+      unload_schema();
+    }
+    if (/*Table not defined in transaction coordinator*/
+               (ndb_err.mysql_code == HA_ERR_TABLE_DEF_CHANGED &&
+                ndb_err.code == 284)) {
+      unload_schema();
+      err << "Retry after unload is possible" << endl;
+      throw TemporaryError();
+    }
+    if (/*No such table existed*/
+               (ndb_err.mysql_code == HA_ERR_NO_SUCH_TABLE &&
+                ndb_err.code == 709)) {
+      unload_schema();
+    }
+    if (/*No such table existed*/
+               (ndb_err.mysql_code == HA_ERR_NO_SUCH_TABLE &&
+                ndb_err.code == 723)) {
+      unload_schema();
+    }
+    if (/*Table is being dropped*/
+               (ndb_err.mysql_code == HA_ERR_NO_SUCH_TABLE &&
+                ndb_err.code == 1226)) {
+      unload_schema();
+    }
+
     switch (ndb_err.status)
     {
     case NdbError::Status::Success:
@@ -959,6 +1006,19 @@ RonSQLPreparer::execute()
     DEB_TRACE();
     abort();
   }
+}
+
+void
+RonSQLPreparer::unload_schema() {
+  Ndb* ndb = m_conf.ndb;
+  const char* table = m_context.ast_root.table.c_str();
+  NdbDictionary::Dictionary *dict = ndb->getDictionary();
+  NdbDictionary::Dictionary::List indexes;
+  dict->listIndexes(indexes, table);
+  for (unsigned i = 0; i < indexes.count; i++) {
+    dict->invalidateIndex(indexes.elements[i].name, table);
+  }
+  dict->invalidateTable(table);
 }
 
 void

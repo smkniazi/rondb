@@ -167,7 +167,6 @@ void RonSQLCtrl::ronsql(
   if (static_cast<drogon::HttpStatusCode>(status.http_code) ==
       drogon::HttpStatusCode::k200OK) {
 #ifdef VM_TRACE
-    assert(err_str.empty());
     assert(!out_str.empty() ||
            params.output_format ==
              RonSQLExecParams::OutputFormat::TEXT_NOHEADER ||

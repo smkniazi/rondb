@@ -205,11 +205,10 @@ ALTER TABLE db1.api_scan CHANGE sint16 sint16_altered SMALLINT NULL;
 --echo == After ALTER TABLE, old query via CLI ==
 --error 1
 --exec $ronsql_cli -D db1 -e "$query" 2>&1
-# todo Fix ronsql to use UnloadSchema
-#--echo == After ALTER TABLE, new query via RDRS ==
-#--exec $rdrs_ronsql '{"query":"$query_altered","database":"db1"}'
 --echo == After ALTER TABLE, new query via CLI ==
---exec $ronsql_cli -D db1 -e "$query_altered"
+--exec $ronsql_cli -D db1 -e "$query_altered" 2>&1
+--echo == After ALTER TABLE, new query via RDRS ==
+--exec $rdrs_ronsql '{"query":"$query_altered","database":"db1"}'
 
 
 

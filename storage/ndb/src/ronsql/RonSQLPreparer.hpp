@@ -98,6 +98,7 @@ public:
     PARSER_ERROR,
   };
   class TemporaryError : public std::exception {};
+  class ColumnNotFoundError : public std::exception {};
   /*
    * The context class is used to expose parser internals to flex and bison code
    * without making them public.
@@ -185,6 +186,7 @@ private:
   void choose_index_scan_config();
   void compile();
   void determine_explain();
+  void unload_schema();
 
   // Functions used in execution phase
 public:
