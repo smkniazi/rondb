@@ -19,7 +19,23 @@ CREATE INDEX
   index_sint24
   ON api_scan
   (sint24);
---let TEST_DATA_TSV=$MYSQL_TMP_DIR/test_data.tsv
+
+# In ../../../mysql-test-run.dox, it says:
+#
+# > <b>$MYSQL_TMP_DIR</b> is equivalent to
+# > <b>$MYSQLTEST_VARDIR/tmp</b> if you are not running with parallel
+# > test threads, but if you run @ref PAGE_MYSQL_TEST_RUN_PL
+# > "mysql-test-run.pl" with <b>`--parallel`</b>, they will be different.
+# > It is therefore best to be consistent and use <b>$MYSQL_TMP_DIR</b>.
+#
+# However, a file in $MYSQL_TMP_DIR cannot be used with `LOAD DATA INFILE` when
+# secure_file_priv is set. This is because $MYSQLTEST_VARDIR=TESTDIR/var/X and
+# MYSQL_TMP_DIR=TESTDIR/var/tmp/X while secure_file_priv is set to the former.
+# We'd like to place the file in TESTDIR/var/X/tmp, so we'll have to use
+# $MYSQLTEST_VARDIR/tmp against the recommendation.
+#
+--let TEST_DATA_TSV=$MYSQLTEST_VARDIR/tmp/test_data.tsv
+
 perl;
   use strict;
   use warnings;
