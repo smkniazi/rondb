@@ -139,7 +139,14 @@
 //#define DO_TRANSIENT_POOL_STAT 1
 //#define DEBUG_HASH 1
 //#define DEBUG_QUOTAS_EXTRA 1
-#define DEBUG_QUOTAS 1
+//#define DEBUG_QUOTAS 1
+//#define DEBUG_RESTART 1
+#endif
+
+#ifdef DEBUG_RESTART
+#define DEB_RESTART(arglist) do { g_eventLogger->info arglist ; } while (0)
+#else
+#define DEB_RESTART(arglist) do { } while (0)
 #endif
 
 #ifdef DEBUG_QUOTAS_EXTRA
@@ -1753,7 +1760,7 @@ void Dbdict::closeWriteTableConf(Signal *signal, FsConnectRecordPtr fsPtr) {
 void Dbdict::startReadTableFile(Signal *signal, Uint32 tableId) {
   // globalSignalLoggers.log(number(), "startReadTableFile");
   ndbrequire(!c_readTableRecord.inUse);
-
+  D("startReadTableFile");
   FsConnectRecordPtr fsPtr;
   ndbrequire(c_fsConnectRecordPool.getPtr(fsPtr, getFsConnRecord()));
   c_readTableRecord.inUse = true;
@@ -2870,6 +2877,7 @@ void Dbdict::execSTTOR(Signal *signal) {
   switch (c_startPhase) {
   case 1:
   {
+    D("Phase 1 in DBDICT reached");
     const ndb_mgm_configuration_iterator * p = 
       m_ctx.m_config.getOwnConfigIterator();
     ndbrequireErr(p != 0, NDBD_EXIT_INVALID_CONFIG);
@@ -2879,7 +2887,14 @@ void Dbdict::execSTTOR(Signal *signal) {
     m_last_updated_table_entry = RNIL;
     break;
   }
+  case 2:
+  {
+    D("Phase 2 in DBDICT reached");
+    break;
+  }
   case 3:
+  {
+    D("Phase 3 in DBDICT reached");
     c_restartType = signal->theData[7];         /* valid if 3 */
     ndbrequire(c_restartType == NodeState::ST_INITIAL_START ||
                c_restartType == NodeState::ST_SYSTEM_RESTART ||
@@ -2894,28 +2909,68 @@ void Dbdict::execSTTOR(Signal *signal) {
     sendSignal(reference(), GSN_CONTINUEB, signal, 1, JBB);
 #endif
     break;
+  }
+  case 4:
+  {
+    D("Phase 4 in DBDICT reached");
+    break;
+  }
+  case 5:
+  {
+    D("Phase 5 in DBDICT reached");
+    break;
+  }
+  case 6:
+  {
+    D("Phase 6 in DBDICT reached");
+    break;
+  }
   case 7:
+  {
     /*
      * config cannot yet be changed dynamically but we start the
      * loop always anyway because the cost is minimal
      */
+    D("Phase 7 in DBDICT reached");
     c_indexStatBgId = 0;
     m_currentBgTxHandle = RNIL;
     indexStatBg_sendContinueB(signal);
     break;
   }
+  case 8:
+  {
+    D("Phase 8 in DBDICT reached");
+    break;
+  }
+  case 103:
+  {
+    D("Phase 103 in DBDICT reached");
+    break;
+  }
+  default:
+  {
+    ndbabort();
+  }
+  }
   sendSTTORRY(signal);
 }  // execSTTOR()
 
 void Dbdict::sendSTTORRY(Signal *signal) {
+  D("Send STTORRY");
   signal->theData[0] = 0; /* garbage SIGNAL KEY */
   signal->theData[1] = 0; /* garbage SIGNAL VERSION NUMBER  */
   signal->theData[2] = 0; /* garbage */
   signal->theData[3] = 1; /* first wanted start phase */
-  signal->theData[4] = 3; /* get type of start */
-  signal->theData[5] = 7; /* start index stat bg loop */
-  signal->theData[6] = ZNOMOREPHASES;
-  sendSignal(NDBCNTR_REF, GSN_STTORRY, signal, 7, JBB);
+  signal->theData[4] = 2;
+  signal->theData[5] = 3; /* get type of start */
+  signal->theData[6] = 4;
+  signal->theData[7] = 5;
+  signal->theData[8] = 6;
+  signal->theData[9] = 7; /* start index stat bg loop */
+  signal->theData[10] = 8;
+  signal->theData[11] = 103;
+  signal->theData[12] = ZNOMOREPHASES;
+  sendSignal(NDBCNTR_REF, GSN_STTORRY, signal, 13, JBB);
 }
 
 /* ---------------------------------------------------------------- */
@@ -3419,7 +3474,7 @@ out:
         "Copying of dictionary information"
         " from master Completed");
   }
-
+  D("Send DICTSTARTCONF");
   signal->theData[0] = reference();
   signal->theData[1] = c_restartRecord.m_senderData;
   sendSignal(c_restartRecord.returnBlockRef, GSN_DICTSTARTCONF, signal, 2, JBB);
@@ -4349,11 +4404,6 @@ void Dbdict::checkSchemaStatus(Signal *signal) {
       continue;
     }  // if
 
-    D("checkSchemaStatus" << V(c_restartRecord.m_pass)
-                          << V(c_restartRecord.activeTable));
-    D("own" << *ownEntry);
-    D("mst" << *masterEntry);
-
 // #define PRINT_SCHEMA_RESTART
 #ifdef PRINT_SCHEMA_RESTART
     printf("checkSchemaStatus: pass: %d table: %d", c_restartRecord.m_pass,
@@ -4367,6 +4417,13 @@ void Dbdict::checkSchemaStatus(Signal *signal) {
 
       if (ownState == SchemaFile::SF_UNUSED) continue;
 
+      D("checkSchemaStatus" << V(c_restartRecord.m_pass)
+                            << V(c_restartRecord.activeTable));
+      D("own" << *ownEntry);
+      D("mst" << *masterEntry);
+      D("Call restartCreateObj");
+      DEB_RESTART(("restartCreateObj, tableId: %u", tableId));
+
       restartCreateObj(signal, tableId, ownEntry, true);
       return;
     }
@@ -4378,6 +4435,13 @@ void Dbdict::checkSchemaStatus(Signal *signal) {
       if (ownState != SchemaFile::SF_IN_USE) continue;
 
       if (*ownEntry == *masterEntry) continue;
+
+      D("checkSchemaStatus" << V(c_restartRecord.m_pass)
+                            << V(c_restartRecord.activeTable));
+      D("own" << *ownEntry);
+      D("mst" << *masterEntry);
+      D("Call restartDropObj");
+      DEB_RESTART(("restartDropObj, tableId: %u", tableId));
 
       restartDropObj(signal, tableId, ownEntry);
       return;
@@ -4406,11 +4470,25 @@ void Dbdict::checkSchemaStatus(Signal *signal) {
                     (!DictTabInfo::isIndex(masterEntry->m_tableType) ||
                      c_systemRestart);
 
+        D("checkSchemaStatus" << V(c_restartRecord.m_pass)
+                              << V(c_restartRecord.activeTable));
+        D("own" << *ownEntry);
+        D("mst" << *masterEntry);
+        D("Call restartCreateObj(2)");
+        DEB_RESTART(("restartCreateObj(2), tableId: %u", tableId));
+
         restartCreateObj(signal, tableId, masterEntry, file);
         return;
       }
 
       if (*ownEntry == *masterEntry) continue;
+
+      D("checkSchemaStatus" << V(c_restartRecord.m_pass)
+                            << V(c_restartRecord.activeTable));
+      D("own" << *ownEntry);
+      D("mst" << *masterEntry);
+      D("Call restartCreateObj(3)");
+      DEB_RESTART(("restartCreateObj(3), tableId: %u", tableId));
 
       restartCreateObj(signal, tableId, masterEntry, false);
       return;
@@ -4419,6 +4497,7 @@ void Dbdict::checkSchemaStatus(Signal *signal) {
 
   if (c_restartRecord.m_op_cnt == 0) {
     jam();
+    D("restartNextPass");
     restartNextPass(signal);
     return;
   } else {
@@ -4888,6 +4967,7 @@ void Dbdict::restartCreateObj(Signal *signal, Uint32 tableId,
     /**
      * Get from master
      */
+    D("Send GSN_GET_TABINFOREQ");
     GetTabInfoReq *const req = (GetTabInfoReq *)&signal->theData[0];
     req->senderRef = reference();
     req->senderData = tableId;
@@ -4902,6 +4982,7 @@ void Dbdict::restartCreateObj(Signal *signal, Uint32 tableId,
 void Dbdict::restartCreateObj_getTabInfoConf(Signal *signal) {
   jam();
 
+  D("restartCreateObj_getTabInfoConf");
   SectionHandle handle(this, signal);
   SegmentedSectionPtr objInfoPtr;
   ndbrequire(handle.getSection(objInfoPtr, GetTabInfoConf::DICT_TAB_INFO));
