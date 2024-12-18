@@ -58,3 +58,4 @@ ndb.ndb_transaction_max_size @solaris: Bug#35392266 ndb_transaction_max_size fai
 
 @import ../suite/rdrs2-golang/disabled.def
 @import ../suite/rdrs2/disabled.def
+@import ../suite/ronsql/disabled.def
