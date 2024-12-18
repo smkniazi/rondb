@@ -493,18 +493,24 @@ GROUPåäö_2	32679
 == Before ALTER TABLE, new query via RDRS ==
 Failed to get column `sint16_altered`.
 Note that column names are case sensitive.
-Caught exception: Failed to get column.
+Failed to get column `sint16_altered`.
+Note that column names are case sensitive.
+Caught ColumnNotFoundError after 2 attempts.
 
 == Before ALTER TABLE, new query via CLI ==
 Failed to get column `sint16_altered`.
 Note that column names are case sensitive.
-ronsql_cli caught exception: Failed to get column.
+Failed to get column `sint16_altered`.
+Note that column names are case sensitive.
+ronsql_cli caught ColumnNotFoundError after 2 attempts.
 == ALTER TABLE ==
 ALTER TABLE db1.api_scan CHANGE sint16 sint16_altered SMALLINT NULL;
 == After ALTER TABLE, old query via CLI ==
 Failed to get column `sint16`.
 Note that column names are case sensitive.
-ronsql_cli caught exception: Failed to get column.
+Failed to get column `sint16`.
+Note that column names are case sensitive.
+ronsql_cli caught ColumnNotFoundError after 2 attempts.
 == After ALTER TABLE, new query via CLI ==
 c	max(sint16_altered)
 NULL	32566
@@ -512,6 +518,15 @@ GROUPxxx_1	32312
 GROUPxxx_3	32675
 GROUPxxx_4	31560
 GROUPåäö_2	32679
+== After ALTER TABLE, new query via RDRS ==
+{"data":
+[{"c":null,"max(sint16_altered)":32566}
+,{"c":"GROUPxxx_1","max(sint16_altered)":32312}
+,{"c":"GROUPxxx_3","max(sint16_altered)":32675}
+,{"c":"GROUPxxx_4","max(sint16_altered)":31560}
+,{"c":"GROUPåäö_2","max(sint16_altered)":32679}
+]
+}
 ===== Cleanup =====
 DROP DATABASE db1;
 DROP DATABASE db2;

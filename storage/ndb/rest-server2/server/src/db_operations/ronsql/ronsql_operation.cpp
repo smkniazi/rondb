@@ -20,6 +20,7 @@
 #include "ronsql_operation.hpp"
 #include "src/error_strings.h"
 #include "storage/ndb/src/ronsql/RonSQLPreparer.hpp"
+#include "storage/ndb/plugin/ndb_sleep.h"
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
 //#define DEBUG_RONSQL_OP 1
@@ -36,25 +37,40 @@
 
 RS_Status ronsql_op(RonSQLExecParams& params) {
   std::basic_ostream<char>& err = *params.err_stream;
-  try
-  {
-    RonSQLPreparer executor(params);
-    DEB_TRACE();
-    executor.execute();
-    DEB_TRACE();
-    return RS_OK;
-  }
-  catch (RonSQLPreparer::TemporaryError& e)
-  {
-    err << "Caught temporary error: " << e.what() << std::endl;
-    DEB_TRACE();
-    return RS_SERVER_ERROR(ERROR_065);
-  }
-  catch (std::runtime_error& e)
-  {
-    err << "Caught exception: " << e.what() << std::endl;
-    DEB_TRACE();
-    return RS_SERVER_ERROR(ERROR_066);
+  static int max_attempts = 2;
+  for (int attempt = 0; attempt < max_attempts; attempt++) {
+    bool is_last_attempt = attempt == max_attempts - 1;
+    try {
+      RonSQLPreparer executor(params);
+      DEB_TRACE();
+      executor.execute();
+      DEB_TRACE();
+      return RS_OK;
+    }
+    catch (RonSQLPreparer::TemporaryError& e) {
+      DEB_TRACE();
+      if (is_last_attempt) {
+        err << "Caught TemporaryError after " << max_attempts << " attempts."
+            << std::endl;
+        return RS_SERVER_ERROR(ERROR_065);
+      } else {
+        ndb_retry_sleep(50);
+      }
+    }
+    catch (RonSQLPreparer::ColumnNotFoundError& e) {
+      if (is_last_attempt) {
+        err << "Caught ColumnNotFoundError after " << max_attempts
+            << " attempts." << std::endl;
+        return RS_SERVER_ERROR(ERROR_066);
+      } else {
+        ndb_retry_sleep(50);
+      }
+    }
+    catch (std::runtime_error& e) {
+      err << "Caught exception: " << e.what() << std::endl;
+      DEB_TRACE();
+      return RS_SERVER_ERROR(ERROR_066);
+    }
   }
   // Should be unreachable
   DEB_TRACE();

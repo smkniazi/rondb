@@ -98,6 +98,7 @@ public:
     PARSER_ERROR,
   };
   class TemporaryError : public std::exception {};
+  class ColumnNotFoundError : public std::exception {};
   /*
    * The context class is used to expose parser internals to flex and bison code
    * without making them public.
@@ -136,6 +137,7 @@ private:
   Context m_context;
   DynamicArray<LexCString> m_columns;
   NdbAttrId* m_column_attrId_map = NULL;
+  CHARSET_INFO** m_column_charset_map = NULL;
   const NdbDictionary::Dictionary* m_dict = NULL;
   const NdbDictionary::Table* m_table = NULL;
   yyscan_t m_scanner;
@@ -185,6 +187,7 @@ private:
   void choose_index_scan_config();
   void compile();
   void determine_explain();
+  void unload_schema();
 
   // Functions used in execution phase
 public:

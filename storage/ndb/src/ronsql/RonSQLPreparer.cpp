@@ -32,6 +32,7 @@
 #include "my_time.h"
 #include "mysql_time.h"
 #include "my_inttypes.h"
+#include <my_base.h>
 
 #if (defined(VM_TRACE) || defined(ERROR_INSERT))
 //#define DEBUG_RONSQLPREPARER 1
@@ -112,10 +113,8 @@ RonSQLPreparer::RonSQLPreparer(RonSQLExecParams conf):
 static inline void
 soft_assert(bool condition, const char* msg)
 {
-  if (!condition)
-  {
-    throw runtime_error(msg);
-  }
+  if (likely(condition)) return;
+  throw runtime_error(msg);
 }
 
 void
@@ -485,9 +484,10 @@ RonSQLPreparer::load()
    * instead, RonSQLPreparer::programAggregator will read the program from m_agg
    * and map col_idx to attrId before speaking to NdbAggregator.
    */
-  // Populate m_dict, m_table and m_column_attrId_map, on the condition that
-  // m_conf.ndb is available. If m_conf.ndb is not available, we'll still be
-  // able to do a (partial) EXPLAIN SELECT, so no need to fail yet.
+  // Populate m_dict, m_table, m_column_attrId_map and m_column_charset_map, on
+  // the condition that m_conf.ndb is available. If m_conf.ndb is not available,
+  // we'll still be able to do a (partial) EXPLAIN SELECT, so no need to fail
+  // yet.
   Ndb* ndb = m_conf.ndb;
   if (ndb != NULL)
   {
@@ -497,6 +497,8 @@ RonSQLPreparer::load()
                 "Failed to get table. Note that RonSQL only supports tables with"
                 " ENGINE=NDB.");
     NdbAttrId* col_id_map = m_amalloc->alloc_exc<NdbAttrId>(m_columns.size());
+    CHARSET_INFO** charset_map =
+      m_amalloc->alloc_exc<CHARSET_INFO*>(m_columns.size());
     for (Uint32 col_idx = 0; col_idx < m_columns.size(); col_idx++)
     {
       const char* col_name = m_columns[col_idx].c_str();
@@ -505,11 +507,20 @@ RonSQLPreparer::load()
       {
         err << "Failed to get column " << quoted_identifier(col_name) << "."
             << endl << "Note that column names are case sensitive." << endl;
-        throw runtime_error("Failed to get column.");
+        // It's possible that the schema is stale. Since we haven't attempted
+        // any ndb operation yet, we have no error code from NDB and no way to
+        // tell whether this error is due to stale schema or a permanent error
+        // in the query. We unload the schema just in case it is stale, then
+        // throw a separate exception type so that the caller can decide whether
+        // to retry.
+        unload_schema();
+        throw ColumnNotFoundError();
       }
       col_id_map[col_idx] = col->getAttrId();
+      charset_map[col_idx] = col->getCharset();
     }
     m_column_attrId_map = col_id_map;
+    m_column_charset_map = charset_map;
   }
 
   /*
@@ -672,6 +683,7 @@ RonSQLPreparer::compile()
     ResultPrinter(m_amalloc,
                   &m_context.ast_root,
                   &m_columns,
+                  m_column_charset_map,
                   m_conf.output_format,
                   m_conf.err_stream);
 }
@@ -903,6 +915,9 @@ RonSQLPreparer::execute()
   }
   catch (const std::exception& e)
   {
+    std::basic_ostream<char>& err = *m_conf.err_stream;
+
+    // Fetch error
     DEB_TRACE();
     NdbError ndb_err;
     if (myTrans != NULL)
@@ -919,7 +934,43 @@ RonSQLPreparer::execute()
       DEB_TRACE();
       throw;
     }
-    std::basic_ostream<char>& err = *m_conf.err_stream;
+
+    // Decide whether to unload and whether the error is temporary
+    if (/*Invalid schema object version*/
+        (ndb_err.mysql_code == HA_ERR_TABLE_DEF_CHANGED &&
+         ndb_err.code == 241)) {
+      unload_schema();
+      err << "Retry after unload is possible" << endl;
+      throw TemporaryError();
+    }
+    if (/*Table is being dropped*/
+               (ndb_err.mysql_code == HA_ERR_NO_SUCH_TABLE &&
+                ndb_err.code == 283)) {
+      unload_schema();
+    }
+    if (/*Table not defined in transaction coordinator*/
+               (ndb_err.mysql_code == HA_ERR_TABLE_DEF_CHANGED &&
+                ndb_err.code == 284)) {
+      unload_schema();
+      err << "Retry after unload is possible" << endl;
+      throw TemporaryError();
+    }
+    if (/*No such table existed*/
+               (ndb_err.mysql_code == HA_ERR_NO_SUCH_TABLE &&
+                ndb_err.code == 709)) {
+      unload_schema();
+    }
+    if (/*No such table existed*/
+               (ndb_err.mysql_code == HA_ERR_NO_SUCH_TABLE &&
+                ndb_err.code == 723)) {
+      unload_schema();
+    }
+    if (/*Table is being dropped*/
+               (ndb_err.mysql_code == HA_ERR_NO_SUCH_TABLE &&
+                ndb_err.code == 1226)) {
+      unload_schema();
+    }
+
     switch (ndb_err.status)
     {
     case NdbError::Status::Success:
@@ -959,6 +1010,19 @@ RonSQLPreparer::execute()
     DEB_TRACE();
     abort();
   }
+}
+
+void
+RonSQLPreparer::unload_schema() {
+  Ndb* ndb = m_conf.ndb;
+  const char* table = m_context.ast_root.table.c_str();
+  NdbDictionary::Dictionary *dict = ndb->getDictionary();
+  NdbDictionary::Dictionary::List indexes;
+  dict->listIndexes(indexes, table);
+  for (unsigned i = 0; i < indexes.count; i++) {
+    dict->invalidateIndex(indexes.elements[i].name, table);
+  }
+  dict->invalidateTable(table);
 }
 
 void
@@ -1303,6 +1367,7 @@ RonSQLPreparer::programAggregator(NdbAggregator* aggregator)
   std::basic_ostream<char>& err = *m_conf.err_stream;
   SelectStatement& ast_root = m_context.ast_root;
   // Program groupby columns
+  assert(m_column_attrId_map != NULL); // Ensured in RonSQLPreparer::load
   struct GroupbyColumns* groupby = ast_root.groupby_columns;
   while (groupby != NULL)
   {
@@ -1322,7 +1387,6 @@ RonSQLPreparer::programAggregator(NdbAggregator* aggregator)
     {
     case AggregationAPICompiler::SVMInstrType::Load:
     {
-      assert(m_column_attrId_map != NULL);
       NdbAttrId col_id = m_column_attrId_map[src];
       if (!aggregator->LoadColumn(col_id, dest))
       {

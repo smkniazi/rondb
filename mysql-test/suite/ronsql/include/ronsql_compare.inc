@@ -25,7 +25,7 @@ if ($QUERY=='')
 --exec cat $MYSQL_TMP_DIR/ronsql-rdrs-body-1 $MYSQL_TMP_DIR/ronsql-rdrs-body-2 $MYSQL_TMP_DIR/ronsql-rdrs-body-3 > $MYSQL_TMP_DIR/ronsql-rdrs-body
 --let $QUERY_PARAMS = -D test $QUERY_PARAMS
 
---exec $MYSQL $QUERY_PARAMS > $MYSQL_TMP_DIR/mysql.out
+--exec $MYSQL --default-character-set=utf8mb4 $QUERY_PARAMS > $MYSQL_TMP_DIR/mysql.out
 if ($canonicalization_script)
 {
   --exec sed -r '$canonicalization_script' $MYSQL_TMP_DIR/mysql.out > $MYSQL_TMP_DIR/mysql.out.canon

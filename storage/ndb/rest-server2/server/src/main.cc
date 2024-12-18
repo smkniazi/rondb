@@ -18,153 +18,17 @@
  */
 
 constexpr const char* const usageHelp =
-  "Usage: rdrs2 [ --config PATH ] [ --help ] [ --help-config ]\n"
+  "Usage: rdrs2 [ --config PATH ] [ --help ]\n"
   "\n"
-  "-c, --config PATH   Use a JSON-format config file. Available config variables\n"
-  "                    can be printed by --help-config. Additionally, keys\n"
-  "                    beginning with a hash (#) are allowed and ignored, and can\n"
-  "                    be used as comments.\n"
+  "-c, --config PATH   Use a JSON-format config file. Keys beginning with a hash\n"
+  "                    (#) are allowed and ignored, and can be used as comments.\n"
   "\n"
-  "--print-config      Print the effective configuration that would be used.\n"
+  "--print-config      Print the effective configuration that would be used,\n"
+  "                    together with explanations.\n"
   "\n"
   "-v, --version       Print version information.\n"
   "\n"
   "-h, --help          Show this usage help.\n"
-  "\n"
-  "--help-config       List the available config options.\n"
-  ;
-constexpr const char* const configHelp =
-  "Config parameters supported in config file (all are optional):\n"
-  "\n"
-  // todo Add explanation for all parameters
-  ".Internal.ReqBufferSize\n"
-  "\n"
-  ".Internal.RespBufferSize\n"
-  "\n"
-  ".Internal.PreAllocatedBuffers\n"
-  "\n"
-  ".Internal.BatchMaxSize\n"
-  "\n"
-  ".Internal.OperationIDMaxSize\n"
-  "\n"
-  ".PIDFile\n"
-  "        Path to .pid file. The process ID will be written on startup, and the\n"
-  "        file will be deleted on exit.\n"
-  "\n"
-  ".REST.Enable\n"
-  "        Whether to enable the REST server.\n"
-  "\n"
-  ".REST.ServerIP\n"
-  "        The IP address to listen on.\n"
-  "\n"
-  ".REST.ServerPort\n"
-  "        TCP port to listen on.\n"
-  "\n"
-  ".REST.NumThreads\n"
-  "\n"
-  ".GRPC.Enable\n"
-  "        Whether to enable the gRPC server.\n"
-  "\n"
-  ".GRPC.ServerIP\n"
-  "        The IP address to listen on.\n"
-  "\n"
-  ".GRPC.ServerPort\n"
-  "        TCP port to listen on.\n"
-  "\n"
-  ".RonDB\n"
-  "        An object describing the connection to a RonDB cluster used to store\n"
-  "        data.\n"
-  "\n"
-  ".RonDB.Mgmds\n"
-  "        An array of ndb_mgmd servers in use by the cluster.\n"
-  "\n"
-  ".RonDB.Mgmds[].IP\n"
-  "        The IP address for an ndb_mgmd server.\n"
-  "\n"
-  ".RonDB.Mgmds[].Port\n"
-  "        The TCP port for an ndb_mgmd server.\n"
-  "\n"
-  ".RonDB.ConnectionPoolSize\n"
-  "\n"
-  ".RonDB.NodeIDs\n"
-  "        An array of ConnectionPoolSize length.\n"
-  "\n"
-  ".RonDB.NodeIDs[]\n"
-  "        Force a RonDB connection to be assigned to a specific node ID.\n"
-  "\n"
-  ".RonDB.ConnectionRetries\n"
-  "        Connection retry attempts.\n"
-  "\n"
-  ".RonDB.ConnectionRetryDelayInSec\n"
-  "\n"
-  ".RonDB.OpRetryOnTransientErrorsCount\n"
-  "        Transient error retry count.\n"
-  "\n"
-  ".RonDB.OpRetryInitialDelayInMS\n"
-  "        Transient error initial delay.\n"
-  "\n"
-  ".RonDB.OpRetryJitterInMS\n"
-  "\n"
-  ".RonDBMetadataCluster\n"
-  "        An object describing the connection to a RonDB cluster used to store\n"
-  "        metadata. It has the same schema as .RonDB. If it is not present in the\n"
-  "        config file, then it will be set to .RonDB\n"
-  "\n"
-  ".Security.TLS.EnableTLS\n"
-  "\n"
-  ".Security.TLS.RequireAndVerifyClientCert\n"
-  "\n"
-  ".Security.TLS.CertificateFile\n"
-  "\n"
-  ".Security.TLS.PrivateKeyFile\n"
-  "\n"
-  ".Security.TLS.RootCACertFile\n"
-  "\n"
-  ".Security.TLS.TestParameters.ClientCertFile\n"
-  "\n"
-  ".Security.TLS.TestParameters.ClientKeyFile\n"
-  "\n"
-  ".Security.APIKey.UseHopsworksAPIKeys\n"
-  "\n"
-  ".Security.APIKey.CacheRefreshIntervalMS\n"
-  "\n"
-  ".Security.APIKey.CacheUnusedEntriesEvictionMS\n"
-  "\n"
-  ".Security.APIKey.CacheRefreshIntervalJitterMS\n"
-  "\n"
-  ".Log.Level\n"
-  "\n"
-  ".Log.FilePath\n"
-  "\n"
-  ".Log.MaxSizeMB\n"
-  "\n"
-  ".Log.MaxBackups\n"
-  "\n"
-  ".Log.MaxAge\n"
-  "\n"
-  ".Testing.MySQL\n"
-  "        An object describing the connection to a MySQL cluster used to store\n"
-  "        data.\n"
-  "\n"
-  ".Testing.MySQL.Servers\n"
-  "        An array of objects, each describing one MySQL server in the cluster.\n"
-  "\n"
-  ".Testing.MySQL.Servers[].IP\n"
-  "        The IP or hostname for the MySQL server.\n"
-  "\n"
-  ".Testing.MySQL.Servers[].Port\n"
-  "        The TCP port for the MySQL server.\n"
-  "\n"
-  ".Testing.MySQL.User\n"
-  "        The username to use for connecting to the MySQL servers.\n"
-  "\n"
-  ".Testing.MySQL.Password\n"
-  "        The password to use for connecting to the MySQL servers.\n"
-  "\n"
-  ".Testing.MySQLMetadataCluster\n"
-  "        An object describing the connection to a MySQL cluster used to store\n"
-  "        metadata. It has the same schema as .Testing.MySQL. If it is not present\n"
-  "        in the config file, then it will be set to .Testing.MySQL.\n"
   ;
 
 #include "connection.hpp"
@@ -290,7 +154,6 @@ int main(int argc, char *argv[]) {
   bool seenOptConfig = false;
   bool optPrintConfig = false;
   bool optHelp = false;
-  bool optHelpConfig = false;
   bool optVersion = false;
   for (int i = 1; i < argc; ++i) {
     if (strcmp(argv[i], "-c") == 0 ||
@@ -316,10 +179,6 @@ int main(int argc, char *argv[]) {
       optHelp = true;
       continue;
     }
-    if (strcmp(argv[i], "--help-config") == 0) {
-      optHelpConfig = true;
-      continue;
-    }
     if (strcmp(argv[i], "-v") == 0 ||
         strcmp(argv[i], "--version") == 0) {
       optVersion = true;
@@ -337,13 +196,7 @@ int main(int argc, char *argv[]) {
   if (optHelp) {
     printf("\n%s", usageHelp);
   }
-  if (optHelpConfig) {
-    if (optVersion || optHelp) {
-      printf("\n\n");
-    }
-    printf("%s", configHelp);
-  }
-  if ((optVersion || optHelp || optHelpConfig) && !optPrintConfig) {
+  if ((optVersion || optHelp) && !optPrintConfig) {
     do_exit(0);
   }
 
@@ -357,7 +210,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (optPrintConfig) {
-    printJson(globalConfigs, std::cout, 0);
+    printJson(globalConfigs, std::cout, 0, true);
     std::cout << '\n';
     do_exit(0);
   }

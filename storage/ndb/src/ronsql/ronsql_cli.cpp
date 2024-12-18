@@ -26,6 +26,7 @@
 #include <my_sys.h> // Only needed for MY_GIVE_INFO
 #include <getopt.h>
 #include <NdbTick.h>
+#include "storage/ndb/plugin/ndb_sleep.h"
 
 using std::cerr;
 using std::cout;
@@ -369,25 +370,41 @@ read_stdin(ArenaMalloc* amalloc, char** buffer, size_t* buffer_len)
 }
 
 static ExitCode
-run_ronsql(RonSQLExecParams& params)
-{
-  try
-  {
-    RonSQLPreparer executor(params);
-    executor.execute();
-    return 0;
-  }
-  catch (RonSQLPreparer::TemporaryError& e)
-  {
-    cerr << "ronsql_cli caught temporary error: " << e.what() << endl;
-    // Use exit code 3 to distinguish temporary errors.
-    // Avoid exit code 2 as it is used by e.g. bash.
-      return 3;
-  }
-  catch (std::runtime_error& e)
-  {
-    cerr << "ronsql_cli caught exception: " << e.what() << endl;
-    return 1;
+run_ronsql(RonSQLExecParams& params) {
+  static int max_attempts = 2;
+  for (int attempt = 0; attempt < max_attempts; attempt++) {
+    bool is_last_attempt = attempt == max_attempts - 1;
+    try {
+      RonSQLPreparer executor(params);
+      executor.execute();
+      return 0;
+    }
+    catch (RonSQLPreparer::TemporaryError& e) {
+      if (is_last_attempt) {
+        // Avoid exit code 2 as it is used by e.g. bash.
+        cerr << "ronsql_cli caught TemporaryError after " << max_attempts
+             << " attempts." << endl;
+      // Exit with code 3 (temporary error)
+        return 3;
+      } else {
+        ndb_retry_sleep(50);
+      }
+    }
+    catch (RonSQLPreparer::ColumnNotFoundError& e) {
+      if (is_last_attempt) {
+        cerr << "ronsql_cli caught ColumnNotFoundError after " << max_attempts
+             << " attempts." << endl;
+      // Exit with code 1 (permanent error)
+        return 1;
+      } else {
+        ndb_retry_sleep(50);
+      }
+    }
+    catch (std::runtime_error& e) {
+      cerr << "ronsql_cli caught exception: " << e.what() << endl;
+      // Exit with code 1 (permanent error)
+      return 1;
+    }
   }
   // Unreachable
   abort();

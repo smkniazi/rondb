@@ -40,6 +40,7 @@ private:
   ArenaMalloc* m_amalloc;
   struct SelectStatement* m_query;
   DynamicArray<LexCString>* m_column_names;
+  CHARSET_INFO** m_column_charset_map;
   RonSQLExecParams::OutputFormat m_output_format;
   std::basic_ostream<char>* m_err;
 
@@ -74,6 +75,7 @@ private:
       struct
       {
         Uint32 reg_g;
+        CHARSET_INFO* charset;
       } print_group_by_column;
       struct
       {
@@ -116,6 +118,7 @@ public:
   ResultPrinter(ArenaMalloc* amalloc,
                 struct SelectStatement* query,
                 DynamicArray<LexCString>* column_names,
+                CHARSET_INFO** charset_map,
                 RonSQLExecParams::OutputFormat output_format,
                 std::basic_ostream<char>* err);
   void print_result(NdbAggregator* aggregator,
