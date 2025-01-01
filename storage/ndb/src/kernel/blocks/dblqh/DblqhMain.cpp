@@ -32147,6 +32147,8 @@ void Dblqh::deleteFragrec(Uint32 fragId)
     NdbMutex_Deinit(&fragptr.p->frag_mutex);
     c_fragment_pool.release(fragptr);
     RSS_OP_FREE(cnoOfAllocatedFragrec);
+    ndbrequire(c_num_fragments > 0);
+    c_num_fragments--;
   }
 }  // Dblqh::deleteFragrec()
 
@@ -33421,6 +33423,7 @@ bool Dblqh::insertFragrec(Signal* signal,
     if (freeEntry != RNIL)
     {
       RSS_OP_ALLOC(cnoOfAllocatedFragrec);
+      c_num_fragments++;
       tabptr.p->num_fragments++;
       return true;
     }
