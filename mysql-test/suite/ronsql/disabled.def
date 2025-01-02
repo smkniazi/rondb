@@ -1,0 +1,15 @@
+##############################################################################
+#
+# List the test cases that are to be disabled temporarily. This file is
+# used for MySQL Cluster tests only.
+#
+# Separate the test case name and the comment with ':'.
+#   <suite>.<test> [@platform|@!platform] : <BUG#|WL#|RONDB-><XXXX> [<comment>]
+#
+# Note:
+#   - Do not use any TAB characters for whitespace.
+#   - Length of a comment section must not be more than 80 characters.
+#
+##############################################################################
+
+ronsql.ronsql_emptytable : RONDB-822 Failed ndbassert during pushdown aggregation
