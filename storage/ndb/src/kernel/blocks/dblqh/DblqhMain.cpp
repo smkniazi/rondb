@@ -20392,9 +20392,14 @@ void Dblqh::sendScanFragConf(Signal *signal, Uint32 scanCompleted,
      * potential crash here? double check.
      * 1. API quits while scanning. scanPtr->scanState == WAIT_CLOSE_SCAN
      * and scanPtr->m_agg_curr_batch_size_bytes maybe 0.
++     * 2. A table-scan is done (or table-scan on an empty table, WAIT_CLOSE_SCAN)
++     * 3. An index-scan on an empty table, WAIT_ACC_SCAN);
++     *
++     * CHECK RONDB-822 for more details
      */
     ndbassert(scanPtr->m_agg_curr_batch_size_bytes ||
-           scanPtr->scanState == ScanRecord::WAIT_CLOSE_SCAN);
+           scanPtr->scanState == ScanRecord::WAIT_CLOSE_SCAN ||
+           scanPtr->scanState == ScanRecord::WAIT_ACC_SCAN);
   }
   const Uint32 completed_ops= tmp_completed_ops;
   const Uint32 total_len= tmp_total_len / sizeof(Uint32);

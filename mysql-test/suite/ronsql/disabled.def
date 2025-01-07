@@ -12,4 +12,4 @@
 #
 ##############################################################################
 
-ronsql.ronsql_emptytable : RONDB-822 Failed ndbassert during pushdown aggregation
+ronsql.ronsql_emptytable : RONDB-831 fails due to a result mismatch.
