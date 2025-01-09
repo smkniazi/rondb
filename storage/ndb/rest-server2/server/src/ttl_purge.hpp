@@ -26,6 +26,7 @@
 #include <map>
 
 #include <NdbApi.hpp>
+#include "NdbThread.h"
 
 class TTLPurger {
  public:
@@ -58,21 +59,23 @@ class TTLPurger {
   static TTLPurger* CreateTTLPurger();
   bool Run();
   ~TTLPurger();
+  void SchemaWatcherJob();
+  void PurgeWorkerJob();
 
  private:
   TTLPurger();
-  void SchemaWatcherJob();
+  static void* _SchemaWatcherJob(void* arg);
+  static void* _PurgeWorkerJob(void* arg);
   Ndb* watcher_ndb_;
-  void PurgeWorkerJob();
   Ndb* worker_ndb_;
   std::atomic<bool> exit_;
 
   typedef struct {
-    int32_t table_id;
-    uint32_t ttl_sec;
-    uint32_t col_no;
-    uint32_t part_id = {0};                   // Only valid in local ttl cache
-    uint32_t batch_size = {kPurgeBatchSize};  // Only valid in local ttl cache
+    Int32 table_id;
+    Uint32 ttl_sec;
+    Uint32 col_no;
+    Uint32 part_id = {0};                   // Only valid in local ttl cache
+    Uint32 batch_size = {kPurgeBatchSize};  // Only valid in local ttl cache
   } TTLInfo;
   std::map<std::string, TTLInfo> ttl_cache_;
   std::mutex mutex_;
@@ -92,9 +95,9 @@ class TTLPurger {
 
   std::atomic<bool> purge_worker_asks_for_retry_;
   bool schema_watcher_running_;
-  std::thread* schema_watcher_;
+  NdbThread* schema_watcher_;
 
-  bool GetShard(int32_t* shard, int32_t* n_purge_nodes, bool update_objects);
+  bool GetShard(Int32* shard, Int32* n_purge_nodes, bool update_objects);
   static Int64 GetNow(unsigned char* encoded_now);
   bool UpdateLease(const unsigned char* encoded_now);
   bool IsNodeAlive(const unsigned char* encoded_last_active);
@@ -102,7 +105,7 @@ class TTLPurger {
                          Uint32 deleted_rows,
                          Uint64 used_time);
   bool purge_worker_running_;
-  std::thread* purge_worker_;
+  NdbThread* purge_worker_;
   std::atomic<bool> purge_worker_exit_;
   std::map<Int32, std::map<Uint32, Int64>> purged_pos_;
 };

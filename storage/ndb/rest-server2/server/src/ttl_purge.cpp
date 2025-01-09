@@ -28,6 +28,7 @@
 #include "include/my_murmur3.h"
 #include "include/my_systime.h"
 #include "include/my_time.h"
+#include "NdbSleep.h"
 
 #include <EventLogger.hpp>
 extern EventLogger *g_eventLogger;
@@ -51,9 +52,9 @@ TTLPurger::~TTLPurger() {
   exit_ = true;
   if (schema_watcher_running_) {
     assert(schema_watcher_ != nullptr);
-    if (schema_watcher_->joinable()) {
-      schema_watcher_->join();
-    }
+    void* status;
+    NdbThread_WaitFor(schema_watcher_, &status);
+    NdbThread_Destroy(&schema_watcher_);
     schema_watcher_ = nullptr;
     schema_watcher_running_ = false;
   }
@@ -99,7 +100,13 @@ static void RandomSleep(int lower_bound, int upper_bound) {
   std::uniform_int_distribution<int> dist(lower_bound, upper_bound);
 
   int sleep_duration = dist(gen);
-  std::this_thread::sleep_for(std::chrono::milliseconds(sleep_duration));
+  NdbSleep_MilliSleep(sleep_duration);
+}
+
+void* TTLPurger::_PurgeWorkerJob(void* arg) {
+  TTLPurger* p_this = static_cast<TTLPurger*>(arg);
+  p_this->PurgeWorkerJob();
+  return nullptr;
 }
 
 static constexpr int NDB_INVALID_SCHEMA_OBJECT = 241;
@@ -295,8 +302,10 @@ retry:
   // Set it to true to make purge worker load cache
   cache_updated_ = true;
   purge_worker_exit_ = false;
-  purge_worker_ = new std::thread(
-                    std::bind(&TTLPurger::PurgeWorkerJob, this));
+  purge_worker_ = NdbThread_Create(TTLPurger::_PurgeWorkerJob,
+                                     (NDB_THREAD_ARG *)this,
+                                     0, "PurgeWorker",
+                                     NDB_THREAD_PRIO_MEAN);
   purge_worker_running_ = true;
 
   // Main schema_watcher_ task
@@ -683,9 +692,9 @@ err:
   purge_worker_exit_ = true;
   if (purge_worker_running_) {
     assert(purge_worker_ != nullptr);
-    if (purge_worker_->joinable()) {
-      purge_worker_->join();
-    }
+    void* status;
+    NdbThread_WaitFor(purge_worker_, &status);
+    NdbThread_Destroy(&purge_worker_);
     purge_worker_ = nullptr;
     purge_worker_running_ = false;
   }
@@ -886,11 +895,11 @@ void TTLPurger::PurgeWorkerJob() {
   size_t pos = 0;
   std::string db_str;
   std::string table_str;
-  uint32_t ttl_col_no = 0;
+  Uint32 ttl_col_no = 0;
   int check = 0;
   int table_id = 0;
   Uint32 hash_val = 0;
-  uint32_t deletedRows = 0;
+  Uint32 deletedRows = 0;
   int trx_failure_times = 0;
   std::map<std::string, TTLInfo>::iterator iter;
   std::map<Int32, std::map<Uint32, Int64>>::iterator purge_tab_iter;
@@ -1516,7 +1525,7 @@ err:
   return;
 }
 
-bool TTLPurger::GetShard(int32_t* shard, int32_t* n_purge_nodes,
+bool TTLPurger::GetShard(Int32* shard, Int32* n_purge_nodes,
                          bool update_objects) {
   *shard = kShardNosharding;
   *n_purge_nodes = 0;
@@ -1549,8 +1558,8 @@ bool TTLPurger::GetShard(int32_t* shard, int32_t* n_purge_nodes,
   NdbRecAttr* rec_attr[3];
   NdbTransaction* trans = nullptr;
   NdbScanOperation* scan_op = nullptr;
-  int32_t n_nodes = 0;;
-  std::vector<int32_t> purge_nodes;
+  Int32 n_nodes = 0;;
+  std::vector<Int32> purge_nodes;
   size_t pos = 0;
   bool check = 0;
   std::string log_buf = "[TTL PWorker] ";
@@ -1813,12 +1822,20 @@ bool TTLPurger::IsNodeAlive(const unsigned char* encoded_last_active) {
   }
 }
 
+void* TTLPurger::_SchemaWatcherJob(void* arg) {
+  TTLPurger* p_this = static_cast<TTLPurger*>(arg);
+  p_this->SchemaWatcherJob();
+  return nullptr;
+}
+
 bool TTLPurger::Run() {
   if (!schema_watcher_running_) {
     assert(schema_watcher_ == nullptr);
     assert(!purge_worker_running_);
-    schema_watcher_ = new std::thread(
-                      std::bind(&TTLPurger::SchemaWatcherJob, this));
+    schema_watcher_ = NdbThread_Create(TTLPurger::_SchemaWatcherJob,
+                                       (NDB_THREAD_ARG *)this,
+                                       0, "SchemaWatcher",
+                                       NDB_THREAD_PRIO_MEAN);
     schema_watcher_running_ = true;
   }
   return true;
