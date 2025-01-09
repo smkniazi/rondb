@@ -1577,6 +1577,7 @@ class Dbtc : public SimulatedBlock {
      * TTL
      */
     Uint8 m_ttl_ignore;
+    Uint8 m_ttl_only_expired;
     /* End of TCKEYREQ/TCINDXREQ only fields */
   };
 

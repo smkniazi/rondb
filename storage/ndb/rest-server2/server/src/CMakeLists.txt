@@ -45,6 +45,7 @@ file(GLOB_RECURSE SRC
         db_operations/pk/pkr_request.cpp
         db_operations/pk/pkr_response.cpp
         db_operations/ronsql/ronsql_operation.cpp
+        ttl_purge.cpp
 )
 NDB_ADD_EXECUTABLE(${PROJECT_NAME} ${SRC} STATIC_NDBCLIENT)
 add_dependencies(${PROJECT_NAME} DROGON_IS_BUILD SIMDJSON_IS_BUILD)

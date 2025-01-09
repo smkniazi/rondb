@@ -40,6 +40,7 @@ class RDRSRonDBConnectionPool {
   RDRSRonDBConnection **dataConnections;
   RDRSRonDBConnection *metadataConnection;
   ThreadContext **m_thread_context;
+  static const Uint32 kNoTTLPurgeThreads = 2;
   Uint32 m_num_threads;
   Uint32 m_num_data_connections;
   bool is_shutdown = true;
@@ -127,6 +128,15 @@ class RDRSRonDBConnectionPool {
   RS_Status GetNdbObject(Ndb **ndb_object,
                          Uint32 threadIndex);
 
+  // Get the specific NdbObject to the TTL schema watcher
+  RS_Status GetTTLSchemaWatcherNdbObject(Ndb **ndb_object) {
+    return GetNdbObject(ndb_object, m_num_threads - 2);
+  }
+
+  // Get the specific NdbObject to the TTL purge worker
+  RS_Status GetTTLPurgeWorkerNdbObject(Ndb **ndb_object) {
+    return GetNdbObject(ndb_object, m_num_threads - 1);
+  }
   /**
    * @brief Return NDB Object back to the pool
    *
@@ -139,6 +149,15 @@ class RDRSRonDBConnectionPool {
                             RS_Status *status,
                             Uint32 threadIndex);
 
+  RS_Status ReturnTTLSchemaWatcherNdbObject(Ndb *ndb_object,
+                                     RS_Status *status) {
+    return ReturnNdbObject(ndb_object, status, m_num_threads - 2);
+  }
+
+  RS_Status ReturnTTLPurgeWorkerNdbObject(Ndb *ndb_object,
+                                          RS_Status *status) {
+    return ReturnNdbObject(ndb_object, status, m_num_threads - 1);
+  }
   /**
    * @brief Get ndb object for metadata operation
    *

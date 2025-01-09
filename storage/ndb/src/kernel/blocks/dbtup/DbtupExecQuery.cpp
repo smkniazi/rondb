@@ -1339,12 +1339,15 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
     } else {
       regOperPtr->ttl_ignore = 0;
     }
+    regOperPtr->ttl_only_expired = lqhScanPtrP->m_ttl_only_expired;
 #ifdef TTL_DEBUG
     if (NEED_PRINT(prepare_fragptr.p->fragTableId)) {
-      g_eventLogger->info("Zart, Dbtup::execTUPKEYREQ(), Ignore TTL[%u, %u]: %u",
+      g_eventLogger->info("Zart, Dbtup::execTUPKEYREQ(), Ignore TTL[%u, %u]: %u, "
+                          "only expired: %u",
                            lqhScanPtrP->m_ttl_ignore,
                            lqhScanPtrP->m_ttl_ignore_for_ral,
-                           regOperPtr->ttl_ignore);
+                           regOperPtr->ttl_ignore,
+                           regOperPtr->ttl_only_expired);
     }
 #endif  // TTL_DEBUG
     /*
@@ -1394,6 +1397,7 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
     req_struct.m_row_id.m_page_idx = row_id_page_idx;
     req_struct.scan_rec = nullptr;
     regOperPtr->ttl_ignore = lqhOpPtrP->ttl_ignore;
+    regOperPtr->ttl_only_expired = lqhOpPtrP->ttl_only_expired;
 #ifdef TTL_DEBUG
     if (NEED_PRINT(prepare_fragptr.p->fragTableId) &&
         regOperPtr->ttl_ignore) {
@@ -1443,11 +1447,13 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
       g_eventLogger->info("Zart, [TableId: %u]"
                           "Set Dbtup::Operationrec::original_op_type: %u, "
                           "current Dbtup::Operationrec::op_type: %u, "
-                          "ignore TTL ?(%u)",
+                          "ignore TTL ?(%u), "
+                          "only expired?(%u)",
                           prepare_fragptr.p->fragTableId,
                           regOperPtr->original_op_type,
                           regOperPtr->op_type,
-                          regOperPtr->ttl_ignore);
+                          regOperPtr->ttl_ignore,
+                          regOperPtr->ttl_only_expired);
     }
 #endif  // TTL_DEBUG
   }
@@ -1836,6 +1842,13 @@ bool Dbtup::execTUPKEYREQ(Signal* signal,
                                    &req_struct, disk_page != RNIL) == -1)) {
         return false;
       }
+      /*
+       * Here we set op_type from ZINSERT_TTL to ZUPDATE to make
+       * the following trigger stuffs regard this operation as a
+       * normal update operation.
+       */
+      // TODO(Zhao): double check this solution
+      regOperPtr->op_type = ZUPDATE;
       /**
        * The lock on the TUP fragment is required to update header info on
        * the base row, thus we use the variable m_base_header_bits in
@@ -2296,6 +2309,21 @@ int Dbtup::handleReadReq(
   }
   dst = &signal->theData[start_index];
   dstLen = (MAX_READ / 4) - start_index;
+
+  if (unlikely(_regOperPtr->ttl_ignore == 0 &&
+               _regOperPtr->ttl_only_expired == 1)) {
+    ndbassert(req_struct->fragPtrP != nullptr);
+    if (!c_lqh->is_ttl_table(req_struct->fragPtrP->fragTableId)) {
+      g_eventLogger->warning("(Read) Received an read request with "
+                             "ttl_only_expired on a non-TTL table: %d",
+                             req_struct->fragPtrP->fragTableId);
+      // return Notfound
+      terrorCode = 626;
+      tupkeyErrorLab(req_struct);
+      return -1;
+    }
+  }
+
   /*
    * Zart
    * Here we check whether the row is expired
@@ -2317,46 +2345,63 @@ int Dbtup::handleReadReq(
 #endif  // TTL_DEBUG
     cmp_ret = checkTTL(regTabPtr, req_struct, &has_error, &err_no);
     if (!has_error) {
-      if (cmp_ret <= 0) {
-        // Expired
-        bool ttl_ignore_for_ral = false;
-        if (req_struct->scan_rec != nullptr) {
-          Dblqh::ScanRecord* scan_rec_ptr =
-             reinterpret_cast<Dblqh::ScanRecord*>(req_struct->scan_rec);
-          if (!scan_rec_ptr->scanLockMode /* X */ &&
-              !scan_rec_ptr->scanLockHold /* S */) {
-            ndbrequire(scan_rec_ptr->readCommitted);
-            if (scan_rec_ptr->scanBlock == this) {
-              PrepareAccLockReq4RAL(req_struct->scan_rec, signal);
+      if (_regOperPtr->ttl_only_expired == 0) {
+        if (cmp_ret <= 0) {
+          // Expired
+          bool ttl_ignore_for_ral = false;
+          if (req_struct->scan_rec != nullptr) {
+            Dblqh::ScanRecord* scan_rec_ptr =
+              reinterpret_cast<Dblqh::ScanRecord*>(req_struct->scan_rec);
+            if (!scan_rec_ptr->scanLockMode /* X */ &&
+                !scan_rec_ptr->scanLockHold /* S */) {
+              ndbrequire(scan_rec_ptr->readCommitted);
+              if (scan_rec_ptr->scanBlock == this) {
+                PrepareAccLockReq4RAL(req_struct->scan_rec, signal);
+              } else {
+                ndbrequire(reinterpret_cast<const void*>(c_lqh->get_c_tux()) ==
+                    reinterpret_cast<const void*>(
+                      scan_rec_ptr->scanBlock));
+                reinterpret_cast<Dbtux*>(scan_rec_ptr->scanBlock)->
+                  PrepareAccLockReq4RAL(
+                      req_struct->scan_rec,
+                      signal);
+              }
+              ttl_ignore_for_ral = c_acc->WhetherSkipTTL(signal);
+#ifdef TTL_DEBUG
+              g_eventLogger->info("Zart, Dbtup::handleReadReq() check whether needs "
+                  "to ignore TTL: %d", ttl_ignore_for_ral);
+#endif  // TTL_DEBUG
             } else {
-              ndbrequire(reinterpret_cast<const void*>(c_lqh->get_c_tux()) ==
-                         reinterpret_cast<const void*>(
-                           scan_rec_ptr->scanBlock));
-              reinterpret_cast<Dbtux*>(scan_rec_ptr->scanBlock)->
-                              PrepareAccLockReq4RAL(
-                                        req_struct->scan_rec,
-                                        signal);
+#ifdef TTL_DEBUG
+              g_eventLogger->info("Zart, Dbtup::handleReadReq() skip TTL "
+                  "checking for locking-scan on TTL "
+                  "table");
+#endif  // TTL_DEBUG
             }
-            ttl_ignore_for_ral = c_acc->WhetherSkipTTL(signal);
+          }
+          if (!ttl_ignore_for_ral) {
 #ifdef TTL_DEBUG
-            g_eventLogger->info("Zart, Dbtup::handleReadReq() check whether needs "
-                "to ignore TTL: %d", ttl_ignore_for_ral);
+            g_eventLogger->info("Zart, (READ) TTL expired");
 #endif  // TTL_DEBUG
-          } else {
-#ifdef TTL_DEBUG
-            g_eventLogger->info("Zart, Dbtup::handleReadReq() skip TTL "
-                                "checking for locking-scan on TTL "
-                                "table");
-#endif  // TTL_DEBUG
+            terrorCode = 626;
+            tupkeyErrorLab(req_struct);
+            return -1;
           }
         }
-        if (!ttl_ignore_for_ral) {
+      } else {
+        if (cmp_ret > 0) {
 #ifdef TTL_DEBUG
-          g_eventLogger->info("Zart, (READ) TTL expired");
+          g_eventLogger->info("Zart, (READ) TTL skip non-expired row "
+                              "since only_expired flag is set");
 #endif  // TTL_DEBUG
           terrorCode = 626;
           tupkeyErrorLab(req_struct);
           return -1;
+        } else {
+#ifdef TTL_DEBUG
+          g_eventLogger->info("Zart, (READ) TTL return expired row "
+                              "since only_expired flag is set");
+#endif  // TTL_DEBUG
         }
       }
     } else {
@@ -2430,6 +2475,22 @@ int Dbtup::handleUpdateReq(Signal* signal,
                            KeyReqStruct* req_struct,
                            bool disk) 
 {
+  if (unlikely(operPtrP->ttl_ignore == 0 &&
+               operPtrP->ttl_only_expired == 1 &&
+               operPtrP->original_op_type != ZWRITE)) {
+    ndbassert(req_struct->fragPtrP != nullptr);
+    if (!c_lqh->is_ttl_table(req_struct->fragPtrP->fragTableId)) {
+      g_eventLogger->warning("(Update) Received an update request with "
+                             "ttl_only_expired on a non-TTL table: %d",
+                             req_struct->fragPtrP->fragTableId);
+      // return Notfound
+      terrorCode = 626;
+      tupkeyErrorLab(req_struct);
+      return -1;
+    }
+  }
+
+#ifdef TTL_DEBUG
   /*
    * Zart
    * Here we check whether the row is expired
@@ -2440,17 +2501,14 @@ int Dbtup::handleUpdateReq(Signal* signal,
    */
   if (operPtrP->original_op_type == ZWRITE &&
       is_ttl_table(regTabPtr)) {
-#ifdef TTL_DEBUG
     g_eventLogger->info("Zart, (UPDATE) Skip checking TTL since "
                         "the original operation is ZWRITE.");
-#endif  // TTL_DEBUG
   }
   if (operPtrP->ttl_ignore == 1) {
-#ifdef TTL_DEBUG
     g_eventLogger->info("Zart, (Update) Skip checking TTL since "
                         "ttl ignore is set");
-#endif  // TTL_DEBUG
   }
+#endif  // TTL_DEBUG
   if (operPtrP->ttl_ignore == 0 &&
       operPtrP->original_op_type != ZWRITE &&
       is_ttl_table(regTabPtr)) {
@@ -3651,6 +3709,20 @@ int Dbtup::handleDeleteReq(Signal* signal,
                            KeyReqStruct *req_struct,
                            bool disk)
 {
+  if (unlikely(regOperPtr->ttl_ignore == 0
+               && regOperPtr->ttl_only_expired == 1)) {
+    ndbassert(req_struct->fragPtrP != nullptr);
+    if (!c_lqh->is_ttl_table(req_struct->fragPtrP->fragTableId)) {
+      g_eventLogger->warning("(Delete) Received an delete request with "
+                             "ttl_only_expired on a non-TTL table: %d",
+                             req_struct->fragPtrP->fragTableId);
+      // return Notfound
+      terrorCode = 626;
+      tupkeyErrorLab(req_struct);
+      return -1;
+    }
+  }
+
   /*
    * Zart
    * Here we check whether the row is expired

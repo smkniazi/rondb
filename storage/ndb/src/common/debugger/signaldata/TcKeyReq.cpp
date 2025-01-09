@@ -109,6 +109,8 @@ bool printTCKEYREQ(FILE *output, const Uint32 *theData, Uint32 len,
 
     if (sig->getTTLIgnoreFlag(sig->requestInfo))
       fprintf(output, " ttl_ignore");
+    if (sig->getTTLOnlyExpiredFlag(sig->requestInfo))
+      fprintf(output, " ttl_only_expired");
 
     fprintf(output, "\n");
   }

@@ -838,7 +838,7 @@ NdbDictionary::Table::getTTLColumnNo() const {
 }
 
 bool
-NdbDictionary::Table::isTTLEnabled() {
+NdbDictionary::Table::isTTLEnabled() const {
   return (m_impl.m_ttl_sec != RNIL && m_impl.m_ttl_col_no != RNIL);
 }
 

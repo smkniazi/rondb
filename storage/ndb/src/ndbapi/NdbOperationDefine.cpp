@@ -1559,5 +1559,9 @@ int NdbOperation::handleOperationOptions(const OperationType type,
     op->theDirtyIndicator = 1;
     op->theSimpleIndicator = 1;
   }
+  if (opts->optionsPresent & OperationOptions::OO_TTL_ONLY_EXPIRED)
+  {
+    op->m_flags |= OF_TTL_ONLY_EXPIRED;
+  }
   return 0;
 }

@@ -259,6 +259,8 @@ class TcKeyReq {
    */
   static void setTTLIgnoreFlag(UintR &requestInfo, UintR val);
   static UintR getTTLIgnoreFlag(const UintR &requestInfo);
+  static void setTTLOnlyExpiredFlag(UintR &requestInfo, UintR val);
+  static UintR getTTLOnlyExpiredFlag(const UintR &requestInfo);
 };
 
 /**
@@ -439,6 +441,7 @@ class TcKeyReq {
  */
 #define TC_TTL_IGNORE_SHIFT (26)
 #define INTERPRETED_INSERT_SHIFT (27)
+#define TC_TTL_ONLY_EXPIRED_SHIFT (28)
 
 /**
  * Scan Info
@@ -813,6 +816,20 @@ UintR
 TcKeyReq::getTTLIgnoreFlag(const UintR & requestInfo)
 {
   return (requestInfo >> TC_TTL_IGNORE_SHIFT) & 1;
+}
+
+inline
+void
+TcKeyReq::setTTLOnlyExpiredFlag(UintR & requestInfo, UintR flag){
+  ASSERT_BOOL(flag, "TcKeyReq::setTTLOnlyExpiredFlag");
+  requestInfo |= (flag << TC_TTL_ONLY_EXPIRED_SHIFT);
+}
+
+inline
+UintR
+TcKeyReq::getTTLOnlyExpiredFlag(const UintR & requestInfo)
+{
+  return (requestInfo >> TC_TTL_ONLY_EXPIRED_SHIFT) & 1;
 }
 
 #undef JAM_FILE_ID

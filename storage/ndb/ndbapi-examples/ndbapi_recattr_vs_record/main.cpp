@@ -50,6 +50,9 @@
 // Used for cout
 #include <iostream>
 
+// Turn on it to try TTL related flags
+// #define TRY_TTL_FLAGS
+
 // Do we use old-style (NdbRecAttr?) or new style (NdbRecord?)
 enum ApiType { api_attr, api_record };
 
@@ -455,9 +458,18 @@ static void do_update(Ndb &myNdb, ApiType accessType) {
          */
         unsigned char attrMask = (1 << attr2ColNum) | (1 << attr3ColNum);
 
+#ifdef TRY_TTL_FLAGS
+        NdbOperation::OperationOptions options;
+        options.optionsPresent = NdbOperation::OperationOptions::OO_TTL_ONLY_EXPIRED;
+        // options.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_IGNORE;
+#endif  // TRY_TTL_FLAGS
         const NdbOperation *pop =
             myTransaction->updateTuple(pkeyColumnRecord, (char *)&row,
-                                       pallColsRecord, (char *)&row, &attrMask);
+                                       pallColsRecord, (char *)&row, &attrMask
+#ifdef TRY_TTL_FLAGS
+                                       ,&options, sizeof(NdbOperation::OperationOptions)
+#endif  // TRY_TTL_FLAGS
+                                       );
 
         if (pop == NULL) APIERROR(myTransaction->getNdbError());
         break;
@@ -505,8 +517,18 @@ static void do_delete(Ndb &myNdb, ApiType accessType) {
       RowData keyInfo;
       keyInfo.attr1 = 3;
 
+#ifdef TRY_TTL_FLAGS
+      NdbOperation::OperationOptions options;
+      options.optionsPresent = NdbOperation::OperationOptions::OO_TTL_ONLY_EXPIRED;
+      // options.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_IGNORE;
+#endif  // TRY_TTL_FLAGS
       const NdbOperation *pop = myTransaction->deleteTuple(
-          pkeyColumnRecord, (char *)&keyInfo, pallColsRecord);
+          pkeyColumnRecord, (char *)&keyInfo, pallColsRecord
+#ifdef TRY_TTL_FLAGS
+          ,nullptr, nullptr,
+          &options, sizeof(NdbOperation::OperationOptions)
+#endif  // TRY_TTL_FLAGS
+          );
 
       if (pop == NULL) APIERROR(myTransaction->getNdbError());
       break;
@@ -556,6 +578,10 @@ static void do_mixed_update(Ndb &myNdb) {
 
     NdbOperation::OperationOptions opts;
     opts.optionsPresent = NdbOperation::OperationOptions::OO_SETVALUE;
+#ifdef TRY_TTL_FLAGS
+    // opts.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_IGNORE;
+    opts.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
     opts.extraSetValues = &setvalspecs[0];
     opts.numExtraSetValues = 1;
 
@@ -614,11 +640,22 @@ static void do_read(Ndb &myNdb, ApiType accessType) {
         break;
       }
       case api_record: {
+#ifdef TRY_TTL_FLAGS
+        NdbOperation::OperationOptions options;
+        options.optionsPresent = NdbOperation::OperationOptions::OO_TTL_ONLY_EXPIRED;
+        // options.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_IGNORE;
+#endif  // TRY_TTL_FLAGS
         rowData.attr1 = i;
         const NdbOperation *pop =
             myTransaction->readTuple(pkeyColumnRecord, (char *)&rowData,
                                      pallColsRecord,  // Read PK+ATTR2+ATTR3
-                                     (char *)&rowData);
+                                     (char *)&rowData
+#ifdef TRY_TTL_FLAGS
+                                     ,NdbOperation::LM_Read,
+                                     nullptr,
+                                     &options, sizeof(NdbOperation::OperationOptions)
+#endif  // TRY_TTL_FLAGS
+                                     );
         if (pop == NULL) APIERROR(myTransaction->getNdbError());
 
         break;
@@ -695,6 +732,10 @@ static void do_mixed_read(Ndb &myNdb) {
 
     NdbOperation::OperationOptions opts;
     opts.optionsPresent = NdbOperation::OperationOptions::OO_GETVALUE;
+#ifdef TRY_TTL_FLAGS
+    // opts.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_IGNORE;
+    opts.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
 
     opts.extraGetValues = &extraCols[0];
     opts.numExtraGetValues = 2;
@@ -768,7 +809,11 @@ static void do_scan(Ndb &myNdb, ApiType accessType) {
 
       if (psop == NULL) APIERROR(myTransaction->getNdbError());
 
-      if (psop->readTuples(NdbOperation::LM_Read) != 0)
+      if (psop->readTuples(NdbOperation::LM_Read
+#ifdef TRY_TTL_FLAGS
+                           , NdbScanOperation::SF_OnlyExpiredScan
+#endif  // TRY_TTL_FLAGS
+                           ) != 0)
         APIERROR(myTransaction->getNdbError());
 
       recAttrAttr1 = psop->getValue("ATTR1");
@@ -782,7 +827,17 @@ static void do_scan(Ndb &myNdb, ApiType accessType) {
        * The scan will fetch a batch and give the user a series of pointers
        * to rows in the batch in nextResult() below
        */
-      psop = myTransaction->scanTable(pallColsRecord, NdbOperation::LM_Read);
+#ifdef TRY_TTL_FLAGS
+      NdbScanOperation::ScanOptions options;
+      // options.optionsPresent = NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+      options.optionsPresent = NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
+      psop = myTransaction->scanTable(pallColsRecord, NdbOperation::LM_Read
+#ifdef TRY_TTL_FLAGS
+                                      , nullptr,
+                                      &options, sizeof(NdbScanOperation::ScanOptions)
+#endif  // TRY_TTL_FLAGS
+                                      );
 
       if (psop == NULL) APIERROR(myTransaction->getNdbError());
 
@@ -867,6 +922,10 @@ static void do_mixed_scan(Ndb &myNdb) {
 
   NdbScanOperation::ScanOptions options;
   options.optionsPresent = NdbScanOperation::ScanOptions::SO_GETVALUE;
+#ifdef TRY_TTL_FLAGS
+  // options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+  options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
   options.extraGetValues = &extraGets[0];
   options.numExtraGetValues = 1;
 
@@ -939,7 +998,12 @@ static void do_indexScan(Ndb &myNdb, ApiType accessType) {
        */
       Uint32 scanFlags = NdbScanOperation::SF_OrderBy |
                          NdbScanOperation::SF_MultiRange |
-                         NdbScanOperation::SF_ReadRangeNo;
+                         NdbScanOperation::SF_ReadRangeNo
+#ifdef TRY_TTL_FLAGS
+                         |
+                         NdbScanOperation::SF_OnlyExpiredScan
+#endif  // TRY_TTL_FLAGS
+                         ;
 
       if (psop->readTuples(NdbOperation::LM_Read, scanFlags,
                            (Uint32)0,        // batch
@@ -992,6 +1056,10 @@ static void do_indexScan(Ndb &myNdb, ApiType accessType) {
 
       NdbScanOperation::ScanOptions options;
       options.optionsPresent = NdbScanOperation::ScanOptions::SO_SCANFLAGS;
+#ifdef TRY_TTL_FLAGS
+      // options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+      options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
       options.scan_flags = scanFlags;
 
       psop = myTransaction->scanIndex(
@@ -1132,6 +1200,10 @@ static void do_mixed_indexScan(Ndb &myNdb) {
   NdbScanOperation::ScanOptions options;
   options.optionsPresent = NdbScanOperation::ScanOptions::SO_SCANFLAGS |
                            NdbScanOperation::ScanOptions::SO_GETVALUE;
+#ifdef TRY_TTL_FLAGS
+  // options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+  options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
   options.scan_flags = scanFlags;
   options.extraGetValues = &extraGets[0];
   options.numExtraGetValues = 1;
@@ -1239,6 +1311,10 @@ static void do_read_and_delete(Ndb &myNdb) {
   extraGets[1].recAttr = NULL;
 
   options.optionsPresent = NdbOperation::OperationOptions::OO_GETVALUE;
+#ifdef TRY_TTL_FLAGS
+  // options.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_IGNORE;
+  options.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
   options.extraGetValues = &extraGets[0];
   options.numExtraGetValues = 2;
 
@@ -1303,6 +1379,9 @@ static void do_scan_update(Ndb &myNdb, ApiType accessType) {
        * returned, with SF_KeyInfo
        */
       if (psop->readTuples(NdbOperation::LM_Read,
+#ifdef TRY_TTL_FLAGS
+                           NdbScanOperation::SF_OnlyExpiredScan |
+#endif  // TRY_TTL_FLAGS
                            NdbScanOperation::SF_KeyInfo) != 0)
         APIERROR(myTransaction->getNdbError());
 
@@ -1315,6 +1394,10 @@ static void do_scan_update(Ndb &myNdb, ApiType accessType) {
     case api_record: {
       NdbScanOperation::ScanOptions options;
       options.optionsPresent = NdbScanOperation::ScanOptions::SO_SCANFLAGS;
+#ifdef TRY_TTL_FLAGS
+      // options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+      options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
       options.scan_flags = NdbScanOperation::SF_KeyInfo;
 
       psop = myTransaction->scanTable(pallColsRecord, NdbOperation::LM_Read,
@@ -1456,6 +1539,9 @@ static void do_scan_delete(Ndb &myNdb, ApiType accessType) {
 
       /* Need KeyInfo when performing scanning delete */
       if (psop->readTuples(NdbOperation::LM_Read,
+#ifdef TRY_TTL_FLAGS
+                           NdbScanOperation::SF_OnlyExpiredScan |
+#endif  // TRY_TTL_FLAGS
                            NdbScanOperation::SF_KeyInfo) != 0)
         APIERROR(myTransaction->getNdbError());
 
@@ -1466,6 +1552,10 @@ static void do_scan_delete(Ndb &myNdb, ApiType accessType) {
     case api_record: {
       NdbScanOperation::ScanOptions options;
       options.optionsPresent = NdbScanOperation::ScanOptions::SO_SCANFLAGS;
+#ifdef TRY_TTL_FLAGS
+      // options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+      options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
       /* Need KeyInfo when performing scanning delete */
       options.scan_flags = NdbScanOperation::SF_KeyInfo;
 
@@ -1649,6 +1739,9 @@ static void do_scan_lock_reread(Ndb &myNdb, ApiType accessType) {
 
       /* Need KeyInfo for lock takeover */
       if (psop->readTuples(NdbOperation::LM_Read,
+#ifdef TRY_TTL_FLAGS
+                           NdbScanOperation::SF_OnlyExpiredScan |
+#endif  // TRY_TTL_FLAGS
                            NdbScanOperation::SF_KeyInfo) != 0)
         APIERROR(myTransaction->getNdbError());
 
@@ -1659,6 +1752,10 @@ static void do_scan_lock_reread(Ndb &myNdb, ApiType accessType) {
     case api_record: {
       NdbScanOperation::ScanOptions options;
       options.optionsPresent = NdbScanOperation::ScanOptions::SO_SCANFLAGS;
+#ifdef TRY_TTL_FLAGS
+      // options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+      options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
       /* Need KeyInfo for lock takeover */
       options.scan_flags = NdbScanOperation::SF_KeyInfo;
 
@@ -1857,6 +1954,10 @@ static void do_all_extras_read(Ndb &myNdb) {
 
     NdbOperation::OperationOptions opts;
     opts.optionsPresent = NdbOperation::OperationOptions::OO_GETVALUE;
+#ifdef TRY_TTL_FLAGS
+    // opts.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_IGNORE;
+    opts.optionsPresent |= NdbOperation::OperationOptions::OO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
 
     opts.extraGetValues = &extraCols[0];
     opts.numExtraGetValues = 4;
@@ -1922,6 +2023,9 @@ static void do_secondary_indexScan(Ndb &myNdb, ApiType accessType) {
 
   Uint32 scanFlags =
       NdbScanOperation::SF_OrderBy | NdbScanOperation::SF_Descending |
+#ifdef TRY_TTL_FLAGS
+      NdbScanOperation::SF_OnlyExpiredScan |
+#endif  // TRY_TTL_FLAGS
       NdbScanOperation::SF_MultiRange | NdbScanOperation::SF_ReadRangeNo;
 
   switch (accessType) {
@@ -1957,6 +2061,10 @@ static void do_secondary_indexScan(Ndb &myNdb, ApiType accessType) {
     case api_record: {
       NdbScanOperation::ScanOptions options;
       options.optionsPresent = NdbScanOperation::ScanOptions::SO_SCANFLAGS;
+#ifdef TRY_TTL_FLAGS
+      // options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+      options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
       options.scan_flags = scanFlags;
 
       psop = myTransaction->scanIndex(
@@ -2064,9 +2172,13 @@ static void do_secondary_indexScanEqual(Ndb &myNdb, ApiType accessType) {
   NdbRecAttr *recAttrAttr2 = nullptr;
   NdbRecAttr *recAttrAttr3 = nullptr;
 
-  Uint32 scanFlags = NdbScanOperation::SF_OrderBy;
+  Uint32 scanFlags = NdbScanOperation::SF_OrderBy
+#ifdef TRY_TTL_FLAGS
+                     | NdbScanOperation::SF_OnlyExpiredScan
+#endif  // TRY_TTL_FLAGS
+                     ;
 
-  Uint32 attr3Eq = 44;
+  Uint32 attr3Eq = 4;
 
   switch (accessType) {
     case api_attr: {
@@ -2092,6 +2204,10 @@ static void do_secondary_indexScanEqual(Ndb &myNdb, ApiType accessType) {
     case api_record: {
       NdbScanOperation::ScanOptions options;
       options.optionsPresent = NdbScanOperation::ScanOptions::SO_SCANFLAGS;
+#ifdef TRY_TTL_FLAGS
+      // options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_IGNORE;
+      options.optionsPresent |= NdbScanOperation::ScanOptions::SO_TTL_ONLY_EXPIRED;
+#endif  // TRY_TTL_FLAGS
       options.scan_flags = scanFlags;
 
       psop = myTransaction->scanIndex(

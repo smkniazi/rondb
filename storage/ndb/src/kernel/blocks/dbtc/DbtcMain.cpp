@@ -4168,6 +4168,7 @@ void Dbtc::execTCKEYREQ(Signal *signal) {
 
     regCachePtr->m_noWait = TcKeyReq::getNoWaitFlag(Treqinfo);
     regCachePtr->m_ttl_ignore = TcKeyReq::getTTLIgnoreFlag(Treqinfo);
+    regCachePtr->m_ttl_only_expired = TcKeyReq::getTTLOnlyExpiredFlag(Treqinfo);
   } else {
     TkeyLength = TcKeyReq::getKeyLength(Treqinfo);
     TattrLen = TcKeyReq::getAttrinfoLen(tcKeyReq->attrLen);
@@ -4180,6 +4181,7 @@ void Dbtc::execTCKEYREQ(Signal *signal) {
      * unable to ignore TTL in ShortTcKeyReq?
      */
     regCachePtr->m_ttl_ignore = 0;
+    regCachePtr->m_ttl_only_expired = 0;
   }
   bool util_flag = ZFALSE;
   if (unlikely(refToMain(sendersBlockRef) == DBUTIL))
@@ -5443,6 +5445,7 @@ void Dbtc::sendlqhkeyreq(Signal *signal, BlockReference TBRef,
   LqhKeyReq::setReplicaApplierFlag(Tdata10,
     (replica_applier == ApiConnectRecord::TF_REPLICA_APPLIER));
   LqhKeyReq::setTTLIgnoreFlag(Tdata10, regCachePtr->m_ttl_ignore);
+  LqhKeyReq::setTTLOnlyExpiredFlag(Tdata10, regCachePtr->m_ttl_only_expired);
 
   /* -----------------------------------------------------------------------
    * If we are sending a short LQHKEYREQ, then there will be some AttrInfo
@@ -15937,6 +15940,8 @@ Uint32 Dbtc::initScanrec(ScanRecordPtr scanptr, const ScanTabReq *scanTabReq,
   ScanFragReq::setMultiFragFlag(tmp, ScanTabReq::getMultiFragFlag(ri));
   ScanFragReq::setAggregationFlag(tmp, ScanTabReq::getAggregation(ri));
   ScanFragReq::setTTLIgnoreFragFlag(tmp, ScanTabReq::getTTLIgnoreFlag(ri));
+  ScanFragReq::setTTLOnlyExpiredFragFlag(tmp,
+                      ScanTabReq::getTTLOnlyExpiredFlag(ri));
 
   if (unlikely(ScanTabReq::getViaSPJFlag(ri))) {
     jam();
@@ -16204,8 +16209,15 @@ void Dbtc::execDIH_SCAN_TAB_CONF(Signal *signal, ScanRecordPtr scanptr,
   if (scanptr.p->m_scan_dist_key_flag)  // Pruned scan
   {
     jamDebug();
+    /*
+     * NOTICE:
+     * Have to comment this assert since
+     * is_ttl_table() can be false when a new TTL purging scan request
+     * just comes after an altering table(TTL=OFF)
     ndbrequire(DictTabInfo::isOrderedIndex(tabPtr.p->tableType) ||
-               tabPtr.p->get_user_defined_partitioning());
+               tabPtr.p->get_user_defined_partitioning() ||
+               is_ttl_table(tabPtr.p));
+    */
 
     /**
      * Prepare for sendDihGetNodeReq to request DBDIH info for

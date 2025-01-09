@@ -303,9 +303,11 @@ int NdbScanOperation::handleScanOptions(const ScanOptions *options) {
      */
     if (unlikely(!(m_attribute_record->flags &
                    NdbRecord::RecHasUserDefinedPartitioning))) {
-      /* Explicit partitioning info not allowed for table and operation*/
-      setErrorCodeAbort(4546);
-      return -1;
+      if (!(options->scan_flags & SF_OnlyExpiredScan)) {
+        /* Explicit partitioning info not allowed for table and operation*/
+        setErrorCodeAbort(4546);
+        return -1;
+      }
     }
 
     m_pruneState = SPS_FIXED;
@@ -314,8 +316,9 @@ int NdbScanOperation::handleScanOptions(const ScanOptions *options) {
     /* And set the vars in the operation now too */
     theDistributionKey = options->partitionId;
     theDistrKeyIndicator_ = 1;
-    assert((m_attribute_record->flags &
-            NdbRecord::RecHasUserDefinedPartitioning) != 0);
+    assert(((m_attribute_record->flags &
+            NdbRecord::RecHasUserDefinedPartitioning) != 0) ||
+            (options->scan_flags & SF_OnlyExpiredScan));
     DBUG_PRINT("info", ("NdbScanOperation::handleScanOptions(dist key): %u",
                         theDistributionKey));
   }
@@ -480,11 +483,14 @@ inline int NdbScanOperation::scanImpl(
    * Zart
    * TTL
    */
-  if (options &&
-      options->optionsPresent & ScanOptions::SO_TTL_IGNORE) {
+  if (options != nullptr &&
+      (options->optionsPresent & ScanOptions::SO_TTL_IGNORE)) {
     m_flags |= OF_TTL_IGNORE;
   }
-
+  if (options != nullptr &&
+      (options->optionsPresent & ScanOptions::SO_TTL_ONLY_EXPIRED)) {
+    m_flags |= OF_TTL_ONLY_EXPIRED;
+  }
 
   /* Add interpreted code words to ATTRINFO signal
    * chain as necessary
@@ -2044,6 +2050,14 @@ int NdbScanOperation::finaliseScanOldApi() {
                             ScanOptions::SO_PARALLEL | ScanOptions::SO_BATCH);
 
   options.scan_flags = m_savedScanFlagsOldApi;
+  /*
+   * Zart
+   * Here is where we set SO_TTL_ONLY_EXPIRED
+   * from OldApi(SF_OnlyExpiredScan)
+   */
+  if (options.scan_flags & SF_OnlyExpiredScan) {
+    options.optionsPresent |= ScanOptions::SO_TTL_ONLY_EXPIRED;
+  }
   options.parallel = m_savedParallelOldApi;
   options.batch = m_savedBatchOldApi;
 
@@ -2205,6 +2219,7 @@ int NdbScanOperation::prepareSendScan(Uint32 /*aTC_ConnectPtr*/,
    * TTL
    */
   ScanTabReq::setTTLIgnoreFlag(reqInfo, (m_flags & OF_TTL_IGNORE) != 0);
+  ScanTabReq::setTTLOnlyExpiredFlag(reqInfo, (m_flags & OF_TTL_ONLY_EXPIRED) != 0);
 
   req->requestInfo = reqInfo;
   req->distributionKey = theDistributionKey;
