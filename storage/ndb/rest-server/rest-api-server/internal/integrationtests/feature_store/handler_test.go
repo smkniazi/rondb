@@ -19,6 +19,7 @@ package feature_store
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -1294,7 +1295,7 @@ func Test_GetFeatureVector_WrongPkValue(t *testing.T) {
 	}
 }
 
-func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
+func Test_GetFeatureVector_Success_ComplexTypeX(t *testing.T) {
 	var fsName = testdbs.FSDB002
 	var fvName = "sample_complex_type"
 	var fvVersion = 1
@@ -1323,6 +1324,11 @@ func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
 		)
 		fsReq.MetadataRequest = &api.MetadataRequest{FeatureName: true, FeatureType: true}
 		fsResp := GetFeatureStoreResponse(t, fsReq)
+		indented, err := json.MarshalIndent(fsResp, "", " ")
+		if err != nil {
+			t.Fatalf("Cannot MarshalIndent. Error %s ", err)
+		}
+		fmt.Printf("Response1: %s", string(indented))
 
 		// convert data to object in json format
 		arrayJson, err := ConvertBinaryToJsonMessage(row[2])
@@ -1341,6 +1347,54 @@ func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
 		}
 		mapPt, err := feature_store.DeserialiseComplexFeature(mapJson, &mapSchema) // map
 		row[3] = *mapPt
+		if err != nil {
+			t.Fatalf("Cannot deserailize feature with error %s ", err)
+		}
+		// validate
+		ValidateResponseWithData(t, &row, &cols, fsResp)
+		ValidateResponseMetadata(t, &fsResp.Metadata, fsReq.MetadataRequest, fsName, fvName, fvVersion)
+	}
+}
+
+func Test_GetFeatureVector_Date_Array_Success_ComplexType(t *testing.T) {
+	var fsName = testdbs.FSDB002
+	var fvName = "date_array"
+	var fvVersion = 1
+	rows, pks, cols, err := GetSampleData(fsName, "date_array_1")
+	if err != nil {
+		t.Fatalf("Cannot get sample data with error %s ", err)
+	}
+	dataSchema, err := avro.Parse(`["null",{"type":"array","items":["null",{"type":"record","name":"r515636140","namespace":"data","fields":[{"name":"sku","type":["null","string"]},{"name":"ts","type":["null",{"type":"long","logicalType":"timestamp-micros"}]}]}]}]`)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	for _, row := range rows {
+		var fsReq = CreateFeatureStoreRequest(
+			fsName,
+			fvName,
+			fvVersion,
+			pks,
+			*GetPkValues(&row, &pks, &cols),
+			nil,
+			nil,
+		)
+		fsReq.MetadataRequest = &api.MetadataRequest{FeatureName: true, FeatureType: true}
+		fsResp := GetFeatureStoreResponse(t, fsReq)
+
+		indented, err := json.MarshalIndent(fsResp, "", " ")
+		if err != nil {
+			t.Fatalf("Cannot MarshalIndent. Error %s ", err)
+		}
+		fmt.Printf("Response: %s", string(indented))
+
+		// convert data to object in json format
+		arrayJson, err := ConvertBinaryToJsonMessage(row[2])
+		if err != nil {
+			t.Fatalf("Cannot convert to json with error %s ", err)
+		}
+		arrayPt, err := feature_store.DeserialiseComplexFeature(arrayJson, &dataSchema) // array
+		row[2] = *arrayPt
 		if err != nil {
 			t.Fatalf("Cannot deserailize feature with error %s ", err)
 		}
@@ -1899,6 +1953,6 @@ func Test_GetFeatureVector_Success_ComplexType_With_Schema_Change(t *testing.T) 
 func work(t *testing.T, stop *bool, done chan int) {
 	defer func() { done <- 1 }()
 	for !*stop {
-		Test_GetFeatureVector_Success_ComplexType(t)
+		Test_GetFeatureVector_Success_ComplexTypeX(t)
 	}
 }

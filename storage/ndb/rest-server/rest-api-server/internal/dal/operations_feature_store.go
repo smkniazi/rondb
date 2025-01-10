@@ -281,6 +281,7 @@ func (c *FeatureGroupAvroSchema) GetSchemaByFeatureName(featureName string) (jso
 }
 
 func GetFeatureGroupAvroSchema(fgName string, fgVersion int, projectId int) (*FeatureGroupAvroSchema, error) {
+	fmt.Printf("--> %s_%d, projectId %d\n", fgName, fgVersion, projectId)
 	subjectName := fmt.Sprintf("%s_%d", fgName, fgVersion)
 	log.Debugf("subject name is: %s", subjectName)
 	cSubjectName := C.CString(subjectName)

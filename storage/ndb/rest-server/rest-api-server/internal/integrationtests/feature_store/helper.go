@@ -65,7 +65,7 @@ func CreateFeatureStoreRequest(
 }
 
 func GetSampleData(database string, table string) ([][]interface{}, []string, []string, error) {
-	return GetNSampleData(database, table, 2)
+	return GetNSampleData(database, table, 1)
 }
 
 func GetNSampleData(database string, table string, n int) ([][]interface{}, []string, []string, error) {

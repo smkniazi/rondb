@@ -180,6 +180,9 @@ VALUES
         31, 'sample_complex_type', 1091, Timestamp('2023-09-26 10:02:58'), 10000, 1, NULL, 2, NULL, NULL, 18, 'ts', 1, NULL, NULL, FALSE, 0
     ),
     (
+        33, 'date_array', 1091, Timestamp('2023-09-26 10:02:58'), 10000, 1, NULL, 2, NULL, NULL, 18, 'ts', 1, NULL, NULL, FALSE, 0
+    ),
+    (
         3090, 'sample_4', 67, Timestamp('2023-05-08 15:20:51'), 10000, 1, NULL, 2, NULL, NULL, 2065, 'ts', 1, NULL, NULL, FALSE, 0
     );
 
@@ -308,6 +311,9 @@ VALUES
     (
 	    19, 'sample_complex_type', 1091, Timestamp('2023-09-26 10:03:16'), 10000, 1, ''
     ),
+    (
+	    21, 'date_array', 1091, Timestamp('2023-09-26 10:03:16'), 10000, 1, ''
+    ),
     /**
     SELECT `fg0`.`id1` `id1`, `fg0`.`ts` `ts`, `fg0`.`data1` `data1`, `fg0`.`data2` `data2`, `fg1`.`id1` `id1`, `fg1`.`bigint` `bigint`
     FROM `test_ken_featurestore`.`sample_1_1` `fg0`
@@ -431,6 +437,9 @@ VALUES
     ),
     (
         25, NULL, 31, NULL, NULL, 0, 0, 0, NULL, 19
+    ),
+    (
+        27, NULL, 33, NULL, NULL, 0, 0, 0, NULL, 21
     ),
     (
         5133, NULL, 2069, NULL, NULL, 0, 0, 0, NULL, 4117
@@ -797,6 +806,15 @@ VALUES
         56, NULL, 31, 'id1', 'bigint', 25, 0, 0, 0, 0, 19, NULL
     ),
     (
+        61, NULL, 33, 'pk', 'string', 27, 0, 0, 0, 0, 21, NULL
+    ),
+    (
+        62, NULL, 33, 'ts', 'timestamp', 27, 1, 0, 0, 0, 21, NULL
+    ),
+    (
+        63, NULL, 33, 'data', 'array<struct<sku:string,ts:timestamp>>', 27, 2, 0, 0, 0, 21, NULL
+    ),
+    (
         5148, NULL, 2069, 'data1', 'bigint', 5133, 2, 0, 0, 0, 4117, NULL
     ),
     (
@@ -1030,6 +1048,9 @@ VALUES
     ),
     (
         1519, NULL, 'id1', NULL, 0, 3090, 1, 4120
+    ),
+    (
+        1521, NULL, 'pk', NULL, 0, 33, 1, 21 
     );
 
 INSERT INTO
@@ -1040,6 +1061,9 @@ VALUES
     ),
     (
 	    21, '{"type":"record","name":"sample_complex_type_1","namespace":"test_ken_featurestore.db","fields":[{"name":"id1","type":["null","long"]},{"name":"ts","type":["null","long"]},{"name":"array","type":["null",{"type":"array","items":["null","long"]}]},{"name":"struct","type":["null",{"type":"record","name":"r854762204","namespace":"struct","fields":[{"name":"int1","type":["null","long"]},{"name":"int2","type":["null","long"]}]}]}]}', 1001
+    ),
+    (
+	    23, '{"type":"record","name":"date_array_1","namespace":"salmanap_featurestore.db","fields":[{"name":"pk","type":["null","string"]},{"name":"ts","type":["null",{"type":"long","logicalType":"timestamp-micros"}]},{"name":"data","type":["null",{"type":"array","items":["null",{"type":"record","name":"r515636140","namespace":"data","fields":[{"name":"sku","type":["null","string"]},{"name":"ts","type":["null",{"type":"long","logicalType":"timestamp-micros"}]}]}]}]}]}', 1001
     );
 
 INSERT INTO
@@ -1050,4 +1074,7 @@ VALUES
     ),
     (
         22, 'sample_complex_type_1', 2, 21, 1001, Timestamp('2023-09-27 10:02:58')
+    ),
+    (
+        23, 'date_array_1', 1, 23, 1001, Timestamp('2023-09-27 10:02:58')
     );

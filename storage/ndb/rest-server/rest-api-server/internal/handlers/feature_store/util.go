@@ -18,6 +18,7 @@ func DeserialiseComplexFeature(value *json.RawMessage, schema *avro.Schema) (*in
 		}
 		return nil, err
 	}
+
 	jsonDecode, err := base64.StdEncoding.DecodeString(valueString)
 	if err != nil {
 		if log.IsDebug() {
@@ -33,6 +34,12 @@ func DeserialiseComplexFeature(value *json.RawMessage, schema *avro.Schema) (*in
 		}
 		return nil, err
 	}
+
+	// fmt.Println("Schema %s\n", (*schema).String())
+	// fmt.Println("Here -> %v\n", avroDeserialized)
+
+	// by, err := json.MarshalIndent(avroDeserialized, "", " ")
+	// fmt.Println("Avro %s\n", string(by))
 	nativeJson := ConvertAvroToJson(avroDeserialized)
 	return &nativeJson, err
 }
@@ -56,9 +63,20 @@ func ConvertAvroToJson(o interface{}) interface{} {
 	switch o.(type) {
 	case map[string]interface{}: // union or map
 		m := o.(map[string]interface{})
+		// fmt.Printf("Outer Case map\n")
 		for key := range m {
+			// sw := strings.Split(key, ".")[0]
+			// fmt.Printf("Inner case ConvertAvroToJson called %v, key %s,  switch %s\n", m, key, sw)
 			switch strings.Split(key, ".")[0] {
-			case "struct":
+
+			case "data":
+				result := make(map[string]interface{})
+				structValue := m[key].(map[string]interface{})
+				for structKey := range structValue {
+					result[structKey] = ConvertAvroToJson(structValue[structKey])
+				}
+				out = result
+			case "sturct":
 				result := make(map[string]interface{})
 				structValue := m[key].(map[string]interface{})
 				for structKey := range structValue {
@@ -73,10 +91,12 @@ func ConvertAvroToJson(o interface{}) interface{} {
 				}
 				out = result
 			default:
+				// fmt.Printf("default case %v\n", m[key])
 				out = ConvertAvroToJson(m[key])
 			}
 		}
 	case []interface{}:
+		//fmt.Printf("Outer Case interface \n ")
 		result := make([]interface{}, 0)
 		for _, item := range o.([]interface{}) {
 			itemJson := ConvertAvroToJson(item)
