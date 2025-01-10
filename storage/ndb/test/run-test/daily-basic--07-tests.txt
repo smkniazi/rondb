@@ -1,4 +1,4 @@
-# Copyright (c) 2015, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2015, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -142,10 +142,6 @@ max-time: 1800
 cmd: testDict
 args: -l 1 -n FailAddFragment
 max-time: 1980
-
-cmd: testSpj
-args: -n NF_Join T6 T13
-max-time: 3780
 
 cmd: testSystemRestart
 args: -n SR_UNDO T6

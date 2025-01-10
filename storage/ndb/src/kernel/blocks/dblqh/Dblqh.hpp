@@ -514,6 +514,7 @@ class Dblqh : public SimulatedBlock {
   Dblqh *m_ldm_instance_used;
 
   Uint32 m_rate_limits_active;
+  Uint32 m_full_restart_logs;
   bool m_is_query_block;
   bool m_is_recover_block;
   bool m_is_in_query_thread;
@@ -1269,6 +1270,7 @@ class Dblqh : public SimulatedBlock {
   typedef DLFifo64List<Fragrecord_pool> Fragrecord_fifo;
   RSS_OP_COUNTER(cnoOfAllocatedFragrec);
   RSS_OP_SNAPSHOT(cnoOfAllocatedFragrec);
+  Uint32 c_num_fragments;
   
   /* $$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$ */
   /* $$$$$$$                GLOBAL CHECKPOINT RECORD                  $$$$$$ */
@@ -4075,6 +4077,7 @@ public:
   Fragrecord_pool c_fragment_pool;
   RSS_AP_SNAPSHOT(c_fragment_pool);
 
+  Uint32 get_num_fragments() { return c_num_fragments; }
   CopyFragRecord_pool c_copy_fragment_pool;
   CopyActiveRecord_pool c_copy_active_pool;
 
@@ -4715,6 +4718,11 @@ public:
   /**
    * Current ongoing local LCP id, == 0 means distributed LCP */
   Uint32 c_localLcpId;
+  bool is_local_lcp() const;
+
+  /* Track if any node waiting for LCP */
+  bool c_any_node_waiting_for_lcp;
+  bool is_any_node_waiting_for_lcp();
 
   /* Counter for starting local LCP ordered by UNDO log overload */
   Uint32 c_current_local_lcp_table_id;
@@ -5876,5 +5884,14 @@ Dblqh::is_ok_to_send_next_record(const TcConnectionrec *tcConPtrP)
   return false;
 }
 
+inline bool
+Dblqh::is_local_lcp() const {
+  return (c_localLcpId > 0);
+}
+
+inline bool
+Dblqh::is_any_node_waiting_for_lcp() {
+  return c_any_node_waiting_for_lcp;
+}
 #endif
 #undef JAM_FILE_ID

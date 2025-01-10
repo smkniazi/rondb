@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2003, 2024, Oracle and/or its affiliates.
-   Copyright (c) 2021, 2024, Hopsworks and/or its affiliates.
+   Copyright (c) 2021, 2025, Hopsworks and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -2988,6 +2988,10 @@ void Dbdict::execREAD_CONFIG_REQ(Signal *signal) {
       m_ctx.m_config.getOwnConfigIterator();
   ndbrequire(p != 0);
 
+  m_full_restart_logs = 1; //Compatability in upgrade, false from MGM server
+  ndbrequire(!ndb_mgm_get_int_parameter(p, CFG_DB_FULL_RESTART_LOGS, 
+					&m_full_restart_logs));
+
   Uint32 max_schema_objects = OLD_NDB_MAX_TABLES;
   ndb_mgm_get_int_parameter(p, CFG_DB_MAX_NUM_SCHEMA_OBJECTS,
                             &max_schema_objects);
@@ -3469,6 +3473,7 @@ out:
 
   if (c_systemRestart) {
     infoEvent("Restore dictionary information from disk Completed");
+    g_eventLogger->info("System restart completed activating indexes");
   } else {
     g_eventLogger->info(
         "Copying of dictionary information"
@@ -4242,6 +4247,7 @@ void Dbdict::restart_checkSchemaStatusComplete(Signal *signal,
 
   ndbrequire(c_restartRecord.m_op_cnt == 0);
   ndbrequire(c_nodeRestart || c_initialNodeRestart);
+  g_eventLogger->info("Node restart activating indexes");
   activateIndexes(signal, 0);
   return;
 }
@@ -4262,6 +4268,7 @@ void Dbdict::execSCHEMA_INFOCONF(Signal *signal) {
     jam();
     return;
   }  // if
+  g_eventLogger->info("System restart activating indexes");
   activateIndexes(signal, 0);
 }  // execSCHEMA_INFOCONF()
 
@@ -4373,9 +4380,8 @@ void Dbdict::checkSchemaStatus(Signal *signal) {
   XSchemaFile *ownxsf = &c_schemaFile[SchemaRecord::NEW_SCHEMA_FILE];
 
   ndbrequire(masterxsf->noOfPages == ownxsf->noOfPages);
-  const Uint32 noOfEntries = masterxsf->noOfPages * NDB_SF_PAGE_ENTRIES;
 
-  for (; c_restartRecord.activeTable < noOfEntries;
+  for (; c_restartRecord.activeTable <= c_max_restart_table_id;
        c_restartRecord.activeTable++) {
     jam();
 
@@ -4620,6 +4626,34 @@ void Dbdict::startRestoreSchema(Signal *signal, Callback cb) {
     jam();
     infoEvent("%s", c_restartRecord.m_start_banner);
   }
+  set_max_check_schema_status();
+}
+
+void Dbdict::set_max_check_schema_status() {
+  XSchemaFile *masterxsf = &c_schemaFile[SchemaRecord::OLD_SCHEMA_FILE];
+  XSchemaFile *ownxsf = &c_schemaFile[SchemaRecord::NEW_SCHEMA_FILE];
+
+  const Uint32 noOfEntries = masterxsf->noOfPages * NDB_SF_PAGE_ENTRIES;
+  for (Uint32 tableId = noOfEntries - 1; tableId > 0; tableId--) {
+    SchemaFile::TableEntry *masterEntry = getTableEntry(masterxsf,
+                                                        tableId);
+    SchemaFile::TableEntry *ownEntry = getTableEntry(ownxsf,
+                                                     tableId);
+    SchemaFile::EntryState masterState =
+        (SchemaFile::EntryState)masterEntry->m_tableState;
+    SchemaFile::EntryState ownState =
+        (SchemaFile::EntryState)ownEntry->m_tableState;
+    if (ownState == SchemaFile::SF_UNUSED &&
+        masterState == SchemaFile::SF_UNUSED &&
+        ownEntry->m_tableType != DictTabInfo::SchemaTransaction) {
+      ownEntry->init();
+      continue;
+    }
+    c_max_restart_table_id = tableId;
+    g_eventLogger->info("Start restore schema, max restart table id = %u", tableId);
+    return;
+  }
+  ndbabort();
 }
 
 void Dbdict::restart_fromBeginTrans(Signal *signal, Uint32 tx_key, Uint32 ret) {
@@ -4814,6 +4848,7 @@ void Dbdict::restart_fromWriteSchemaFile(Signal *signal, Uint32 senderData,
     infoEvent("%s", c_restartRecord.m_end_banner);
   }
 
+  g_eventLogger->info("Finished writing schema file after restoring schema");
   execute(signal, c_schemaRecord.m_callback, retCode);
 }
 
@@ -4960,14 +4995,16 @@ void Dbdict::restartCreateObj(Signal *signal, Uint32 tableId,
     c_readTableRecord.m_callback.m_callbackFunction =
         safe_cast(&Dbdict::restartCreateObj_readConf);
 
-    g_eventLogger->info("Restart recreating table with id = %u", tableId);
-
+    if (m_full_restart_logs) {
+      g_eventLogger->info("Restart recreating table with id = %u", tableId);
+    }
+    D("start read table file: " << tableId);
     startReadTableFile(signal, tableId);
   } else {
     /**
      * Get from master
      */
-    D("Send GSN_GET_TABINFOREQ");
+    D("Send GSN_GET_TABINFOREQ: " << tableId);
     GetTabInfoReq *const req = (GetTabInfoReq *)&signal->theData[0];
     req->senderRef = reference();
     req->senderData = tableId;

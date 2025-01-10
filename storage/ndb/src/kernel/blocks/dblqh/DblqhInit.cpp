@@ -71,6 +71,7 @@ Uint64 Dblqh::getTransactionMemoryNeed(
 
 void Dblqh::initData() 
 {
+  c_any_node_waiting_for_lcp = false;
 #ifdef STATS_PARALLEL_COPY_FRAGMENT
   c_outstanding_words_copy_fragreq = 0;
   c_outstanding_rows_copy_fragreq = 0;
@@ -843,6 +844,7 @@ Dblqh::Dblqh(Block_context &ctx, Uint32 instanceNumber, Uint32 blockNo)
   m_current_ldm_instance = 0;
 
   RSS_OP_COUNTER_INIT(cnoOfAllocatedFragrec);
+  c_num_fragments = 0;
 
   c_transient_pools[DBLQH_OPERATION_RECORD_TRANSIENT_POOL_INDEX] =
       &tcConnect_pool;
