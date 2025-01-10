@@ -71,12 +71,14 @@ void printDocString(std::ostream& out,
       }
     }
   }
+#ifdef VM_TRACE
   for(Uint32 i = 0; i < len; i++) {
     char c = data[i];
     assert((0x20 <= c && c <= 0x21) ||
            (0x23 <= c && c <= 0x5b) ||
            (0x5d <= c && c <= 0x7e));
   }
+#endif
   out << (is_first ? "\n" : ",\n")
       << INDENT()
       << "\"#\": \""
