@@ -2896,7 +2896,7 @@ SimulatedBlock::prepareRETURN_DIRECT(Uint32 gsn,
   signal->header.theVerId_signalNumber = gsn;
 }
 
-// Do a consictency check before reusing a signal.
+// Do a consistency check before reusing a signal.
 inline void 
 SimulatedBlock::check_sections(Signal25* signal,
                                Uint32 oldSecCount, 

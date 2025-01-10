@@ -76,6 +76,9 @@ struct NodeReceiverGroup {
 
 template <unsigned T> struct SignalT
 {
+  SignalT() {
+    memset(&header, 0, sizeof(SignalHeader));
+  }
   Uint32 m_sectionPtrI[3];
   SignalHeader header;
   union {
