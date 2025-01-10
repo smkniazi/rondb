@@ -35,14 +35,14 @@ func DeserialiseComplexFeature(value *json.RawMessage, schema *avro.Schema) (*in
 		return nil, err
 	}
 
-	// fmt.Println("Schema %s\n", (*schema).String())
-	// fmt.Println("Here -> %v\n", avroDeserialized)
+	fmt.Printf("Schema %s\n", (*schema).String())
+	fmt.Printf("Deserialized Avro -> %v\n", avroDeserialized)
 
 	// by, err := json.MarshalIndent(avroDeserialized, "", " ")
 	// fmt.Println("Avro %s\n", string(by))
 	nativeJson := ConvertAvroToJson(avroDeserialized)
 	by, err := json.MarshalIndent(nativeJson, "", " ")
-	fmt.Printf("Avro %s\n", string(by))
+	fmt.Printf("Deserialized Avro Json %s\n", string(by))
 
 	return &nativeJson, err
 }
