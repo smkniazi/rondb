@@ -19,7 +19,6 @@ package feature_store
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -1295,7 +1294,7 @@ func Test_GetFeatureVector_WrongPkValue(t *testing.T) {
 	}
 }
 
-func Test_GetFeatureVector_Success_ComplexTypeX(t *testing.T) {
+func Test_GetFeatureVector_Success_ComplexType(t *testing.T) {
 	var fsName = testdbs.FSDB002
 	var fvName = "sample_complex_type"
 	var fvVersion = 1
@@ -1324,11 +1323,6 @@ func Test_GetFeatureVector_Success_ComplexTypeX(t *testing.T) {
 		)
 		fsReq.MetadataRequest = &api.MetadataRequest{FeatureName: true, FeatureType: true}
 		fsResp := GetFeatureStoreResponse(t, fsReq)
-		indented, err := json.MarshalIndent(fsResp, "", " ")
-		if err != nil {
-			t.Fatalf("Cannot MarshalIndent. Error %s ", err)
-		}
-		fmt.Printf("Response1: %s", string(indented))
 
 		// convert data to object in json format
 		arrayJson, err := ConvertBinaryToJsonMessage(row[2])
@@ -1364,7 +1358,7 @@ func Test_GetFeatureVector_Date_Array_Success_ComplexType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Cannot get sample data with error %s ", err)
 	}
-	dataSchema, err := avro.Parse(`["null",{"type":"array","items":["null",{"type":"record","name":"r515636140","namespace":"data","fields":[{"name":"sku","type":["null","string"]},{"name":"ts","type":["null",{"type":"long","logicalType":"timestamp-micros"}]}]}]}]`)
+	dataSchema, err := avro.Parse(`["null",{"type":"array","items":["null",{"type":"record","name":"myRecName","namespace":"data","fields":[{"name":"sku","type":["null","string"]},{"name":"ts","type":["null",{"type":"long","logicalType":"timestamp-micros"}]}]}]}]`)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -1382,11 +1376,11 @@ func Test_GetFeatureVector_Date_Array_Success_ComplexType(t *testing.T) {
 		fsReq.MetadataRequest = &api.MetadataRequest{FeatureName: true, FeatureType: true}
 		fsResp := GetFeatureStoreResponse(t, fsReq)
 
-		indented, err := json.MarshalIndent(fsResp, "", " ")
-		if err != nil {
-			t.Fatalf("Cannot MarshalIndent. Error %s ", err)
-		}
-		fmt.Printf("Response: %s", string(indented))
+		//indented, err := json.MarshalIndent(fsResp, "", " ")
+		//if err != nil {
+		//	t.Fatalf("Cannot MarshalIndent. Error %s ", err)
+		//}
+		//fmt.Printf("Response: %s", string(indented))
 
 		// convert data to object in json format
 		arrayJson, err := ConvertBinaryToJsonMessage(row[2])
@@ -1953,6 +1947,6 @@ func Test_GetFeatureVector_Success_ComplexType_With_Schema_Change(t *testing.T) 
 func work(t *testing.T, stop *bool, done chan int) {
 	defer func() { done <- 1 }()
 	for !*stop {
-		Test_GetFeatureVector_Success_ComplexTypeX(t)
+		Test_GetFeatureVector_Success_ComplexType(t)
 	}
 }
