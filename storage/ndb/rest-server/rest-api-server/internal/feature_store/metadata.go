@@ -68,6 +68,8 @@ type FeatureGroupFeatures struct {
 	JoinIndex           int
 	Features            []*FeatureMetadata
 	PrimaryKeyMap       []*dal.ServingKey
+	TableName           string // Cached: FeatureGroupName_FeatureGroupVersion - pre-computed to avoid repeated fmt.Sprintf
+	FeatureGroupKey     string // Cached: joinIndex|featureGroupId - pre-computed to avoid repeated fmt.Sprintf
 }
 
 type FeatureMetadata struct {
@@ -83,6 +85,7 @@ type FeatureMetadata struct {
 	Label               bool
 	Prefix              string
 	JoinIndex           int
+	IndexKey            string // Cached: joinIndex|fgId|Name - pre-computed to avoid repeated fmt.Sprintf
 }
 
 var COMPLEX_FEATURE = map[string]bool{
@@ -167,6 +170,10 @@ func newFeatureViewMetadata(
 			fgFeature.PrimaryKeyMap = fgPk
 		}
 		fgFeature.JoinIndex = feature.JoinIndex
+		// Pre-compute and cache the table name to avoid repeated fmt.Sprintf in hot path
+		fgFeature.TableName = fmt.Sprintf("%s_%d", feature.FeatureGroupName, feature.FeatureGroupVersion)
+		// Pre-compute and cache the feature group key to avoid repeated fmt.Sprintf in hot path
+		fgFeature.FeatureGroupKey = fmt.Sprintf("%d|%d", feature.JoinIndex, feature.FeatureGroupId)
 		fgFeaturesArray = append(fgFeaturesArray, &fgFeature)
 	}
 	less := func(i, j int) bool {
@@ -271,11 +278,13 @@ func GetFeatureGroupKeyByFeature(feature *FeatureMetadata) string {
 }
 
 func GetFeatureGroupKeyByTDFeature(feature *FeatureGroupFeatures) string {
-	return *getFeatureGroupIndexKey(feature.JoinIndex, feature.FeatureGroupId)
+	// Return pre-computed cached value to avoid repeated fmt.Sprintf calls
+	return feature.FeatureGroupKey
 }
 
 func GetFeatureIndexKeyByFeature(feature *FeatureMetadata) string {
-	return *getFeatureIndexKey(feature.JoinIndex, feature.FeatureGroupId, feature.Name)
+	// Return pre-computed cached value to avoid repeated fmt.Sprintf calls
+	return feature.IndexKey
 }
 
 func GetFeatureIndexKeyByFgIndexKey(fgKey string, featureName string) string {
@@ -288,7 +297,8 @@ func getFeatureGroupIndexKey(joinIndex int, fgId int) *string {
 }
 
 func getFeatureIndexKey(joinIndex int, fgId int, f string) *string {
-	var featureIndexKey = GetFeatureIndexKeyByFgIndexKey(*getFeatureGroupIndexKey(joinIndex, fgId), f)
+	// Optimized: combine two fmt.Sprintf calls into one to avoid intermediate string allocation
+	var featureIndexKey = fmt.Sprintf("%d|%d|%s", joinIndex, fgId, f)
 	return &featureIndexKey
 }
 
@@ -378,6 +388,8 @@ func GetFeatureViewMetadata(featureStoreName, featureViewName string, featureVie
 		feature.Label = tdf.Label == 1
 		feature.Prefix = joinIdToJoin[tdf.TDJoinID].Prefix
 		feature.JoinIndex = joinIdToJoin[tdf.TDJoinID].Index
+		// Pre-compute and cache the index key to avoid repeated fmt.Sprintf in hot path
+		feature.IndexKey = fmt.Sprintf("%d|%d|%s", feature.JoinIndex, feature.FeatureGroupId, feature.Name)
 		features[i] = &feature
 	}
 	var servingKeys, err1 = dal.GetServingKeys(fvID)
