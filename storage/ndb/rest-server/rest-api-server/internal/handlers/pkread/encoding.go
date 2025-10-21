@@ -179,7 +179,7 @@ func ProcessPKReadResponse(respBuff *heap.NativeBuffer, response api.PKReadRespo
 	if respBuff.Size != capacity || !(dataLength < capacity) {
 		msg := fmt.Sprintf("internal server error. response buffer may be corrupt. "+
 			"Buffer capacity: %d, Buffer data length: %d", capacity, dataLength)
-		return http.StatusInternalServerError, msg, fmt.Errorf(msg)
+		return http.StatusInternalServerError, msg, fmt.Errorf("%s", msg)
 	}
 
 	opIDX := iBuf[C.PK_RESP_OP_ID_IDX]
