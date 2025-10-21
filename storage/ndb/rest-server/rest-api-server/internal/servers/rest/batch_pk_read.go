@@ -36,8 +36,16 @@ var operationUrl = regexp.MustCompile("^[a-zA-Z0-9$_]+/[a-zA-Z0-9$_]+/pk-read")
 func (h *RouteHandler) BatchPkRead(c *gin.Context) {
 	apiKey := c.GetHeader(config.API_KEY_NAME)
 
+	// Read raw request body
+	body, err := c.GetRawData()
+	if err != nil {
+		c.AbortWithError(http.StatusBadRequest, err)
+		return
+	}
+
+	// Use sonic for faster JSON unmarshaling (2-5x faster than encoding/json)
 	operations := api.BatchOpRequest{}
-	err := c.ShouldBindJSON(&operations)
+	err = sonic.Unmarshal(body, &operations)
 	if err != nil {
 		c.AbortWithError(http.StatusBadRequest, err)
 		return
@@ -80,6 +88,23 @@ func (h *RouteHandler) BatchPkRead(c *gin.Context) {
 }
 
 func parseOperation(operation *api.BatchSubOp, pkReadarams *api.PKReadParams) error {
+
+	if operation.Method == nil {
+		return fmt.Errorf("Error:Field validation for 'Method' failed")
+	}
+
+	if operation.RelativeURL == nil {
+		return fmt.Errorf("Error:Field validation for 'RelativeURL' failed")
+	}
+
+	if operation.Body == nil {
+		return fmt.Errorf("Error:Field validation for 'Body' failed")
+	}
+
+	if operation.Body.Filters == nil {
+		return fmt.Errorf("Error:Field validation for 'Filters' failed")
+	}
+
 	// remove leading / character
 	if strings.HasPrefix(*operation.RelativeURL, "/") {
 		trimmed := strings.Trim(*operation.RelativeURL, "/")

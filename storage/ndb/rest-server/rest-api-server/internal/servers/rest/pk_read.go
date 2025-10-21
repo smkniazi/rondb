@@ -64,8 +64,15 @@ func parsePkReadRequest(c *gin.Context) (*api.PKReadParams, error) {
 		return nil, err
 	}
 
+	// Read raw request body
+	body, err := c.GetRawData()
+	if err != nil {
+		return nil, err
+	}
+
+	// Use sonic for faster JSON unmarshaling (2-5x faster than encoding/json)
 	postParams := api.PKReadBody{}
-	if err := c.BindJSON(&postParams); err != nil {
+	if err := sonic.Unmarshal(body, &postParams); err != nil {
 		return nil, err
 	}
 
