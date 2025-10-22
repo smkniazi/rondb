@@ -87,6 +87,7 @@ type FeatureMetadata struct {
 	Prefix              string
 	JoinIndex           int
 	IndexKey            string // Cached: joinIndex|fgId|Name - pre-computed to avoid repeated fmt.Sprintf
+	ServingKey          string // Cached: joinIndex|Name - pre-computed to avoid repeated GetServingKey calls
 }
 
 var COMPLEX_FEATURE = map[string]bool{
@@ -404,6 +405,8 @@ func GetFeatureViewMetadata(featureStoreName, featureViewName string, featureVie
 		feature.JoinIndex = joinIdToJoin[tdf.TDJoinID].Index
 		// Pre-compute and cache the index key to avoid repeated fmt.Sprintf in hot path
 		feature.IndexKey = fmt.Sprintf("%d|%d|%s", feature.JoinIndex, feature.FeatureGroupId, feature.Name)
+		// Pre-compute and cache the serving key to avoid repeated GetServingKey calls in hot path
+		feature.ServingKey = GetServingKey(feature.JoinIndex, feature.Name)
 		features[i] = &feature
 	}
 	var servingKeys, err1 = dal.GetServingKeys(fvID)

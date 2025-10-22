@@ -518,14 +518,18 @@ func GetBatchPkReadParams(metadata *feature_store.FeatureViewMetadata, entries *
 	isDebug := log.IsDebug()
 
 	var batchReadParams = make([]*api.PKReadParams, 0, len(metadata.FeatureGroupFeatures))
+
 	for _, fgFeature := range metadata.FeatureGroupFeatures {
 		testDb := fgFeature.FeatureStoreName
 		// Use pre-computed cached table name instead of fmt.Sprintf
 		testTable := fgFeature.TableName
+
 		var filters = make([]api.Filter, 0, len(fgFeature.Features))
 		var columns = make([]api.ReadColumn, 0, len(fgFeature.Features))
+
 		for _, feature := range fgFeature.Features {
-			if _, ok := metadata.PrimaryKeyMap[feature_store.GetServingKey(feature.JoinIndex, feature.Name)]; !ok {
+			// Use pre-computed ServingKey instead of calling GetServingKey to avoid string concatenation overhead
+			if _, ok := metadata.PrimaryKeyMap[feature.ServingKey]; !ok {
 				var colName = feature.Name
 				var colType = api.DRT_DEFAULT
 				readCol := api.ReadColumn{Column: &colName, DataReturnType: &colType}
