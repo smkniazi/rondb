@@ -2022,43 +2022,7 @@ RS_Status JSONParser::scan_parse(simdjson::padded_string_view reqBody,
     return handle_simdjson_error(error, doc, currentLocation);
   }
 
-  std::string_view method;
-  auto methodVal = reqObject[METHOD];
-  if (unlikely(methodVal.error() == simdjson::error_code::NO_SUCH_FIELD)) {
-  } else if (unlikely(methodVal.error() != simdjson::SUCCESS)) {
-    return handle_simdjson_error(methodVal.error(), doc, currentLocation);
-  } else if (methodVal.is_null()) {
-    return CRS_Status(
-        HTTP_CODE::CLIENT_ERROR, "the Method section should be POST").status;
-  } else {
-    error = methodVal.get(method);
-    if (unlikely(error != simdjson::SUCCESS)) {
-      return handle_simdjson_error(error, doc, currentLocation);
-    }
-    if (unlikely(method != POST)) {
-      return CRS_Status(
-          HTTP_CODE::CLIENT_ERROR, "the Method section should be POST").status;
-    }
-  }
-
-  simdjson::ondemand::object bodyObject;
-  auto bodyVal = reqObject[BODY];
-  if (unlikely(bodyVal.error() == simdjson::error_code::NO_SUCH_FIELD)) {
-    return CRS_Status(static_cast<HTTP_CODE>(
-          drogon::HttpStatusCode::k400BadRequest),
-        ERROR_INVALID_BODY, std::string(rdrsErrorMessage(ERROR_INVALID_BODY))).status;
-  }
-  if (unlikely(bodyVal.error() != simdjson::SUCCESS)) {
-    return handle_simdjson_error(bodyVal.error(), doc, currentLocation);
-  } else if (unlikely(bodyVal.is_null())) {
-    return CRS_Status(static_cast<HTTP_CODE>(
-          drogon::HttpStatusCode::k400BadRequest),
-        ERROR_INVALID_BODY, std::string(rdrsErrorMessage(ERROR_INVALID_BODY))).status;
-  }
-  error = bodyVal.get(bodyObject);
-  if (unlikely(error != simdjson::SUCCESS)) {
-    return handle_simdjson_error(error, doc, currentLocation);
-  }
+  auto& bodyObject = reqObject;
 
   int64_t limit = -1;
   auto limitVal = bodyObject[LIMIT];
