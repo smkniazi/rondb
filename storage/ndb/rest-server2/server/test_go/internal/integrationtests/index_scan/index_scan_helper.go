@@ -30,12 +30,20 @@ import (
 	"hopsworks.ai/rdrs2/internal/log"
 	"hopsworks.ai/rdrs2/internal/testutils"
 	"hopsworks.ai/rdrs2/pkg/api"
-	"hopsworks.ai/rdrs2/resources/testdbs"
 	"hopsworks.ai/rdrs2/version"
 )
 
-// ConvertToSQL converts an IndexScanQuery to a SQL SELECT statement
-func ConvertToSQL(database string, table string, query *api.IndexScanQuery) (string, error) {
+// NO_ERROR_MSG is used when no error message is expected in the response
+const NO_ERROR_MSG = ""
+
+// Constants for row order comparison in CompareResults
+const (
+	ROWS_ORDER_MUST_MATCH    = true
+	ROWS_ORDER_MAY_NOT_MATCH = false
+)
+
+// ConverJSONtToSQL converts an IndexScanQuery to a SQL SELECT statement
+func ConverJSONtToSQL(database string, table string, query *api.IndexScanQuery) (string, error) {
 	var sqlBuilder strings.Builder
 
 	sqlBuilder.WriteString("SELECT ")
@@ -78,7 +86,7 @@ func ConvertToSQL(database string, table string, query *api.IndexScanQuery) (str
 }
 
 // convertFilterToSQL recursively converts FilterScan to SQL WHERE clause
-func convertFilterToSQL(filter *api.FilterScan) (string, error) {
+func convertFilterToSQL(filter *api.ScanFilter) (string, error) {
 	switch filter.Op {
 	case "AND", "OR", "NAND", "NOR":
 		if filter.Args == nil || len(filter.Args) == 0 {
@@ -252,7 +260,7 @@ func GetSampleData(db *sql.DB, sqlQuery string) ([][]interface{}, []string, []st
 
 // GetSampleDataWithQuery executes an IndexScanQuery and returns the result rows
 func GetSampleDataWithQuery(db *sql.DB, database string, table string, query *api.IndexScanQuery) ([][]interface{}, []string, []string, error) {
-	sqlQuery, err := ConvertToSQL(database, table, query)
+	sqlQuery, err := ConverJSONtToSQL(database, table, query)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to convert query to SQL: %w", err)
 	}
@@ -262,26 +270,26 @@ func GetSampleDataWithQuery(db *sql.DB, database string, table string, query *ap
 
 // ExecuteUsingMySQLServer is a helper function to execute query and print results for testing
 // Returns: rows ([][]interface{}), column names ([]string), error
-func ExecuteUsingMySQLServer(t *testing.T, query *api.IndexScanQuery) ([][]interface{}, []string, error) {
+func ExecuteUsingMySQLServer(t *testing.T, database string, table string, query *api.IndexScanQuery) ([][]interface{}, []string, error) {
 	jsonBytes, err := json.MarshalIndent(query, "", "  ")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal query: %w", err)
 	}
 	log.Debugf("JSON:\n%s\n", string(jsonBytes))
 
-	sql, err := ConvertToSQL(testdbs.DB029, "tbl", query)
+	sql, err := ConverJSONtToSQL(database, table, query)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to convert to SQL: %w", err)
 	}
 	log.Infof("Request SQL:\n%s\n", sql)
 
-	db, err := testutils.CreateMySQLConnectionDataCluster()
+	conn, err := testutils.CreateMySQLConnectionDataCluster()
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create DB connection: %w", err)
 	}
-	defer db.Close()
+	defer conn.Close()
 
-	rows, columns, colTypes, err := GetSampleData(db, sql)
+	rows, columns, colTypes, err := GetSampleData(conn, sql)
 	if err != nil {
 		log.Infof("Query returned no data or error: %v", err)
 		return nil, nil, err
@@ -317,26 +325,39 @@ func NewIndexScanURL(db string, table string) string {
 
 // ExecuteUsingRESTServer is a helper function to execute query via REST endpoint and print results
 // Returns: rows ([][]any), column names ([]string), response code (int), error
-func ExecuteUsingRESTServer(t *testing.T, query *api.IndexScanQuery) ([][]any, []string, int, error) {
+func ExecuteUsingRESTServer(t *testing.T, database string, table string, query *api.IndexScanQuery,
+	expectedErrMsg string, expectedRespCode int) ([][]any, []string, int, error) {
 	jsonBytes, err := json.Marshal(query)
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("failed to marshal query: %w", err)
 	}
 
-	log.Infof("JSON Request:\n%s\n", string(jsonBytes))
+	url := NewIndexScanURL(database, table)
 
-	url := NewIndexScanURL(testdbs.DB029, "tbl")
+	log.Infof("JSON Request. URL: %s. Body:\n%s\n", url, string(jsonBytes))
 
 	respCode, respBody := testclient.SendHttpRequest(
 		t,
 		http.MethodPost,
 		url,
 		string(jsonBytes),
-		"",
-		http.StatusOK,
+		expectedErrMsg,
+		expectedRespCode,
 	)
 
 	log.Infof("Response Code: %d. Body: %s \n", respCode, string(respBody))
+
+	// Validate response code
+	if respCode != expectedRespCode {
+		t.Fatalf("Expected response code %d, got %d. Body: %s", expectedRespCode, respCode, string(respBody))
+	}
+
+	// Validate error message if expected and response is not OK
+	if expectedErrMsg != "" && respCode != http.StatusOK {
+		if !strings.Contains(string(respBody), expectedErrMsg) {
+			t.Fatalf("Expected error message containing '%s', got: %s", expectedErrMsg, string(respBody))
+		}
+	}
 
 	var scanResp api.IndexScanResponse
 	err = json.Unmarshal(respBody, &scanResp)
@@ -348,9 +369,10 @@ func ExecuteUsingRESTServer(t *testing.T, query *api.IndexScanQuery) ([][]any, [
 		return [][]any{}, []string{}, respCode, nil
 	}
 
-	var columnNames []string
-	for colName := range scanResp.Data[0] {
-		columnNames = append(columnNames, colName)
+	// Extract column names in order from raw JSON (map iteration doesn't preserve order)
+	columnNames, err := extractColumnNamesInOrder(respBody)
+	if err != nil {
+		return nil, nil, respCode, fmt.Errorf("failed to extract column names: %w", err)
 	}
 
 	rows := make([][]any, len(scanResp.Data))
@@ -372,9 +394,11 @@ func ExecuteUsingRESTServer(t *testing.T, query *api.IndexScanQuery) ([][]any, [
 	return rows, columnNames, respCode, nil
 }
 
-// CompareResults compares MySQL and REST server results using string-based comparison
+// CompareResults compares MySQL and REST server results
+// If rowOrder is true, rows must match in the same order
+// If rowOrder is false, rows must match in count and data but order doesn't matter
 func CompareResults(t *testing.T, mysqlRows [][]interface{}, mysqlCols []string,
-	restRows [][]any, restCols []string) {
+	restRows [][]any, restCols []string, rowOrder bool) {
 
 	if len(mysqlCols) != len(restCols) {
 		t.Fatalf("Column count mismatch: MySQL=%d, REST=%d", len(mysqlCols), len(restCols))
@@ -391,15 +415,124 @@ func CompareResults(t *testing.T, mysqlRows [][]interface{}, mysqlCols []string,
 		t.Fatalf("Row count mismatch: MySQL=%d, REST=%d", len(mysqlRows), len(restRows))
 	}
 
-	for i := range mysqlRows {
-		for j := range mysqlRows[i] {
-			mysqlVal := fmt.Sprintf("%v", mysqlRows[i][j])
-			restVal := fmt.Sprintf("%v", restRows[i][j])
+	if rowOrder {
+		// Compare rows in order
+		for i := range mysqlRows {
+			for j := range mysqlRows[i] {
+				mysqlVal := fmt.Sprintf("%v", mysqlRows[i][j])
+				restVal := fmt.Sprintf("%v", restRows[i][j])
 
-			if mysqlVal != restVal {
-				t.Errorf("Value mismatch at row %d, col %d (%s): MySQL=%s, REST=%s",
-					i, j, mysqlCols[j], mysqlVal, restVal)
+				if mysqlVal != restVal {
+					t.Errorf("Value mismatch at row %d, col %d (%s): MySQL=%s, REST=%s",
+						i, j, mysqlCols[j], mysqlVal, restVal)
+				}
+			}
+		}
+	} else {
+		// Compare rows without considering order
+		// Convert rows to string representation for comparison
+		mysqlRowSet := make(map[string]int)
+		for _, row := range mysqlRows {
+			rowStr := rowToString(row)
+			mysqlRowSet[rowStr]++
+		}
+
+		restRowSet := make(map[string]int)
+		for _, row := range restRows {
+			rowStr := rowToString(row)
+			restRowSet[rowStr]++
+		}
+
+		// Check that all MySQL rows exist in REST results
+		for rowStr, count := range mysqlRowSet {
+			if restRowSet[rowStr] != count {
+				t.Errorf("Row mismatch: MySQL has %d occurrence(s) of row %s, REST has %d",
+					count, rowStr, restRowSet[rowStr])
+			}
+		}
+
+		// Check that all REST rows exist in MySQL results
+		for rowStr, count := range restRowSet {
+			if mysqlRowSet[rowStr] != count {
+				t.Errorf("Row mismatch: REST has %d occurrence(s) of row %s, MySQL has %d",
+					count, rowStr, mysqlRowSet[rowStr])
 			}
 		}
 	}
+}
+
+// rowToString converts a row to a string representation for comparison
+func rowToString(row []any) string {
+	parts := make([]string, len(row))
+	for i, val := range row {
+		parts[i] = fmt.Sprintf("%v", val)
+	}
+	return strings.Join(parts, "|")
+}
+
+// extractColumnNamesInOrder extracts column names from JSON response preserving order
+// Uses json.Decoder to read tokens in order since map iteration doesn't preserve key order
+func extractColumnNamesInOrder(respBody []byte) ([]string, error) {
+	decoder := json.NewDecoder(strings.NewReader(string(respBody)))
+
+	// Navigate to the first object in "data" array: {"data":[{...},...]}
+	// Skip opening brace of root object
+	if _, err := decoder.Token(); err != nil {
+		return nil, fmt.Errorf("failed to read opening brace: %w", err)
+	}
+
+	// Find "data" key
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read token: %w", err)
+		}
+
+		key, ok := token.(string)
+		if !ok {
+			continue
+		}
+
+		if key == "data" {
+			// Skip opening bracket of data array
+			if _, err := decoder.Token(); err != nil {
+				return nil, fmt.Errorf("failed to read data array opening: %w", err)
+			}
+
+			// Check if array has elements
+			if !decoder.More() {
+				return []string{}, nil
+			}
+
+			// Skip opening brace of first object
+			if _, err := decoder.Token(); err != nil {
+				return nil, fmt.Errorf("failed to read first object opening: %w", err)
+			}
+
+			// Extract column names in order
+			var columnNames []string
+			for decoder.More() {
+				token, err := decoder.Token()
+				if err != nil {
+					return nil, fmt.Errorf("failed to read column name: %w", err)
+				}
+
+				colName, ok := token.(string)
+				if !ok {
+					return nil, fmt.Errorf("expected string key, got %T", token)
+				}
+				columnNames = append(columnNames, colName)
+
+				// Skip the value
+				var value interface{}
+				if err := decoder.Decode(&value); err != nil {
+					return nil, fmt.Errorf("failed to skip value: %w", err)
+				}
+			}
+
+			return columnNames, nil
+		}
+	}
+
+	return nil, fmt.Errorf("data field not found in response")
 }

@@ -20,70 +20,79 @@ package api
 type IndexScanQuery struct {
 	Limit       int           `json:"limit"`
 	ReadColumns *[]ReadColumn `json:"readColumns"`
-	Filters     *FilterScan   `json:"filters"`
+	Filters     *ScanFilter   `json:"filters"`
 	Index       *IndexScan    `json:"index"`
 }
 
 /*
-FilterScan represents a recursive binary tree filter structure.
+ScanFilter represents a recursive binary tree filter structure.
 
 The filter consists of two types of nodes:
 1. Logical operators (internal nodes):
-   - op: "AND" | "OR" | "NAND" | "NOR"
-   - args: array of sub-filters (each can be logical or comparison)
-   Example:
-     {
-       "op": "AND",
-       "args": [...]
-     }
 
-2. Comparison operators (leaf nodes):
-   a. CMP (comparison):
-      - op: "CMP"
-      - column: column name
-      - cond: condition ("GT", "GE", "LT", "LE", "EQ", "NE")
-      - value: comparison value
-      Example:
-        {
-          "op": "CMP",
-          "column": "val_1",
-          "cond": "LE",
-          "value": 30
-        }
+  - op: "AND" | "OR" | "NAND" | "NOR"
 
-   b. ISNOTNULL (null check):
-      - op: "ISNOTNULL"
-      - column: column name
-      Example:
-        {
-          "op": "ISNOTNULL",
-          "column": "content"
-        }
+  - args: array of sub-filters (each can be logical or comparison)
+    Example:
+    {
+    "op": "AND",
+    "args": [...]
+    }
+
+    2. Comparison operators (leaf nodes):
+    a. CMP (comparison):
+
+  - op: "CMP"
+
+  - column: column name
+
+  - cond: condition ("GT", "GE", "LT", "LE", "EQ", "NE")
+
+  - value: comparison value
+    Example:
+    {
+    "op": "CMP",
+    "column": "val_1",
+    "cond": "LE",
+    "value": 30
+    }
+
+    b. ISNOTNULL (null check):
+
+  - op: "ISNOTNULL"
+
+  - column: column name
+    Example:
+    {
+    "op": "ISNOTNULL",
+    "column": "content"
+    }
 
 Complete example representing: (content IS NOT NULL AND pk > 2) AND (val_1 <= 30 OR val_2 > 500)
-  {
-    "op": "AND",
-    "args": [
-      {
-        "op": "AND",
-        "args": [
-          {"op": "ISNOTNULL", "column": "content"},
-          {"op": "CMP", "column": "pk", "cond": "GT", "value": 2}
-        ]
-      },
-      {
-        "op": "OR",
-        "args": [
-          {"op": "CMP", "column": "val_1", "cond": "LE", "value": 30},
-          {"op": "CMP", "column": "val_2", "cond": "GT", "value": 500}
-        ]
-      }
-    ]
-  }
+
+	{
+	  "op": "AND",
+	  "args": [
+	    {
+	      "op": "AND",
+	      "args": [
+	        {"op": "ISNOTNULL", "column": "content"},
+	        {"op": "CMP", "column": "pk", "cond": "GT", "value": 2}
+	      ]
+	    },
+	    {
+	      "op": "OR",
+	      "args": [
+	        {"op": "CMP", "column": "val_1", "cond": "LE", "value": 30},
+	        {"op": "CMP", "column": "val_2", "cond": "GT", "value": 500}
+	      ]
+	    }
+	  ]
+	}
 */
-type FilterScan struct {
+type ScanFilter struct {
 	Op     string        `json:"op"`
-	Args   []*FilterScan `json:"args,omitempty"`
+	Args   []*ScanFilter `json:"args,omitempty"`
 	Column string        `json:"column,omitempty"`
 	Cond   string        `json:"cond,omitempty"`
 	Value  any           `json:"value,omitempty"`
@@ -97,11 +106,11 @@ type IndexScan struct {
 }
 
 type RangeScan struct {
-	Lower BoundScan `json:"lower"`
-	Upper BoundScan `json:"upper"`
+	Lower BoundedScan `json:"lower"`
+	Upper BoundedScan `json:"upper"`
 }
 
-type BoundScan struct {
+type BoundedScan struct {
 	Values    []any `json:"values"`
 	Inclusive bool  `json:"inclusive"`
 }

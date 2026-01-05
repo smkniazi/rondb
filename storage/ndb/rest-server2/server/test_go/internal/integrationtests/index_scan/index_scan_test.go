@@ -18,16 +18,22 @@
 package index_scan
 
 import (
+	"math"
+	"net/http"
 	"testing"
 
 	"hopsworks.ai/rdrs2/pkg/api"
+	"hopsworks.ai/rdrs2/resources/testdbs"
 )
 
 // Example 1: Simple comparison filter - "val_1" >= "1"
 func Test_SimpleComparison(t *testing.T) {
+	database := testdbs.DB029
+	table := "tiny_tbl" // using tiny table as both rest and mysql will read the entire table.
+
 	query := api.IndexScanQuery{
 		Limit: 10,
-		Filters: &api.FilterScan{
+		Filters: &api.ScanFilter{
 			Op:     "CMP",
 			Column: "val_1",
 			Cond:   "GE",
@@ -35,53 +41,52 @@ func Test_SimpleComparison(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, respCode, err := ExecuteUsingRESTServer(t, &query)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
 
-	if respCode != 200 {
-		t.Fatalf("Expected response code 200, got %d", respCode)
-	}
-
-	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols)
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
 }
 
 // Example 2: Simple ISNOTNULL filter
 func Test_IsNotNull(t *testing.T) {
+	database := testdbs.DB029
+	table := "tiny_tbl" // using tiny table as both rest and mysql will read the entire table.
+
 	query := api.IndexScanQuery{
 		Limit: 10,
-		Filters: &api.FilterScan{
+		Filters: &api.ScanFilter{
 			Op:     "ISNOTNULL",
 			Column: "content",
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, respCode, err := ExecuteUsingRESTServer(t, &query)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
 
-	if respCode != 200 {
-		t.Fatalf("Expected response code 200, got %d", respCode)
-	}
-
-	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols)
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
 }
 
 // Example 3: Complex filter from design doc
 // (content IS NOT NULL AND pk > 2) AND (val_1 <= 30 OR val_2 > 500)
+// using big_tbl as in this test we are using asc order and a limit
 func Test_ComplexFilterWithIndex(t *testing.T) {
+	database := testdbs.DB029
+	table := "big_tbl"
+
 	col1 := "pk"
 	col2 := "val_1"
 	col3 := "val_2"
@@ -97,12 +102,12 @@ func Test_ComplexFilterWithIndex(t *testing.T) {
 	query := api.IndexScanQuery{
 		Limit:       10,
 		ReadColumns: &readColumns,
-		Filters: &api.FilterScan{
+		Filters: &api.ScanFilter{
 			Op: "AND",
-			Args: []*api.FilterScan{
+			Args: []*api.ScanFilter{
 				{
 					Op: "AND",
-					Args: []*api.FilterScan{
+					Args: []*api.ScanFilter{
 						{
 							Op:     "ISNOTNULL",
 							Column: "content",
@@ -117,7 +122,7 @@ func Test_ComplexFilterWithIndex(t *testing.T) {
 				},
 				{
 					Op: "OR",
-					Args: []*api.FilterScan{
+					Args: []*api.ScanFilter{
 						{
 							Op:     "CMP",
 							Column: "val_1",
@@ -139,11 +144,11 @@ func Test_ComplexFilterWithIndex(t *testing.T) {
 			KeyColumns: []string{"val_1", "val_2"},
 			Ranges: []api.RangeScan{
 				{
-					Lower: api.BoundScan{
+					Lower: api.BoundedScan{
 						Values:    []any{0, 0},
 						Inclusive: true,
 					},
-					Upper: api.BoundScan{
+					Upper: api.BoundedScan{
 						Values:    []any{1000, 1000},
 						Inclusive: false,
 					},
@@ -153,26 +158,25 @@ func Test_ComplexFilterWithIndex(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, respCode, err := ExecuteUsingRESTServer(t, &query)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
 
-	if respCode != 200 {
-		t.Fatalf("Expected response code 200, got %d", respCode)
-	}
-
-	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols)
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MUST_MATCH)
 }
 
 // Example 3: Complex filter from design doc
 // (content IS NOT NULL AND pk > 2) AND (val_1 <= 30 OR val_2 > 500)
 func Test_ComplexFilterWithOutIndex(t *testing.T) {
+	database := testdbs.DB029
+	table := "big_tbl"
+
 	col1 := "pk"
 	col2 := "val_1"
 	col3 := "val_2"
@@ -186,14 +190,14 @@ func Test_ComplexFilterWithOutIndex(t *testing.T) {
 	}
 
 	query := api.IndexScanQuery{
-		Limit:       10,
+		Limit:       math.MaxInt,
 		ReadColumns: &readColumns,
-		Filters: &api.FilterScan{
+		Filters: &api.ScanFilter{
 			Op: "AND",
-			Args: []*api.FilterScan{
+			Args: []*api.ScanFilter{
 				{
 					Op: "AND",
-					Args: []*api.FilterScan{
+					Args: []*api.ScanFilter{
 						{
 							Op:     "ISNOTNULL",
 							Column: "content",
@@ -208,7 +212,7 @@ func Test_ComplexFilterWithOutIndex(t *testing.T) {
 				},
 				{
 					Op: "OR",
-					Args: []*api.FilterScan{
+					Args: []*api.ScanFilter{
 						{
 							Op:     "CMP",
 							Column: "val_1",
@@ -227,30 +231,30 @@ func Test_ComplexFilterWithOutIndex(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, respCode, err := ExecuteUsingRESTServer(t, &query)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
 
-	if respCode != 200 {
-		t.Fatalf("Expected response code 200, got %d", respCode)
-	}
-
-	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols)
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
 }
 
+// TODO this test some times fail
 // Example 4: AND operation - ("val_1" >= "1") AND ("val_2" >= "1")
 func Test_AndOperation(t *testing.T) {
+	database := testdbs.DB029
+	table := "big_tbl"
+
 	query := api.IndexScanQuery{
 		Limit: 10,
-		Filters: &api.FilterScan{
+		Filters: &api.ScanFilter{
 			Op: "AND",
-			Args: []*api.FilterScan{
+			Args: []*api.ScanFilter{
 				{
 					Op:     "CMP",
 					Column: "val_1",
@@ -270,11 +274,11 @@ func Test_AndOperation(t *testing.T) {
 			KeyColumns: []string{"val_1", "val_2"},
 			Ranges: []api.RangeScan{
 				{
-					Lower: api.BoundScan{
+					Lower: api.BoundedScan{
 						Values:    []any{0, 0},
 						Inclusive: true,
 					},
-					Upper: api.BoundScan{
+					Upper: api.BoundedScan{
 						Values:    []any{1000, 1000},
 						Inclusive: false,
 					},
@@ -284,37 +288,36 @@ func Test_AndOperation(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, respCode, err := ExecuteUsingRESTServer(t, &query)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
 
-	if respCode != 200 {
-		t.Fatalf("Expected response code 200, got %d", respCode)
-	}
-
-	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols)
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MUST_MATCH)
 }
 
 // Example 5: Index scan without filters
 func Test_IndexScanOnly(t *testing.T) {
+	database := testdbs.DB029
+	table := "big_tbl"
+
 	query := api.IndexScanQuery{
-		Limit: 10,
+		Limit: math.MaxInt,
 		Index: &api.IndexScan{
 			Name:       "idx_val",
 			KeyColumns: []string{"val_1", "val_2"},
 			Ranges: []api.RangeScan{
 				{
-					Lower: api.BoundScan{
+					Lower: api.BoundedScan{
 						Values:    []any{0, 0},
 						Inclusive: true,
 					},
-					Upper: api.BoundScan{
+					Upper: api.BoundedScan{
 						Values:    []any{1000, 1000},
 						Inclusive: false,
 					},
@@ -324,30 +327,29 @@ func Test_IndexScanOnly(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, respCode, err := ExecuteUsingRESTServer(t, &query)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
 
-	if respCode != 200 {
-		t.Fatalf("Expected response code 200, got %d", respCode)
-	}
-
-	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols)
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MUST_MATCH)
 }
 
 // Example 6: Filter without index (table scan)
 func Test_TableScanWithFilter(t *testing.T) {
+	database := testdbs.DB029
+	table := "big_tbl"
+
 	query := api.IndexScanQuery{
-		Limit: 50,
-		Filters: &api.FilterScan{
+		Limit: math.MaxInt,
+		Filters: &api.ScanFilter{
 			Op: "OR",
-			Args: []*api.FilterScan{
+			Args: []*api.ScanFilter{
 				{
 					Op:     "CMP",
 					Column: "val_1",
@@ -364,19 +366,15 @@ func Test_TableScanWithFilter(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, respCode, err := ExecuteUsingRESTServer(t, &query)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
 
-	if respCode != 200 {
-		t.Fatalf("Expected response code 200, got %d", respCode)
-	}
-
-	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols)
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
 }
