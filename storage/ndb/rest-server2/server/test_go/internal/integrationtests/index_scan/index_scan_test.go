@@ -20,8 +20,11 @@ package index_scan
 import (
 	"math"
 	"net/http"
+	"sync/atomic"
 	"testing"
+	"time"
 
+	"hopsworks.ai/rdrs2/internal/testutils"
 	"hopsworks.ai/rdrs2/pkg/api"
 	"hopsworks.ai/rdrs2/resources/testdbs"
 )
@@ -374,6 +377,198 @@ func Test_TableScanWithFilter(t *testing.T) {
 	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
+	}
+
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
+}
+
+// Simple comparison filter on pk col - "pk" >= "1" and "pk" <= "10"
+func Test_SimpleComparisonOnPkCol(t *testing.T) {
+	database := testdbs.DB029
+	table := "big_tbl2" // using tiny table as both rest and mysql will read the entire table.
+
+	query := api.IndexScanQuery{
+		Limit: 100,
+		Filters: &api.ScanFilter{
+			Op: "AND",
+			Args: []*api.ScanFilter{
+				{
+					Op:     "CMP",
+					Column: "pk",
+					Cond:   "GE",
+					Value:  0,
+				},
+				{
+					Op:     "CMP",
+					Column: "pk",
+					Cond:   "LT",
+					Value:  10,
+				},
+			},
+		},
+	}
+
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	if err != nil {
+		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
+	}
+
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	if err != nil {
+		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
+	}
+
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
+}
+
+// No operations are running when schema is changed.
+func Test_SchemaVersionChangeNonConcurrent(t *testing.T) {
+	// Reset database at start
+	err := testutils.RunQueriesOnDataCluster(testdbs.DB025Scheme)
+	if err != nil {
+		t.Fatalf("failed to reset database. Error: %v", err)
+	}
+
+	defer func() { // reset database at end
+		err := testutils.RunQueriesOnDataCluster(testdbs.DB025Scheme)
+		if err != nil {
+			t.Fatalf("failed to re-set database. Error: %v", err)
+		}
+	}()
+
+	database := testdbs.DB025
+	table := "table_2"
+
+	query := api.IndexScanQuery{
+		Limit: 100,
+		Filters: &api.ScanFilter{
+			Op:     "CMP",
+			Column: "id0",
+			Cond:   "EQ",
+			Value:  1,
+		},
+	}
+
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	if err != nil {
+		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
+	}
+
+	loop := 256
+	for i := 0; i < loop; i++ {
+		restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+		if err != nil {
+			t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
+		}
+		CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
+	}
+
+	// drop and recreate the database. this will change schema version
+	err = testutils.RunQueriesOnDataCluster(testdbs.DB025UpdateScheme)
+	if err != nil {
+		t.Fatalf("failed to re-create tables. Error: %v", err)
+	}
+
+	mysqlRows, mysqlCols, err = ExecuteUsingMySQLServer(t, database, table, &query)
+	if err != nil {
+		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
+	}
+
+	for i := 0; i < loop; i++ {
+		restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+		if err != nil {
+			t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
+		}
+		CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
+	}
+}
+
+// Test_SchemaVersionChangeConcurrent runs scan operations concurrently while schema is being changed.
+// This tests the REST server's ability to handle schema version mismatch errors (error 241).
+func Test_SchemaVersionChangeConcurrent(t *testing.T) {
+	// Reset database at start
+	err := testutils.RunQueriesOnDataCluster(testdbs.DB025Scheme)
+	if err != nil {
+		t.Fatalf("failed to reset database. Error: %v", err)
+	}
+
+	defer func() { // reset database at end
+		err := testutils.RunQueriesOnDataCluster(testdbs.DB025Scheme)
+		if err != nil {
+			t.Fatalf("failed to re-set database. Error: %v", err)
+		}
+	}()
+
+	database := testdbs.DB025
+	table := "table_2"
+
+	query := api.IndexScanQuery{
+		Limit: 100,
+		Filters: &api.ScanFilter{
+			Op:     "CMP",
+			Column: "id0",
+			Cond:   "EQ",
+			Value:  1,
+		},
+	}
+
+	// Start worker goroutines making continuous scan requests
+	numWorkers := 1
+	var stop atomic.Bool
+	stop.Store(false)
+	done := make(chan int, numWorkers)
+
+	for i := 0; i < numWorkers; i++ {
+		go func(workerID int) {
+			count := 0
+			defer func() {
+				done <- count
+			}()
+			for !stop.Load() {
+				restRows, _, _, _ := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+				if len(restRows) != 1 {
+					stop.Store(true)
+					t.Errorf("worker %d: wrong data read. Expecting one row to read. Got: %d rows", workerID, len(restRows))
+				}
+				count++
+			}
+		}(i)
+	}
+
+	// Let requests run to cache schema on all REST server threads
+	time.Sleep(2 * time.Second)
+
+	// Change schema WHILE requests are still running
+	// This should trigger schema version mismatch errors on some requests
+	t.Log("Changing schema...")
+	err = testutils.RunQueriesOnDataCluster(testdbs.DB025UpdateScheme)
+	if err != nil {
+		t.Fatalf("failed to update schema. Error: %v", err)
+	}
+	t.Log("Schema changed")
+
+	// Continue running requests for a bit after schema change
+	time.Sleep(2 * time.Second)
+
+	// Stop workers
+	stop.Store(true)
+
+	// Wait for all workers and count total operations
+	totalOps := 0
+	for i := 0; i < numWorkers; i++ {
+		totalOps += <-done
+	}
+	t.Logf("Total operations completed: %d", totalOps)
+
+	// Verify final state - requests should work after schema change
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	if err != nil {
+		t.Fatalf("ExecuteUsingMySQLServer failed after schema change: %v", err)
+	}
+
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	if err != nil {
+		t.Fatalf("ExecuteUsingRESTServer failed after schema change: %v", err)
 	}
 
 	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
