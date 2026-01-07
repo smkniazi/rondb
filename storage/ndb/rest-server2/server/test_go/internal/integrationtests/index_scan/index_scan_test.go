@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"hopsworks.ai/rdrs2/internal/common"
 	"hopsworks.ai/rdrs2/internal/testutils"
 	"hopsworks.ai/rdrs2/pkg/api"
 	"hopsworks.ai/rdrs2/resources/testdbs"
@@ -836,7 +837,7 @@ func TestDataTypesInt(t *testing.T) {
 				Limit: 100,
 				Filters: &api.ScanFilter{
 					Op: "AND",
-					Args: []*api.ScanFilter{ 
+					Args: []*api.ScanFilter{
 						{
 							Op:     "ISNULL",
 							Column: "id0",
@@ -851,7 +852,7 @@ func TestDataTypesInt(t *testing.T) {
 			Table:            testTable,
 			DB:               testDB,
 			ExpectedHttpCode: http.StatusOK,
-			BodyContains:     EMPTY_STRING, 
+			BodyContains:     EMPTY_STRING,
 			RowsOrder:        ROWS_ORDER_MUST_MATCH,
 		},
 		"nullValsInCols": {
@@ -859,7 +860,7 @@ func TestDataTypesInt(t *testing.T) {
 				Limit: 100,
 				Filters: &api.ScanFilter{
 					Op: "AND",
-					Args: []*api.ScanFilter{ 
+					Args: []*api.ScanFilter{
 						{
 							Op:     "CMP",
 							Column: "id0",
@@ -1764,6 +1765,79 @@ func TestDataTypesMediumInt(t *testing.T) {
 				},
 			},
 			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesFloat(t *testing.T) {
+	testDB := testdbs.DB009
+
+	tests := map[string]api.IndexTestInfo{
+		"floatPK": { // NDB does not support float PKs
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  0,
+				},
+			},
+			Table:            "float_table2",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_017(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  0,
+				},
+			},
+			Table:            "float_table1",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1",
+				},
+			},
+			Table:            "float_table1",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nullVals": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  2,
+				},
+			},
+			Table:            "float_table1",
 			DB:               testDB,
 			ExpectedHttpCode: http.StatusOK,
 			BodyContains:     EMPTY_STRING,
