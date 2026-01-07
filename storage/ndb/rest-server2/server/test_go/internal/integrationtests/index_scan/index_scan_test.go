@@ -49,7 +49,70 @@ func Test_SimpleComparison(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
+	if err != nil {
+		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
+	}
+
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
+}
+
+func Test_NotFound(t *testing.T) {
+	database := testdbs.DB029
+	table := "tiny_tbl" // using tiny table as both rest and mysql will read the entire table.
+
+	query := api.IndexScanQuery{
+		Limit: 10,
+		Filters: &api.ScanFilter{
+			Op:     "CMP",
+			Column: "val_1",
+			Cond:   "EQ",
+			Value:  -404,
+		},
+	}
+
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	if err != nil {
+		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
+	}
+
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
+	if err != nil {
+		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
+	}
+
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
+}
+
+func Test_Projection(t *testing.T) {
+	database := testdbs.DB029
+	table := "tiny_tbl" // using tiny table as both rest and mysql will read the entire table.
+
+	col3 := "val_2"
+	col4 := "content"
+
+	readColumns := []api.ReadColumn{
+		{Column: &col3},
+		{Column: &col4},
+	}
+
+	query := api.IndexScanQuery{
+		Limit:       10,
+		ReadColumns: &readColumns,
+		Filters: &api.ScanFilter{
+			Op:     "CMP",
+			Column: "val_1",
+			Cond:   "GT",
+			Value:  0,
+		},
+	}
+
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	if err != nil {
+		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
+	}
+
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
@@ -75,7 +138,7 @@ func Test_IsNotNull(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
@@ -166,7 +229,7 @@ func Test_ComplexFilterWithIndex(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
@@ -239,7 +302,7 @@ func Test_ComplexFilterWithOutIndex(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
@@ -296,7 +359,7 @@ func Test_AndOperation(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
@@ -335,7 +398,7 @@ func Test_IndexScanOnly(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
@@ -374,7 +437,7 @@ func Test_TableScanWithFilter(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
@@ -413,7 +476,7 @@ func Test_SimpleComparisonOnPkCol(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 	}
@@ -456,7 +519,7 @@ func Test_SchemaVersionChangeNonConcurrent(t *testing.T) {
 
 	loop := 256
 	for i := 0; i < loop; i++ {
-		restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+		restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 		if err != nil {
 			t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 		}
@@ -475,7 +538,7 @@ func Test_SchemaVersionChangeNonConcurrent(t *testing.T) {
 	}
 
 	for i := 0; i < loop; i++ {
-		restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+		restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 		if err != nil {
 			t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
 		}
@@ -525,7 +588,7 @@ func Test_SchemaVersionChangeConcurrent(t *testing.T) {
 				done <- count
 			}()
 			for !stop.Load() {
-				restRows, _, _, _ := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+				restRows, _, _, _ := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 				if len(restRows) != 1 {
 					stop.Store(true)
 					t.Errorf("worker %d: wrong data read. Expecting one row to read. Got: %d rows", workerID, len(restRows))
@@ -566,10 +629,260 @@ func Test_SchemaVersionChangeConcurrent(t *testing.T) {
 		t.Fatalf("ExecuteUsingMySQLServer failed after schema change: %v", err)
 	}
 
-	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, NO_ERROR_MSG, http.StatusOK)
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, database, table, &query, EMPTY_STRING, http.StatusOK)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed after schema change: %v", err)
 	}
 
 	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, ROWS_ORDER_MAY_NOT_MATCH)
 }
+
+func TestDataTypesInt(t *testing.T) {
+	testDB := testdbs.DB004
+	testTable := "int_table"
+
+	tests := map[string]api.IndexTestInfo{
+		"404": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  100,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  100,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusNotFound,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  1,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  1,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"max_pk_values": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  2147483647,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  4294967295,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"min_pk_values": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  -2147483648,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  0,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"assignNegativeValToUnsignedCol": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  1,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  -1,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     EMPTY_STRING, // TODO FIX ME
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"assigningBiggerVals": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{ // bigger than the range
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  2147483648,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  4294967295,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     EMPTY_STRING, // TODO FIX ME
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"assigningSmallerVals": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{ // bigger than the range
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  -2147483649,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  0,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     EMPTY_STRING, // TODO FIX ME
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nullValsInPK": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{ 
+						{
+							Op:     "ISNULL",
+							Column: "id0",
+						},
+						{
+							Op:     "ISNULL",
+							Column: "id1",
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING, 
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nullValsInCols": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{ 
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  1,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  1,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+

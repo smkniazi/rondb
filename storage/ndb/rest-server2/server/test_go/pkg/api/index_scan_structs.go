@@ -119,3 +119,12 @@ type IndexScanResponse struct {
 	Data []map[string]any `json:"data"`
 	Rows int              `json:"rows"`
 }
+
+type IndexTestInfo struct {
+	IndexScanReq     IndexScanQuery
+	Table            string
+	DB               string
+	ExpectedHttpCode int
+	BodyContains   string
+	RowsOrder        bool
+}

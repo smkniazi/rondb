@@ -33,13 +33,15 @@ import (
 	"hopsworks.ai/rdrs2/version"
 )
 
-// NO_ERROR_MSG is used when no error message is expected in the response
-const NO_ERROR_MSG = ""
+// EMPTY_STRING is used when no error message is expected in the response
+const EMPTY_STRING = ""
 
 // Constants for row order comparison in CompareResults
 const (
 	ROWS_ORDER_MUST_MATCH    = true
 	ROWS_ORDER_MAY_NOT_MATCH = false
+	DATA_NEEDS_BINARY_ENCODING = true
+	DATA_DOES_NOT_NEED_BINARY_ENCODING = false 
 )
 
 // ConverJSONtToSQL converts an IndexScanQuery to a SQL SELECT statement
@@ -251,10 +253,6 @@ func GetSampleData(db *sql.DB, sqlQuery string) ([][]interface{}, []string, []st
 		return nil, nil, nil, fmt.Errorf("error iterating rows: %w", err)
 	}
 
-	if len(resultRows) == 0 {
-		return nil, columns, colTypeNames, fmt.Errorf("no data returned from query")
-	}
-
 	return resultRows, columns, colTypeNames, nil
 }
 
@@ -359,6 +357,11 @@ func ExecuteUsingRESTServer(t *testing.T, database string, table string, query *
 		}
 	}
 
+	// Don't try to unmarshal if response is not 200 OK
+	if respCode != http.StatusOK {
+		return nil, nil, respCode, nil
+	}
+
 	var scanResp api.IndexScanResponse
 	err = json.Unmarshal(respBody, &scanResp)
 	if err != nil {
@@ -399,6 +402,12 @@ func ExecuteUsingRESTServer(t *testing.T, database string, table string, query *
 // If rowOrder is false, rows must match in count and data but order doesn't matter
 func CompareResults(t *testing.T, mysqlRows [][]interface{}, mysqlCols []string,
 	restRows [][]any, restCols []string, rowOrder bool) {
+
+	// When both return 0 rows, column comparison is skipped because
+	// REST API doesn't return column metadata when there's no data
+	if len(mysqlRows) == 0 && len(restRows) == 0 {
+		return
+	}
 
 	if len(mysqlCols) != len(restCols) {
 		t.Fatalf("Column count mismatch: MySQL=%d, REST=%d", len(mysqlCols), len(restCols))
