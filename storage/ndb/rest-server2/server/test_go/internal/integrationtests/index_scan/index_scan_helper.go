@@ -545,3 +545,27 @@ func extractColumnNamesInOrder(respBody []byte) ([]string, error) {
 
 	return nil, fmt.Errorf("data field not found in response")
 }
+
+func indexScanTestMultiple(t *testing.T, tests map[string]api.IndexTestInfo, isBinaryData bool) {
+
+	for name, testInfo := range tests {
+		t.Run(name, func(t *testing.T) {
+			indexScanTest(t, testInfo, isBinaryData, true)
+		})
+	}
+
+}
+
+func indexScanTest(t *testing.T, testInfo api.IndexTestInfo, isBinaryData bool, validate bool) {
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, testInfo.DB, testInfo.Table, &testInfo.IndexScanReq)
+	if err != nil {
+		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
+	}
+
+	restRows, restCols, _, err := ExecuteUsingRESTServer(t, testInfo.DB, testInfo.Table, &testInfo.IndexScanReq, testInfo.BodyContains, testInfo.ExpectedHttpCode)
+	if err != nil {
+		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
+	}
+
+	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, testInfo.RowsOrder)
+}
