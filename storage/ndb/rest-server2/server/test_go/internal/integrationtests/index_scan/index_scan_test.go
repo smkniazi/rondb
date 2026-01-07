@@ -1847,3 +1847,194 @@ func TestDataTypesFloat(t *testing.T) {
 
 	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 }
+
+func TestDataTypesDouble(t *testing.T) {
+	testDB := testdbs.DB010
+
+	tests := map[string]api.IndexTestInfo{
+		"doublePK": { // NDB does not support double PKs
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  0,
+				},
+			},
+			Table:            "double_table2",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_017(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  0,
+				},
+			},
+			Table:            "double_table1",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  1,
+				},
+			},
+			Table:            "double_table1",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nullVals": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  2,
+				},
+			},
+			Table:            "double_table1",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesDecimal(t *testing.T) {
+	testDB := testdbs.DB011
+	testTable := "decimal_table"
+
+	tests := map[string]api.IndexTestInfo{
+		"simple": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  -12345.12345,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  12345.12345,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nullVals": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  -67890.12345,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  67890.12345,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"assignNegativeValToUnsignedCol": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  -12345.12345,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  -12345.12345, // id1 is unsigned
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_015(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"assigningBiggerVals": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  -12345.12345,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  123456789.12345, // value too large
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_015(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
