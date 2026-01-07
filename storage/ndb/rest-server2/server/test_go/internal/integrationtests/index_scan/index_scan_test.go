@@ -1108,3 +1108,224 @@ func TestDataTypesBigInt(t *testing.T) {
 	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 }
 
+func TestDataTypesTinyInt(t *testing.T) {
+	testDB := testdbs.DB006
+	testTable := "tinyint_table"
+
+	tests := map[string]api.IndexTestInfo{
+		"simple": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  0,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  0,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"max_pk_values": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  127,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  255,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"min_pk_values": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  -128,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  0,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"assignNegativeValToUnsignedCol": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  0,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  -1, // id1 is unsigned
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"assigningBiggerVals": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  127,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  256, // 255+1
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"assigningSmallerVals": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  -129, // -128-1
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  0,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nullValsInPK": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "ISNULL",
+							Column: "id0",
+						},
+						{
+							Op:     "ISNULL",
+							Column: "id1",
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nullValsInCols": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op: "AND",
+					Args: []*api.ScanFilter{
+						{
+							Op:     "CMP",
+							Column: "id0",
+							Cond:   "EQ",
+							Value:  1,
+						},
+						{
+							Op:     "CMP",
+							Column: "id1",
+							Cond:   "EQ",
+							Value:  1,
+						},
+					},
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
