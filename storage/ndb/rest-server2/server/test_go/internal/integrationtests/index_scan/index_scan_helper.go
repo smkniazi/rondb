@@ -362,8 +362,11 @@ func ExecuteUsingRESTServer(t *testing.T, database string, table string, query *
 		return nil, nil, respCode, nil
 	}
 
+	// Use json.Decoder with UseNumber() to preserve numeric precision for large int64/uint64 values
 	var scanResp api.IndexScanResponse
-	err = json.Unmarshal(respBody, &scanResp)
+	decoder := json.NewDecoder(strings.NewReader(string(respBody)))
+	decoder.UseNumber()
+	err = decoder.Decode(&scanResp)
 	if err != nil {
 		return nil, nil, respCode, fmt.Errorf("failed to unmarshal response body: %w", err)
 	}
@@ -382,7 +385,12 @@ func ExecuteUsingRESTServer(t *testing.T, database string, table string, query *
 	for i, rowMap := range scanResp.Data {
 		row := make([]any, len(columnNames))
 		for j, colName := range columnNames {
-			row[j] = rowMap[colName]
+			// Convert json.Number to string for consistent comparison
+			if num, ok := rowMap[colName].(json.Number); ok {
+				row[j] = num.String()
+			} else {
+				row[j] = rowMap[colName]
+			}
 		}
 		rows[i] = row
 	}
