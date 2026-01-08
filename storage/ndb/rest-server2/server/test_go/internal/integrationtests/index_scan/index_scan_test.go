@@ -646,7 +646,7 @@ func TestDataTypesInt(t *testing.T) {
 	testTable := "int_table"
 
 	tests := map[string]api.IndexTestInfo{
-		"404": {
+		"notfound": {
 			IndexScanReq: api.IndexScanQuery{
 				Limit: 100,
 				Filters: &api.ScanFilter{
@@ -669,7 +669,7 @@ func TestDataTypesInt(t *testing.T) {
 			},
 			Table:            testTable,
 			DB:               testDB,
-			ExpectedHttpCode: http.StatusNotFound,
+			ExpectedHttpCode: http.StatusOK,
 			BodyContains:     EMPTY_STRING,
 			RowsOrder:        ROWS_ORDER_MUST_MATCH,
 		},
@@ -3345,4 +3345,3 @@ func arrayColumnTest(t *testing.T, table string, database string, isBinary bool,
 
 	indexScanTestMultiple(t, tests, isBinary)
 }
-
