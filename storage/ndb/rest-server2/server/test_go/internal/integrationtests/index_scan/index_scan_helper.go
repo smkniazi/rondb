@@ -19,6 +19,7 @@ package index_scan
 
 import (
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -45,7 +46,7 @@ const (
 )
 
 // ConverJSONtToSQL converts an IndexScanQuery to a SQL SELECT statement
-func ConverJSONtToSQL(database string, table string, query *api.IndexScanQuery) (string, error) {
+func ConverJSONtToSQL(database string, table string, query *api.IndexScanQuery, isBinaryData bool) (string, error) {
 	var sqlBuilder strings.Builder
 
 	sqlBuilder.WriteString("SELECT ")
@@ -64,7 +65,7 @@ func ConverJSONtToSQL(database string, table string, query *api.IndexScanQuery) 
 	sqlBuilder.WriteString(fmt.Sprintf(" FROM %s.%s", database, table))
 
 	if query.Filters != nil {
-		whereClause, err := convertFilterToSQL(query.Filters)
+		whereClause, err := convertFilterToSQL(query.Filters, isBinaryData)
 		if err != nil {
 			return "", err
 		}
@@ -88,7 +89,7 @@ func ConverJSONtToSQL(database string, table string, query *api.IndexScanQuery) 
 }
 
 // convertFilterToSQL recursively converts FilterScan to SQL WHERE clause
-func convertFilterToSQL(filter *api.ScanFilter) (string, error) {
+func convertFilterToSQL(filter *api.ScanFilter, isBinaryData bool) (string, error) {
 	switch filter.Op {
 	case "AND", "OR", "NAND", "NOR":
 		if filter.Args == nil || len(filter.Args) == 0 {
@@ -97,7 +98,7 @@ func convertFilterToSQL(filter *api.ScanFilter) (string, error) {
 
 		subClauses := make([]string, 0, len(filter.Args))
 		for _, arg := range filter.Args {
-			subClause, err := convertFilterToSQL(arg)
+			subClause, err := convertFilterToSQL(arg, isBinaryData)
 			if err != nil {
 				return "", err
 			}
@@ -143,7 +144,7 @@ func convertFilterToSQL(filter *api.ScanFilter) (string, error) {
 			return "", fmt.Errorf("unknown condition: %s", filter.Cond)
 		}
 
-		value := formatValue(filter.Value)
+		value := formatValue(filter.Value, isBinaryData)
 		return fmt.Sprintf("%s %s %s", filter.Column, sqlOperator, value), nil
 
 	case "ISNOTNULL":
@@ -164,7 +165,8 @@ func convertFilterToSQL(filter *api.ScanFilter) (string, error) {
 }
 
 // formatValue formats a value for SQL
-func formatValue(value interface{}) string {
+// If isBinaryData is true, wraps the value with from_base64() for binary column comparison
+func formatValue(value interface{}, isBinaryData bool) string {
 	if value == nil {
 		return "NULL"
 	}
@@ -173,6 +175,10 @@ func formatValue(value interface{}) string {
 	case string:
 		// Escape single quotes in strings
 		escaped := strings.ReplaceAll(v, "'", "''")
+		if isBinaryData {
+			// For binary data, the value is base64 encoded, use from_base64() to decode
+			return fmt.Sprintf("from_base64('%s')", escaped)
+		}
 		return fmt.Sprintf("'%s'", escaped)
 	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
 		return fmt.Sprintf("%v", v)
@@ -185,13 +191,17 @@ func formatValue(value interface{}) string {
 		return "FALSE"
 	default:
 		// For other types, convert to string and quote
+		if isBinaryData {
+			return fmt.Sprintf("from_base64('%v')", v)
+		}
 		return fmt.Sprintf("'%v'", v)
 	}
 }
 
 // GetSampleData executes a SQL query and returns the result rows
 // Returns: rows ([][]interface{}), column names ([]string), column types ([]string), error
-func GetSampleData(db *sql.DB, sqlQuery string) ([][]interface{}, []string, []string, error) {
+// If isBinaryData is true, []byte values are base64 encoded
+func GetSampleData(db *sql.DB, sqlQuery string, isBinaryData bool) ([][]interface{}, []string, []string, error) {
 	rows, err := db.Query(sqlQuery)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to execute query: %w", err)
@@ -236,10 +246,14 @@ func GetSampleData(db *sql.DB, sqlQuery string) ([][]interface{}, []string, []st
 			if val == nil {
 				row[i] = nil
 			} else {
-				// Convert []byte to string or keep as-is based on type
+				// Convert []byte to string or base64 based on isBinaryData flag
 				switch v := val.(type) {
 				case []byte:
-					row[i] = string(v)
+					if isBinaryData {
+						row[i] = base64.StdEncoding.EncodeToString(v)
+					} else {
+						row[i] = string(v)
+					}
 				default:
 					row[i] = v
 				}
@@ -257,25 +271,25 @@ func GetSampleData(db *sql.DB, sqlQuery string) ([][]interface{}, []string, []st
 }
 
 // GetSampleDataWithQuery executes an IndexScanQuery and returns the result rows
-func GetSampleDataWithQuery(db *sql.DB, database string, table string, query *api.IndexScanQuery) ([][]interface{}, []string, []string, error) {
-	sqlQuery, err := ConverJSONtToSQL(database, table, query)
+func GetSampleDataWithQuery(db *sql.DB, database string, table string, query *api.IndexScanQuery, isBinaryData bool) ([][]interface{}, []string, []string, error) {
+	sqlQuery, err := ConverJSONtToSQL(database, table, query, isBinaryData)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to convert query to SQL: %w", err)
 	}
 
-	return GetSampleData(db, sqlQuery)
+	return GetSampleData(db, sqlQuery, isBinaryData)
 }
 
 // ExecuteUsingMySQLServer is a helper function to execute query and print results for testing
 // Returns: rows ([][]interface{}), column names ([]string), error
-func ExecuteUsingMySQLServer(t *testing.T, database string, table string, query *api.IndexScanQuery) ([][]interface{}, []string, error) {
+func ExecuteUsingMySQLServer(t *testing.T, database string, table string, query *api.IndexScanQuery, isBinaryData bool) ([][]interface{}, []string, error) {
 	jsonBytes, err := json.MarshalIndent(query, "", "  ")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to marshal query: %w", err)
 	}
 	log.Debugf("JSON:\n%s\n", string(jsonBytes))
 
-	sql, err := ConverJSONtToSQL(database, table, query)
+	sql, err := ConverJSONtToSQL(database, table, query, isBinaryData)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to convert to SQL: %w", err)
 	}
@@ -287,7 +301,7 @@ func ExecuteUsingMySQLServer(t *testing.T, database string, table string, query 
 	}
 	defer conn.Close()
 
-	rows, columns, colTypes, err := GetSampleData(conn, sql)
+	rows, columns, colTypes, err := GetSampleData(conn, sql, isBinaryData)
 	if err != nil {
 		log.Infof("Query returned no data or error: %v", err)
 		return nil, nil, err
@@ -558,14 +572,14 @@ func indexScanTestMultiple(t *testing.T, tests map[string]api.IndexTestInfo, isB
 
 	for name, testInfo := range tests {
 		t.Run(name, func(t *testing.T) {
-			indexScanTest(t, testInfo, isBinaryData, true)
+			indexScanTest(t, testInfo, isBinaryData)
 		})
 	}
 
 }
 
-func indexScanTest(t *testing.T, testInfo api.IndexTestInfo, isBinaryData bool, validate bool) {
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, testInfo.DB, testInfo.Table, &testInfo.IndexScanReq)
+func indexScanTest(t *testing.T, testInfo api.IndexTestInfo, isBinaryData bool) {
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, testInfo.DB, testInfo.Table, &testInfo.IndexScanReq, isBinaryData)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}

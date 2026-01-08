@@ -46,7 +46,7 @@ func Test_SimpleComparison(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -73,7 +73,7 @@ func Test_NotFound(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -109,7 +109,7 @@ func Test_Projection(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -135,7 +135,7 @@ func Test_IsNotNull(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -226,7 +226,7 @@ func Test_ComplexFilterWithIndex(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -299,7 +299,7 @@ func Test_ComplexFilterWithOutIndex(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -356,7 +356,7 @@ func Test_AndOperation(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -395,7 +395,7 @@ func Test_IndexScanOnly(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -434,7 +434,7 @@ func Test_TableScanWithFilter(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -473,7 +473,7 @@ func Test_SimpleComparisonOnPkCol(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -514,7 +514,7 @@ func Test_SchemaVersionChangeNonConcurrent(t *testing.T) {
 		},
 	}
 
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -534,7 +534,7 @@ func Test_SchemaVersionChangeNonConcurrent(t *testing.T) {
 		t.Fatalf("failed to re-create tables. Error: %v", err)
 	}
 
-	mysqlRows, mysqlCols, err = ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err = ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
@@ -626,7 +626,7 @@ func Test_SchemaVersionChangeConcurrent(t *testing.T) {
 	t.Logf("Total operations completed: %d", totalOps)
 
 	// Verify final state - requests should work after schema change
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query)
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, database, table, &query, DATA_DOES_NOT_NEED_BINARY_ENCODING)
 	if err != nil {
 		t.Fatalf("ExecuteUsingMySQLServer failed after schema change: %v", err)
 	}
@@ -2698,8 +2698,7 @@ func TestDataTypesBitColumn(t *testing.T) {
 					Op:     "CMP",
 					Column: "id0",
 					Cond:   "EQ",
-					//Value:  testclient.EncodePkValue("1", true, 100, true),
-					Value:  1,
+					Value:  testclient.EncodePkValue("1", true, 100, true),
 				},
 			},
 			Table:            testTable,
