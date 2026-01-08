@@ -18,6 +18,8 @@
 package index_scan
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"math"
 	"net/http"
 	"sync/atomic"
@@ -2743,3 +2745,604 @@ func TestDataTypesBitColumn(t *testing.T) {
 
 	indexScanTestMultiple(t, tests, DATA_NEEDS_BINARY_ENCODING)
 }
+
+func TestDataTypesDateColumn(t *testing.T) {
+	testDB := testdbs.DB019
+	testTable := "date_table"
+
+	tests := map[string]api.IndexTestInfo{
+		"validpk1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1111-11-11",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1111-11-11 00:00:00",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"invalidpk": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1111-11-11 11:00:00",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_008(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"invalidpk2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1111-11-11 00:00:00.123123",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_008(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1111-11-12",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"error": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1111-13-11", // invalid month
+				},
+			},
+			Table:               testTable,
+			DB:                  testDB,
+			ExpectedHttpCode:    http.StatusBadRequest,
+			BodyContains:        common.ERROR_027(),
+			RowsOrder:           ROWS_ORDER_MUST_MATCH,
+			SkipMySQLValidation: true,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesDefaultValues(t *testing.T) {
+	testDB := testdbs.DB028
+	testTable := "table_1"
+
+	tests := map[string]api.IndexTestInfo{
+		"test1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id",
+					Cond:   "EQ",
+					Value:  1,
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestLargePks(t *testing.T) {
+	testDB := testdbs.DB026
+	testTable := "table_1"
+
+	pkData := make([]byte, 3070)
+	for i := 0; i < 3070; i++ {
+		pkData[i] = 0x41
+	}
+	pkDataEncoded := base64.StdEncoding.EncodeToString(pkData)
+
+	tests := map[string]api.IndexTestInfo{
+		"largePk": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id",
+					Cond:   "EQ",
+					Value:  pkDataEncoded,
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_NEEDS_BINARY_ENCODING)
+}
+
+func TestLargeBase64Pk(t *testing.T) {
+	testDB := testdbs.DB026
+	testTable := "table_2"
+
+	someNumber := 7
+	pkTotalLength := 3000 // id0 is 3000 bytes
+	id0 := make([]byte, pkTotalLength-8)
+	actualData := make([]byte, 8)
+	binary.LittleEndian.PutUint64(actualData, uint64(someNumber))
+	allData := append(id0, actualData...)
+	pkDataEncoded := base64.StdEncoding.EncodeToString(allData)
+
+	tests := map[string]api.IndexTestInfo{
+		"largeBase64Pk": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id",
+					Cond:   "EQ",
+					Value:  pkDataEncoded,
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_NEEDS_BINARY_ENCODING)
+}
+
+func TestLargeColumn(t *testing.T) {
+	testDB := testdbs.DB027
+	testTable := "table_1"
+
+	decoded := []byte("1")
+	pkDataEncoded := base64.StdEncoding.EncodeToString(decoded)
+
+	tests := map[string]api.IndexTestInfo{
+		"ok": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id",
+					Cond:   "EQ",
+					Value:  pkDataEncoded,
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"notBase64String": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id",
+					Cond:   "EQ",
+					Value:  "1",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_NEEDS_BINARY_ENCODING)
+}
+
+func TestDataTypesText(t *testing.T) {
+	testDB := testdbs.DB013
+	testTable := "text_table"
+
+	tests := map[string]api.IndexTestInfo{
+		"notfound": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "-1",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"null": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple2": { // all characters needs to be escaped. ascii char that needs escaping
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "3",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple3": { // all characters needs to be escaped. non printable ascii char for example 0x17
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "4",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple4": { // all characters needs to be escaped. non printable unicode
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "5",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesBlob(t *testing.T) {
+	testDB := testdbs.DB013
+	testTable := "blob_table"
+
+	tests := map[string]api.IndexTestInfo{
+		"notfound": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("-1", true, 255, false),
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"null": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("2", true, 255, false),
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("1", true, 255, false),
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_NEEDS_BINARY_ENCODING)
+}
+
+func TestDataTypesChar(t *testing.T) {
+	arrayColumnTest(t, "table1", testdbs.DB012, false, 100, DATA_NEEDS_BINARY_ENCODING)
+}
+
+func TestDataTypesVarchar(t *testing.T) {
+	arrayColumnTest(t, "table1", testdbs.DB014, false, 50, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesLongVarchar(t *testing.T) {
+	arrayColumnTest(t, "table1", testdbs.DB015, false, 256, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesBinary(t *testing.T) {
+	arrayColumnTest(t, "table1", testdbs.DB016, true, 100, DATA_NEEDS_BINARY_ENCODING)
+}
+
+func TestDataTypesVarbinary(t *testing.T) {
+	arrayColumnTest(t, "table1", testdbs.DB017, true, 100, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesLongVarbinary(t *testing.T) {
+	arrayColumnTest(t, "table1", testdbs.DB018, true, 256, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+// arrayColumnTest is a helper function for testing char/varchar/binary column types
+func arrayColumnTest(t *testing.T, table string, database string, isBinary bool, colWidth int, padding bool) {
+	tests := map[string]api.IndexTestInfo{
+		"notfound1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("-1", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"badRequest1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue(*testclient.NewOperationID(colWidth*4 + 1), isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_008(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("1", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("2", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple3": { // new line char in string
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("3", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple4": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("4", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple5": { // unicode pk
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("这是一个测验", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("5", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"escapedChars": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("6", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"quotedPK": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("\"7\"", isBinary, colWidth, padding),
+				},
+			},
+			Table:            table,
+			DB:               database,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, isBinary)
+}
+

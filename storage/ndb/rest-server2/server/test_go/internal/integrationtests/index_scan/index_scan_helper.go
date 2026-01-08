@@ -39,10 +39,10 @@ const EMPTY_STRING = ""
 
 // Constants for row order comparison in CompareResults
 const (
-	ROWS_ORDER_MUST_MATCH    = true
-	ROWS_ORDER_MAY_NOT_MATCH = false
-	DATA_NEEDS_BINARY_ENCODING = true
-	DATA_DOES_NOT_NEED_BINARY_ENCODING = false 
+	ROWS_ORDER_MUST_MATCH              = true
+	ROWS_ORDER_MAY_NOT_MATCH           = false
+	DATA_NEEDS_BINARY_ENCODING         = true
+	DATA_DOES_NOT_NEED_BINARY_ENCODING = false
 )
 
 // ConverJSONtToSQL converts an IndexScanQuery to a SQL SELECT statement
@@ -579,14 +579,19 @@ func indexScanTestMultiple(t *testing.T, tests map[string]api.IndexTestInfo, isB
 }
 
 func indexScanTest(t *testing.T, testInfo api.IndexTestInfo, isBinaryData bool) {
-	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, testInfo.DB, testInfo.Table, &testInfo.IndexScanReq, isBinaryData)
-	if err != nil {
-		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
-	}
-
 	restRows, restCols, _, err := ExecuteUsingRESTServer(t, testInfo.DB, testInfo.Table, &testInfo.IndexScanReq, testInfo.BodyContains, testInfo.ExpectedHttpCode)
 	if err != nil {
 		t.Fatalf("ExecuteUsingRESTServer failed: %v", err)
+	}
+
+	// Skip MySQL validation if explicitly requested
+	if testInfo.SkipMySQLValidation {
+		return
+	}
+
+	mysqlRows, mysqlCols, err := ExecuteUsingMySQLServer(t, testInfo.DB, testInfo.Table, &testInfo.IndexScanReq, isBinaryData)
+	if err != nil {
+		t.Fatalf("ExecuteUsingMySQLServer failed: %v", err)
 	}
 
 	CompareResults(t, mysqlRows, mysqlCols, restRows, restCols, testInfo.RowsOrder)

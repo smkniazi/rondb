@@ -121,10 +121,11 @@ type IndexScanResponse struct {
 }
 
 type IndexTestInfo struct {
-	IndexScanReq     IndexScanQuery
-	Table            string
-	DB               string
-	ExpectedHttpCode int
-	BodyContains   string
-	RowsOrder        bool
+	IndexScanReq         IndexScanQuery
+	Table                string
+	DB                   string
+	ExpectedHttpCode     int
+	BodyContains         string
+	RowsOrder            bool
+	SkipMySQLValidation  bool // When true, skip MySQL comparison. Default false (validate).
 }
