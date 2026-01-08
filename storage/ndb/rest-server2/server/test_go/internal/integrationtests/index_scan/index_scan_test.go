@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"hopsworks.ai/rdrs2/internal/common"
+	"hopsworks.ai/rdrs2/internal/integrationtests/testclient"
 	"hopsworks.ai/rdrs2/internal/testutils"
 	"hopsworks.ai/rdrs2/pkg/api"
 	"hopsworks.ai/rdrs2/resources/testdbs"
@@ -2206,4 +2207,540 @@ func TestDataTypesDatetimeColumn(t *testing.T) {
 	}
 
 	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesTimeColumn(t *testing.T) {
+	testDB := testdbs.DB021
+
+	tests := map[string]api.IndexTestInfo{
+		"validpk1_pre0": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "11:11:11",
+				},
+			},
+			Table:            "time_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk1_pre3": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "11:11:11.123",
+				},
+			},
+			Table:            "time_table3",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk1_pre6": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "11:11:11.123456",
+				},
+			},
+			Table:            "time_table6",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk2_pre0": { // nanoseconds should be ignored
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "11:11:11.123123",
+				},
+			},
+			Table:            "time_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk2_pre3": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "11:11:11.123000",
+				},
+			},
+			Table:            "time_table3",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest_pre0": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "12:11:11",
+				},
+			},
+			Table:            "time_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest_pre3": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "12:11:11.123",
+				},
+			},
+			Table:            "time_table3",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest_pre6": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "12:11:11.123456",
+				},
+			},
+			Table:            "time_table6",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"wrongtime_pre0": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "11:61:11", // invalid minutes
+				},
+			},
+			Table:            "time_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_027(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesTimestampColumn(t *testing.T) {
+	testDB := testdbs.DB022
+
+	tests := map[string]api.IndexTestInfo{
+		"badts_1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1111-11-11 11:11:11",
+				},
+			},
+			Table:            "ts_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_027(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"badts_2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1970-01-01 00:00:00",
+				},
+			},
+			Table:            "ts_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_027(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"badts_3": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2038-01-19 03:14:08",
+				},
+			},
+			Table:            "ts_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_027(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk1_pre0": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-11 11:11:11",
+				},
+			},
+			Table:            "ts_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk1_pre3": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-11 11:11:11.123",
+				},
+			},
+			Table:            "ts_table3",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk1_pre6": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-11 11:11:11.123456",
+				},
+			},
+			Table:            "ts_table6",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk2_pre0": { // nanoseconds should be ignored
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-11 11:11:11.123123",
+				},
+			},
+			Table:            "ts_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk2_pre3": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-11 11:11:11.123000",
+				},
+			},
+			Table:            "ts_table3",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"validpk2_pre6": { // -ve sign should be ignored
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-11 -11:11:11.123456",
+				},
+			},
+			Table:            "ts_table6",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest_pre0": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-12 11:11:11",
+				},
+			},
+			Table:            "ts_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest_pre3": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-12 11:11:11.123",
+				},
+			},
+			Table:            "ts_table3",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest_pre6": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-11-12 11:11:11.123456",
+				},
+			},
+			Table:            "ts_table6",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"wrongdate_pre0": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022-13-11 11:11:11", // invalid month
+				},
+			},
+			Table:            "ts_table0",
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_027(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesYearColumn(t *testing.T) {
+	// Year 1901-2155 (1 byte)
+	testDB := testdbs.DB023
+	testTable := "year_table"
+
+	tests := map[string]api.IndexTestInfo{
+		"simple1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2022",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"notfound1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1901",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"notfound2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2155",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"nulltest": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2023",
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"baddate1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "1900", // below valid range
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_015(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"baddate2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  "2156", // above valid range
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusBadRequest,
+			BodyContains:     common.ERROR_015(),
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_DOES_NOT_NEED_BINARY_ENCODING)
+}
+
+func TestDataTypesBitColumn(t *testing.T) {
+	testDB := testdbs.DB024
+	testTable := "bit_table"
+
+	tests := map[string]api.IndexTestInfo{
+		"simple1": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					//Value:  testclient.EncodePkValue("1", true, 100, true),
+					Value:  1,
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"simple2": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("2", true, 100, true),
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+		"null": {
+			IndexScanReq: api.IndexScanQuery{
+				Limit: 100,
+				Filters: &api.ScanFilter{
+					Op:     "CMP",
+					Column: "id0",
+					Cond:   "EQ",
+					Value:  testclient.EncodePkValue("3", true, 100, true),
+				},
+			},
+			Table:            testTable,
+			DB:               testDB,
+			ExpectedHttpCode: http.StatusOK,
+			BodyContains:     EMPTY_STRING,
+			RowsOrder:        ROWS_ORDER_MUST_MATCH,
+		},
+	}
+
+	indexScanTestMultiple(t, tests, DATA_NEEDS_BINARY_ENCODING)
 }
