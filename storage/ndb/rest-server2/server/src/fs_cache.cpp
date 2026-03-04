@@ -121,7 +121,13 @@ void stop_fs_cache() {
 void fs_cache_dec_ref_count(char *cache_entry) {
   if (cache_entry) {
     FSCacheEntry *cacheEntry = (FSCacheEntry*)cache_entry;
-    cacheEntry->m_ref_count--;
+    int prev = cacheEntry->m_ref_count.fetch_sub(1);
+    if (prev == 1 && cacheEntry->m_evicted) {
+      // Last reference to an evicted entry — safe to delete.
+      // No complex features to unregister since m_data is nullptr
+      // for entries evicted via evict_failed_entry().
+      delete cacheEntry;
+    }
   }
 }
 
@@ -201,6 +207,31 @@ void fs_metadata_update_cache(
   FSCacheEntry* entry,
   std::shared_ptr<RestErrorCode> errorCode) {
   return g_fs_metadata_cache->update_cache(data, entry, errorCode);
+}
+
+void fs_metadata_evict_failed_entry(FSCacheEntry *entry) {
+  g_fs_metadata_cache->evict_failed_entry(entry);
+}
+
+void FSMetadataCache::evict_failed_entry(FSCacheEntry *entry) {
+  Uint32 key_cache_id = entry->m_key_cache_id;
+  NdbMutex_Lock(m_rwLock[key_cache_id]);
+  auto it = m_fs_cache[key_cache_id].find(entry->m_key);
+  if (it == m_fs_cache[key_cache_id].end() || it->second != entry) {
+    // Already removed or replaced by another thread
+    NdbMutex_Unlock(m_rwLock[key_cache_id]);
+    return;
+  }
+  DEB_FS("Evicting failed entry %s from cache", entry->m_key.c_str());
+  m_fs_cache[key_cache_id].erase(it);
+  NdbMutex_Lock(m_queueLock[key_cache_id]);
+  remove_entry(entry, key_cache_id);
+  NdbMutex_Unlock(m_queueLock[key_cache_id]);
+  NdbMutex_Unlock(m_rwLock[key_cache_id]);
+  // Mark as evicted so the last fs_cache_dec_ref_count call deletes it.
+  // This must be set after removing from the map — the caller still holds
+  // ref_count >= 1, so the entry won't be deleted prematurely.
+  entry->m_evicted = true;
 }
 
 metadata::FeatureViewMetadata*
@@ -390,13 +421,6 @@ void FSMetadataCache::cache_entry_updater(Uint32 key_cache_id) {
         if (m_stopped || (milliSeconds >= eviction_ms)) {
           DEB_FS("FS Key %s deleted", first_entry->m_key.c_str());
           m_fs_cache[key_cache_id].erase(first_entry->m_key);
-          //unregister complex features from golang layer
-          if (first_entry->m_data != nullptr && 
-              first_entry->m_data->complexFeatures.size() != 0){
-            for (auto& [key, val] : first_entry->m_data->complexFeatures) {
-              val.unregister_with_go_layer();
-            }
-          }
           NdbMutex_Unlock(m_rwLock[key_cache_id]);
           NdbMutex_Lock(m_queueLock[key_cache_id]);
           remove_entry(first_entry, key_cache_id);
@@ -432,7 +456,7 @@ void FSMetadataCache::cache_entry_updater(Uint32 key_cache_id) {
   }
 }
 
-void FSMetadataCache::load_single_feature_view(const std::string &fsName,
+bool FSMetadataCache::load_single_feature_view(const std::string &fsName,
                                                const std::string &fvName,
                                                int fvVersion) {
   std::string cacheKey =
@@ -448,7 +472,7 @@ void FSMetadataCache::load_single_feature_view(const std::string &fsName,
   NdbMutex_Lock(m_rwLock[key_cache_id]);
   if (m_stopped) {
     NdbMutex_Unlock(m_rwLock[key_cache_id]);
-    return;
+    return true;
   }
   auto existing_it = m_fs_cache[key_cache_id].find(cacheKey);
   if (existing_it != m_fs_cache[key_cache_id].end()) {
@@ -459,27 +483,21 @@ void FSMetadataCache::load_single_feature_view(const std::string &fsName,
       NdbMutex_Unlock(existing->m_waitLock);
       NdbMutex_Unlock(m_rwLock[key_cache_id]);
       DEB_FS("Feature view %s already cached, skipping", cacheKey.c_str());
-      return;
+      return true;
     }
     // IS_INVALID entry (e.g., left over from a DELETE event) — remove it
     // so we can reload fresh metadata.
     if (existing->m_ref_count > 0) {
-      // Still in use — can't remove yet, skip
+      // Still in use — can't remove yet, retry later
       NdbMutex_Unlock(existing->m_waitLock);
       NdbMutex_Unlock(m_rwLock[key_cache_id]);
-      return;
+      return false;
     }
     m_fs_cache[key_cache_id].erase(existing_it);
     NdbMutex_Unlock(existing->m_waitLock);
     NdbMutex_Lock(m_queueLock[key_cache_id]);
     remove_entry(existing, key_cache_id);
     NdbMutex_Unlock(m_queueLock[key_cache_id]);
-    if (existing->m_data != nullptr &&
-        existing->m_data->complexFeatures.size() != 0) {
-      for (auto& [key, val] : existing->m_data->complexFeatures) {
-        val.unregister_with_go_layer();
-      }
-    }
     delete existing;
   }
 
@@ -498,7 +516,7 @@ void FSMetadataCache::load_single_feature_view(const std::string &fsName,
                            errorCode ? errorCode->ToString().c_str()
                                      : "unknown error");
     DEB_FS("Preload failed for %s, not caching error", cacheKey.c_str());
-    return;
+    return false;
   }
 
   // Load succeeded — insert into cache if no one else created an entry
@@ -507,16 +525,31 @@ void FSMetadataCache::load_single_feature_view(const std::string &fsName,
   if (m_stopped) {
     NdbMutex_Unlock(m_rwLock[key_cache_id]);
     delete data;
-    return;
+    return true;
   }
   auto race_it = m_fs_cache[key_cache_id].find(cacheKey);
   if (race_it != m_fs_cache[key_cache_id].end()) {
-    // Someone else (lazy-load or parallel preload) already created an entry.
-    NdbMutex_Unlock(m_rwLock[key_cache_id]);
-    delete data;
-    DEB_FS("Feature view %s populated by another path, discarding",
-           cacheKey.c_str());
-    return;
+    auto *existing = race_it->second;
+    NdbMutex_Lock(existing->m_waitLock);
+    if (existing->m_state == FSCacheEntry::IS_INVALID &&
+        existing->m_ref_count == 0) {
+      // Replace stale IS_INVALID entry with fresh valid data.
+      m_fs_cache[key_cache_id].erase(race_it);
+      NdbMutex_Unlock(existing->m_waitLock);
+      NdbMutex_Lock(m_queueLock[key_cache_id]);
+      remove_entry(existing, key_cache_id);
+      NdbMutex_Unlock(m_queueLock[key_cache_id]);
+      delete existing;
+      // Fall through to insert the new entry below.
+    } else {
+      // IS_VALID, IS_FILLING, or still referenced — keep it.
+      NdbMutex_Unlock(existing->m_waitLock);
+      NdbMutex_Unlock(m_rwLock[key_cache_id]);
+      delete data;
+      DEB_FS("Feature view %s populated by another path, discarding",
+             cacheKey.c_str());
+      return true;
+    }
   }
 
   auto *newEntry = new FSCacheEntry();
@@ -535,6 +568,7 @@ void FSMetadataCache::load_single_feature_view(const std::string &fsName,
   NdbMutex_Unlock(m_rwLock[key_cache_id]);
 
   DEB_FS("Preloaded feature view: %s", cacheKey.c_str());
+  return true;
 }
 
 void FSMetadataCache::preload_all_feature_views() {
@@ -602,6 +636,82 @@ void FSMetadataCache::preload_all_feature_views() {
                       count, num_threads);
 }
 
+void FSMetadataCache::add_pending_insert(const std::string &fsName,
+                                         const std::string &fvName,
+                                         int fvVersion) {
+  std::string cacheKey =
+    metadata::getFeatureViewCacheKey(fsName, fvName, fvVersion);
+
+  // Check for duplicate
+  for (auto &p : m_pending_inserts) {
+    if (p.cache_key == cacheKey) {
+      // Reset retry so we try again soon
+      p.retry_count = 0;
+      p.polls_until_retry = 1;
+      return;
+    }
+  }
+  // Evict oldest entry if at capacity
+  if ((int)m_pending_inserts.size() >= MAX_PENDING_INSERTS) {
+    g_eventLogger->warning(
+      "[FS Cache Event] Pending insert list full (%d), dropping oldest entry %s",
+      MAX_PENDING_INSERTS, m_pending_inserts.front().cache_key.c_str());
+    m_pending_inserts.erase(m_pending_inserts.begin());
+  }
+  m_pending_inserts.push_back({cacheKey, fsName, fvName, fvVersion, 0, 1});
+}
+
+void FSMetadataCache::remove_pending_insert(const std::string &cacheKey) {
+  for (auto it = m_pending_inserts.begin(); it != m_pending_inserts.end();
+       ++it) {
+    if (it->cache_key == cacheKey) {
+      DEB_FS("Removed %s from pending retry list", cacheKey.c_str());
+      m_pending_inserts.erase(it);
+      return;
+    }
+  }
+}
+
+void FSMetadataCache::process_pending_inserts() {
+  int loads_this_cycle = 0;
+  auto it = m_pending_inserts.begin();
+  while (it != m_pending_inserts.end()) {
+    if (m_stopped) break;
+
+    it->polls_until_retry--;
+    if (it->polls_until_retry > 0) {
+      ++it;
+      continue;
+    }
+
+    // Cap the number of loads per poll cycle to keep the event loop
+    // responsive.  Each load_single_feature_view call does full NDB scans
+    // that can take hundreds of milliseconds.  Without a cap, a large
+    // pending list (e.g. after initial data loading) blocks pollEvents()
+    // for tens of seconds, delaying DELETE event processing.
+    if (loads_this_cycle >= MAX_RETRIES_PER_CYCLE) {
+      it->polls_until_retry = 1;  // try again next cycle
+      ++it;
+      continue;
+    }
+
+    bool success = load_single_feature_view(
+      it->fs_name, it->fv_name, it->fv_version);
+    loads_this_cycle++;
+    if (success) {
+      it = m_pending_inserts.erase(it);
+    } else {
+      it->retry_count++;
+      // Exponential backoff: 1, 2, 4, 8, ... capped at MAX_RETRY_POLLS
+      int backoff = 1 << std::min(it->retry_count, 6);  // cap shift to avoid overflow
+      it->polls_until_retry = std::min(backoff, MAX_RETRY_POLLS);
+      DEB_FS("Deferred load failed for %s, next retry in %d polls (attempt %d)",
+             it->cache_key.c_str(), it->polls_until_retry, it->retry_count);
+      ++it;
+    }
+  }
+}
+
 extern "C" void* fs_event_thread_main(void *arg) {
   errno = 0;
   ((FSMetadataCache*)arg)->event_watcher_job();
@@ -662,12 +772,6 @@ void FSMetadataCache::evict_entry(const std::string &cacheKey) {
   NdbMutex_Unlock(m_queueLock[key_cache_id]);
   NdbMutex_Unlock(m_rwLock[key_cache_id]);
 
-  if (entry->m_data != nullptr &&
-      entry->m_data->complexFeatures.size() != 0) {
-    for (auto& [key, val] : entry->m_data->complexFeatures) {
-      val.unregister_with_go_layer();
-    }
-  }
   NdbMutex_Unlock(entry->m_waitLock);
   delete entry;
 }
@@ -803,6 +907,9 @@ retry:
     // Preload picks up missed INSERTs (load_single_feature_view skips
     // already-cached entries, so this is a fast no-op for most views).
     preload_all_feature_views();
+    // Stale pending retries from before the disconnect are now redundant —
+    // preload has already tried to load every known feature view.
+    m_pending_inserts.clear();
   }
   first_connect = false;
 
@@ -818,7 +925,12 @@ retry:
         ndb->getNdbError().code, ndb->getNdbError().message);
       goto err;
     }
-    if (res == 0) continue;
+    if (res == 0) {
+      if (!m_pending_inserts.empty()) {
+        process_pending_inserts();
+      }
+      continue;
+    }
 
     NdbEventOperation *op;
     while ((op = ndb->nextEvent())) {
@@ -849,10 +961,9 @@ retry:
             break;
           }
           std::string fsName(fs_name_buf);
-          g_eventLogger->info(
-            "[FS Cache Event] INSERT detected for %s|%s|%d",
-            fsName.c_str(), fvName.c_str(), version);
-          load_single_feature_view(fsName, fvName, version);
+          if (!load_single_feature_view(fsName, fvName, version)) {
+            add_pending_insert(fsName, fvName, version);
+          }
           break;
         }
         case NdbDictionary::Event::TE_DELETE: {
@@ -868,15 +979,16 @@ retry:
           char fs_name_buf[FEATURE_STORE_NAME_SIZE];
           RS_Status rs = find_feature_store_data(fs_id, fs_name_buf);
           if (rs.http_code != SUCCESS) {
-            // Feature store may have been deleted too — skip
+            g_eventLogger->warning(
+              "[FS Cache Event] DELETE: failed to resolve feature_store_id %d",
+              fs_id);
             break;
           }
           std::string fsName(fs_name_buf);
           std::string cacheKey =
             metadata::getFeatureViewCacheKey(fsName, fvName, version);
-          g_eventLogger->info(
-            "[FS Cache Event] DELETE detected for %s", cacheKey.c_str());
           evict_entry(cacheKey);
+          remove_pending_insert(cacheKey);
           break;
         }
         case NdbDictionary::Event::TE_CLUSTER_FAILURE:
@@ -890,6 +1002,9 @@ retry:
         default:
           break;
       }
+    }
+    if (!m_pending_inserts.empty()) {
+      process_pending_inserts();
     }
   }
   goto done;

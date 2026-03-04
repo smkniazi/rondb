@@ -553,7 +553,11 @@ std::tuple<FeatureViewMetadata*, std::shared_ptr<RestErrorCode>>
     if (errorCode) {
       DEB_MD_CACHE("Key %s failed with error",
                    entry->m_key.c_str());
+      // Broadcast error to waiting threads, then evict from cache so
+      // subsequent requests retry instead of getting a permanently
+      // cached error (RONDB-1030).
       fs_metadata_update_cache(nullptr, entry, errorCode);
+      fs_metadata_evict_failed_entry(entry);
       return {nullptr, errorCode};
     }
     fs_metadata_update_cache(metadata, entry, nullptr);
