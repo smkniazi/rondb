@@ -520,7 +520,13 @@ bool FSMetadataCache::load_single_feature_view(const std::string &fsName,
   }
 
   // Load succeeded — insert into cache if no one else created an entry
-  // while we were loading.
+  // while we were loading (lock was released during fetch).
+  // Three possible states of the map entry:
+  //   (a) No entry:  normal case, insert below.
+  //   (b) IS_INVALID with ref_count==0: stale error from a lazy-load race.
+  //       Replace it with our fresh valid data.
+  //   (c) IS_VALID, IS_FILLING, or referenced: another path populated it.
+  //       Discard our duplicate data.
   NdbMutex_Lock(m_rwLock[key_cache_id]);
   if (m_stopped) {
     NdbMutex_Unlock(m_rwLock[key_cache_id]);
@@ -533,7 +539,7 @@ bool FSMetadataCache::load_single_feature_view(const std::string &fsName,
     NdbMutex_Lock(existing->m_waitLock);
     if (existing->m_state == FSCacheEntry::IS_INVALID &&
         existing->m_ref_count == 0) {
-      // Replace stale IS_INVALID entry with fresh valid data.
+      // Case (b): Replace stale IS_INVALID entry with fresh valid data.
       m_fs_cache[key_cache_id].erase(race_it);
       NdbMutex_Unlock(existing->m_waitLock);
       NdbMutex_Lock(m_queueLock[key_cache_id]);
@@ -542,7 +548,7 @@ bool FSMetadataCache::load_single_feature_view(const std::string &fsName,
       delete existing;
       // Fall through to insert the new entry below.
     } else {
-      // IS_VALID, IS_FILLING, or still referenced — keep it.
+      // Case (c): IS_VALID, IS_FILLING, or still referenced — keep it.
       NdbMutex_Unlock(existing->m_waitLock);
       NdbMutex_Unlock(m_rwLock[key_cache_id]);
       delete data;

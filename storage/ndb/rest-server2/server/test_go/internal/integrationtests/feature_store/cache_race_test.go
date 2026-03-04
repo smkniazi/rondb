@@ -78,7 +78,7 @@ DELETE FROM hopsworks.feature_group WHERE id = 2069;
 SET FOREIGN_KEY_CHECKS = 1;`
 
 	sqlInsertFG2069 = `INSERT INTO hopsworks.feature_group VALUES
-		(2069, 'sample_1', 67, Timestamp('2023-04-21 09:33:40'), 10000, 1, NULL, 2, NULL, NULL, 2057, 'ts', 1, NULL, NULL, FALSE, 0);`
+		(2069, 'sample_1', 67, Timestamp('2023-04-21 09:33:40'), 10000, 1, NULL, 2, NULL, NULL, 2057, 'ts', 1, NULL, NULL, FALSE, 0, NULL, NULL);`
 
 	// Explicit dep deletion — NDB may not reliably CASCADE on feature_view
 	// DELETE, so we remove children ourselves.  Delete order: children first,

@@ -68,6 +68,9 @@ class FSCacheEntry {
   };
   Uint8 m_state;
   std::atomic<int> m_ref_count;
+  // Set to true after evict_failed_entry() removes this entry from the
+  // cache map.  When the last holder calls fs_cache_dec_ref_count() and
+  // sees prev==1 && m_evicted, it deletes the entry.
   std::atomic<bool> m_evicted{false};
 
   FSCacheEntry() {
@@ -96,6 +99,11 @@ metadata::FeatureViewMetadata*
 void fs_metadata_update_cache(metadata::FeatureViewMetadata*,
                               FSCacheEntry*,
                               std::shared_ptr<RestErrorCode>);
+// Remove a failed lazy-load entry from the cache map so the next request
+// creates a fresh IS_FILLING entry and retries.  Called after update_cache()
+// has broadcast the error to waiting threads.  The entry is not deleted here;
+// m_evicted is set so fs_cache_dec_ref_count() deletes it when the last
+// reference is released.
 void fs_metadata_evict_failed_entry(FSCacheEntry*);
 
 class FSMetadataCache {
@@ -122,6 +130,8 @@ class FSMetadataCache {
   void preload_all_feature_views();
   void start_event_watcher();
   void event_watcher_job();
+  // Remove a failed lazy-load entry from the cache map.  See
+  // fs_metadata_evict_failed_entry() above for the full contract.
   void evict_failed_entry(FSCacheEntry *entry);
   // Force the event watcher to tear down and reconnect (for testing)
   void force_reconnect() { m_force_reconnect = true; }
@@ -147,23 +157,32 @@ class FSMetadataCache {
   void insert_last(FSCacheEntry*, Uint32);
   void remove_entry(FSCacheEntry*, Uint32);
 
+  // Fetch metadata from NDB and insert into cache.  Called from both the
+  // event watcher (INSERT events) and preload path.  Returns false if the
+  // NDB fetch failed (caller should add to pending retry list), true on
+  // success or if the entry was already cached by another path.
   bool load_single_feature_view(const std::string &fsName,
                                 const std::string &fvName,
                                 int fvVersion);
   void evict_entry(const std::string &cacheKey);
 
+  // Deferred retry for INSERT events that fail because dependent metadata
+  // rows don't exist yet (e.g. during backup/restore when feature_view
+  // is restored before training_dataset_join).  Retries with exponential
+  // backoff (1s, 2s, 4s, ... capped at MAX_RETRY_POLLS seconds).
+  // Only accessed from the event watcher thread — no locking needed.
   struct PendingInsert {
     std::string cache_key;
     std::string fs_name;
     std::string fv_name;
     int fv_version;
-    int retry_count;
-    int polls_until_retry;
+    int retry_count;       // number of failed attempts so far
+    int polls_until_retry; // poll cycles to skip before next attempt
   };
   std::vector<PendingInsert> m_pending_inserts;
-  static constexpr int MAX_PENDING_INSERTS = 1000;
-  static constexpr int MAX_RETRY_POLLS = 60;
-  static constexpr int MAX_RETRIES_PER_CYCLE = 3;
+  static constexpr int MAX_PENDING_INSERTS = 1000;  // bounded list size
+  static constexpr int MAX_RETRY_POLLS = 60;        // backoff cap (~60s)
+  static constexpr int MAX_RETRIES_PER_CYCLE = 3;   // event loop starvation cap
   void process_pending_inserts();
   void add_pending_insert(const std::string &fsName,
                           const std::string &fvName,
