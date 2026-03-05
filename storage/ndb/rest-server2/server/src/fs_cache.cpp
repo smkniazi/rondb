@@ -849,7 +849,15 @@ retry:
     event.setTable(*tab);
     event.addTableEvent(NdbDictionary::Event::TE_INSERT);
     event.addTableEvent(NdbDictionary::Event::TE_DELETE);
-    event.mergeEvents(true);
+    // Do NOT merge events.  With mergeEvents(true), NDB merges events on the
+    // same PK within a single Global Checkpoint Interval (GCI, ~2s):
+    //   INSERT + DELETE → no event (cancelled out)
+    //   DELETE + INSERT → UPDATE  (we don't subscribe to → dropped)
+    // This causes DELETE events to silently vanish when an INSERT for the same
+    // feature_view row lands in the same GCI (e.g. during restore + immediate
+    // delete, or test teardown + next test).  Feature_view changes are rare
+    // schema operations, so the extra event volume is negligible.
+    event.mergeEvents(false);
     for (int col = 0; col < tab->getNoOfColumns(); col++) {
       event.addEventColumn(col);
     }
@@ -871,7 +879,7 @@ retry:
       ndb->getNdbError().code, ndb->getNdbError().message);
     goto err;
   }
-  ev_op->mergeEvents(true);
+  ev_op->mergeEvents(false);
 
   // Register PK column
   id_val = ev_op->getValue("id");

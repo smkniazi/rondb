@@ -745,3 +745,196 @@ func Test_CacheRace_MissingFeatureGroup_Recovery(t *testing.T) {
 	// Should succeed now — error was not permanently cached
 	makeSimpleFVRequest(t, "", http.StatusOK)
 }
+
+// ===========================================================================
+// Assumption Tests — Diagnostic tests that validate core assumptions about
+// NDB event behavior.  Run with:
+//   ./script.sh test hopsworks.ai/rdrs2/internal/integrationtests/feature_store TestAssumption
+//
+// The pass/fail pattern directly identifies the broken assumption:
+//
+//   Test                             | Fails if...
+//   ---------------------------------|--------------------------------------------
+//   StandaloneDelete                 | Event watcher doesn't process DELETE at all
+//   StandaloneInsert                 | Event watcher doesn't process INSERT at all
+//   RestoreThenDeleteImmediate       | Event merging eats DELETE after quick restore
+//   RestoreThenDeleteWithGap         | Something OTHER than event merging is broken
+//   InsertThenDeleteSameGCI          | INSERT+DELETE in same GCI → no event (merged)
+//   DeleteThenInsertSameGCI          | DELETE+INSERT in same GCI → UPDATE (not subscribed)
+//
+// Key inference:
+//   If RestoreThenDeleteImmediate FAILS but RestoreThenDeleteWithGap PASSES,
+//   then NDB event merging (mergeEvents=true) is confirmed as the root cause.
+// ===========================================================================
+
+// TestAssumption_StandaloneDelete verifies the most basic event flow:
+// SQL DELETE on feature_view → NDB TE_DELETE event → evict_entry → cache cleared.
+// If this fails, the event watcher is fundamentally broken.
+func TestAssumption_StandaloneDelete(t *testing.T) {
+	defer restoreSimpleFV(t)
+
+	// Ensure cached
+	makeSimpleFVRequest(t, "", http.StatusOK)
+
+	// Standalone delete — no preceding INSERT in this test
+	deleteSimpleFV(t)
+
+	// Must see non-200 within 30s.  Failure = event watcher is dead.
+	pollSimpleUntilNotOK(t)
+}
+
+// TestAssumption_StandaloneInsert verifies that an INSERT on feature_view
+// causes the event watcher to load the metadata WITHOUT any client request
+// triggering a lazy-load.  We sleep instead of polling to isolate event
+// watcher behavior from the lazy-load path.
+func TestAssumption_StandaloneInsert(t *testing.T) {
+	defer restoreSimpleFV(t)
+
+	makeSimpleFVRequest(t, "", http.StatusOK)
+
+	deleteSimpleFV(t)
+	pollSimpleUntilNotOK(t)
+
+	// Insert deps first, then FV — event should trigger successful load
+	runSQL(t, "SET FOREIGN_KEY_CHECKS = 0;\n"+
+		sqlInsertAllDeps2059+"\n"+
+		sqlInsertFV2059+"\n"+
+		"SET FOREIGN_KEY_CHECKS = 1;")
+
+	// Wait WITHOUT making any requests — give the event watcher time to load.
+	// 5 seconds >> GCI interval (~2s) + poll timeout (1s) + load time (~1s).
+	time.Sleep(5 * time.Second)
+
+	// Single request — should be 200 if event watcher loaded it.
+	// Failure = INSERT events don't trigger loading.
+	makeSimpleFVRequest(t, "", http.StatusOK)
+}
+
+// TestAssumption_RestoreThenDeleteImmediate exactly replicates the pattern
+// from restoreSimpleFV (DELETE + INSERT) followed immediately by deleteSimpleFV.
+// This is the pattern that fails in the other tests.
+//
+// If this FAILS (30s timeout at pollSimpleUntilNotOK), the DELETE event from
+// the second deleteSimpleFV is being swallowed — likely by NDB event merging
+// with the INSERT event from restoreSimpleFV (both in the same GCI).
+func TestAssumption_RestoreThenDeleteImmediate(t *testing.T) {
+	defer restoreSimpleFV(t)
+
+	makeSimpleFVRequest(t, "", http.StatusOK)
+
+	// --- Simulate restoreSimpleFV (DELETE + INSERT in quick succession) ---
+	_ = testutils.RunQueriesOnMetadataCluster(sqlDeleteDeps2059)
+	_ = testutils.RunQueriesOnMetadataCluster(sqlDeleteFV2059)
+	runSQL(t, "SET FOREIGN_KEY_CHECKS = 0;\n"+
+		sqlInsertAllDeps2059+"\n"+
+		sqlInsertFV2059+"\n"+
+		"SET FOREIGN_KEY_CHECKS = 1;")
+	pollSimpleUntilOK(t)
+
+	// --- Immediately delete (like the next test would) ---
+	deleteSimpleFV(t)
+
+	// If this times out → event merging is the root cause.
+	pollSimpleUntilNotOK(t)
+}
+
+// TestAssumption_RestoreThenDeleteWithGap is identical to the above but adds
+// a 5-second gap between restore and delete.  This ensures the INSERT event
+// from restoreSimpleFV is in a DIFFERENT GCI from the DELETE event.
+//
+// Compare results:
+//   Immediate FAILS + WithGap PASSES → event merging confirmed
+//   Both FAIL → NOT event merging, something else is broken
+func TestAssumption_RestoreThenDeleteWithGap(t *testing.T) {
+	defer restoreSimpleFV(t)
+
+	makeSimpleFVRequest(t, "", http.StatusOK)
+
+	// --- Simulate restoreSimpleFV ---
+	_ = testutils.RunQueriesOnMetadataCluster(sqlDeleteDeps2059)
+	_ = testutils.RunQueriesOnMetadataCluster(sqlDeleteFV2059)
+	runSQL(t, "SET FOREIGN_KEY_CHECKS = 0;\n"+
+		sqlInsertAllDeps2059+"\n"+
+		sqlInsertFV2059+"\n"+
+		"SET FOREIGN_KEY_CHECKS = 1;")
+	pollSimpleUntilOK(t)
+
+	// 5-second gap: ensures the INSERT event is consumed by the event watcher
+	// and that a GCI boundary passes before the next DELETE.
+	t.Log("Waiting 5s for GCI boundary...")
+	time.Sleep(5 * time.Second)
+
+	// --- Now delete ---
+	deleteSimpleFV(t)
+
+	// If this ALSO times out → root cause is NOT event merging.
+	pollSimpleUntilNotOK(t)
+}
+
+// TestAssumption_InsertThenDeleteSameGCI tests INSERT followed by DELETE in
+// the tightest possible timing (single SQL batch on same connection).
+// With mergeEvents(true), INSERT + DELETE within the same GCI → no event.
+func TestAssumption_InsertThenDeleteSameGCI(t *testing.T) {
+	defer restoreSimpleFV(t)
+
+	makeSimpleFVRequest(t, "", http.StatusOK)
+
+	// First clear the cache
+	deleteSimpleFV(t)
+	pollSimpleUntilNotOK(t)
+
+	// INSERT + DELETE in a single SQL batch — maximum chance of same GCI
+	runSQL(t, "SET FOREIGN_KEY_CHECKS = 0;\n"+
+		sqlInsertAllDeps2059+"\n"+
+		sqlInsertFV2059+"\n"+
+		sqlDeleteDeps2059+"\n"+
+		sqlDeleteFV2059+"\n"+
+		"SET FOREIGN_KEY_CHECKS = 1;")
+
+	// Wait for event processing
+	time.Sleep(5 * time.Second)
+
+	// FV should NOT be in cache (it was deleted).
+	// If this returns 200 → INSERT event loaded it and DELETE event was merged away.
+	status, _ := sendRawFSRequest(t, fsNameSimple, fvNameSimple,
+		fvVersionSimple, "id1", "1")
+	if status == http.StatusOK {
+		t.Log("RESULT: INSERT+DELETE same batch → cache still shows 200 → DELETE event was MERGED AWAY")
+	} else {
+		t.Logf("RESULT: INSERT+DELETE same batch → cache shows %d → events processed correctly", status)
+	}
+	// Don't fail — this is diagnostic
+}
+
+// TestAssumption_DeleteThenInsertSameGCI tests DELETE followed by INSERT in
+// the tightest possible timing.
+// With mergeEvents(true), DELETE + INSERT within the same GCI → UPDATE (not subscribed).
+func TestAssumption_DeleteThenInsertSameGCI(t *testing.T) {
+	defer restoreSimpleFV(t)
+
+	makeSimpleFVRequest(t, "", http.StatusOK)
+
+	// DELETE + INSERT in a single SQL batch — maximum chance of same GCI
+	runSQL(t, "SET FOREIGN_KEY_CHECKS = 0;\n"+
+		sqlDeleteDeps2059+"\n"+
+		sqlDeleteFV2059+"\n"+
+		sqlInsertAllDeps2059+"\n"+
+		sqlInsertFV2059+"\n"+
+		"SET FOREIGN_KEY_CHECKS = 1;")
+
+	// Wait for event processing
+	time.Sleep(5 * time.Second)
+
+	// Cache should have a valid entry (FV was re-inserted).
+	// With mergeEvents(true), DELETE+INSERT → UPDATE → not subscribed → NO event.
+	// So the cache would retain the OLD entry (still IS_VALID), and status would be 200.
+	// With mergeEvents(false) or proper handling, we'd see BOTH events processed.
+	status, _ := sendRawFSRequest(t, fsNameSimple, fvNameSimple,
+		fvVersionSimple, "id1", "1")
+	if status == http.StatusOK {
+		t.Log("RESULT: DELETE+INSERT same batch → cache shows 200 → could be old entry or properly reloaded")
+	} else {
+		t.Logf("RESULT: DELETE+INSERT same batch → cache shows %d → eviction happened but reload failed/not yet", status)
+	}
+	// Don't fail — this is diagnostic
+}
