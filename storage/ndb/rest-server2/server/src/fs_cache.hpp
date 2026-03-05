@@ -182,7 +182,7 @@ class FSMetadataCache {
   std::vector<PendingInsert> m_pending_inserts;
   static constexpr int MAX_PENDING_INSERTS = 1000;  // bounded list size
   static constexpr int MAX_RETRY_POLLS = 60;        // backoff cap (~60s)
-  static constexpr int MAX_RETRIES_PER_CYCLE = 3;   // event loop starvation cap
+  static constexpr int MAX_RETRIES_PER_CYCLE = 1;   // event loop starvation cap
   void process_pending_inserts();
   void add_pending_insert(const std::string &fsName,
                           const std::string &fvName,

@@ -665,6 +665,9 @@ void FSMetadataCache::add_pending_insert(const std::string &fsName,
     m_pending_inserts.erase(m_pending_inserts.begin());
   }
   m_pending_inserts.push_back({cacheKey, fsName, fvName, fvVersion, 0, 1});
+  g_eventLogger->info(
+    "[FS Cache Event] Added %s to pending retry list (%zu entries)",
+    cacheKey.c_str(), m_pending_inserts.size());
 }
 
 void FSMetadataCache::remove_pending_insert(const std::string &cacheKey) {
@@ -680,6 +683,8 @@ void FSMetadataCache::remove_pending_insert(const std::string &cacheKey) {
 
 void FSMetadataCache::process_pending_inserts() {
   int loads_this_cycle = 0;
+  int pending_size = (int)m_pending_inserts.size();
+
   auto it = m_pending_inserts.begin();
   while (it != m_pending_inserts.end()) {
     if (m_stopped) break;
@@ -701,18 +706,25 @@ void FSMetadataCache::process_pending_inserts() {
       continue;
     }
 
+    g_eventLogger->info(
+      "[FS Cache Event] Retrying pending insert %s (attempt %d, %d pending)",
+      it->cache_key.c_str(), it->retry_count + 1, pending_size);
+
     bool success = load_single_feature_view(
       it->fs_name, it->fv_name, it->fv_version);
     loads_this_cycle++;
     if (success) {
+      g_eventLogger->info(
+        "[FS Cache Event] Pending retry succeeded for %s", it->cache_key.c_str());
       it = m_pending_inserts.erase(it);
     } else {
       it->retry_count++;
       // Exponential backoff: 1, 2, 4, 8, ... capped at MAX_RETRY_POLLS
       int backoff = 1 << std::min(it->retry_count, 6);  // cap shift to avoid overflow
       it->polls_until_retry = std::min(backoff, MAX_RETRY_POLLS);
-      DEB_FS("Deferred load failed for %s, next retry in %d polls (attempt %d)",
-             it->cache_key.c_str(), it->polls_until_retry, it->retry_count);
+      g_eventLogger->info(
+        "[FS Cache Event] Pending retry failed for %s, next in %d polls (attempt %d)",
+        it->cache_key.c_str(), it->polls_until_retry, it->retry_count);
       ++it;
     }
   }
@@ -967,6 +979,10 @@ retry:
             break;
           }
           std::string fsName(fs_name_buf);
+          g_eventLogger->info(
+            "[FS Cache Event] INSERT event: %s/%s/v%d (%zu pending)",
+            fsName.c_str(), fvName.c_str(), version,
+            m_pending_inserts.size());
           if (!load_single_feature_view(fsName, fvName, version)) {
             add_pending_insert(fsName, fvName, version);
           }
@@ -993,6 +1009,9 @@ retry:
           std::string fsName(fs_name_buf);
           std::string cacheKey =
             metadata::getFeatureViewCacheKey(fsName, fvName, version);
+          g_eventLogger->info(
+            "[FS Cache Event] DELETE event: %s (%zu pending)",
+            cacheKey.c_str(), m_pending_inserts.size());
           evict_entry(cacheKey);
           remove_pending_insert(cacheKey);
           break;
